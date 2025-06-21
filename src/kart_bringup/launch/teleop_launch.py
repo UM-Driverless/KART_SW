@@ -1,0 +1,40 @@
+import os
+
+from ament_index_python.packages import get_package_share_directory
+
+from launch import LaunchDescription
+from launch.actions import IncludeLaunchDescription
+from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch_ros.actions import Node
+
+def generate_launch_description():
+    joy_params = os.path.join(
+        get_package_share_directory('kart_bringup'),
+        'config',
+        'teleop_params.yaml'
+    )
+
+    # Nodo que lee el joystick y publica en /joy
+    joy_node_cmd = Node(
+        package='joy_to_cmd_vel',
+        executable='joy_to_cmd_vel',
+        name='joy_to_cmd_vel',
+        output='screen',
+        parameters=[joy_params]
+    )
+
+    # Nodo que traduce /joy a /cmd_vel
+    teleop_node_cmd = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(os.path.join(
+            get_package_share_directory('teleop_twist_joy'),
+                'launch',
+                'teleop-launch.py'))
+        )
+
+    
+    ld = LaunchDescription()
+
+    ld.add_action(joy_node_cmd)
+    ld.add_action(teleop_node_cmd)
+
+    return ld
