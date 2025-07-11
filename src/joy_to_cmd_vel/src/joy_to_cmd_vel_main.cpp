@@ -28,9 +28,11 @@ joy2cmd_callback(const std::shared_ptr<sensor_msgs::msg::Joy> msg){
             drive_info.drive.steering_angle = (-1)*msg->axes[steering];
         }
         
-        // Acerelacion = Acerelador - freno || Gatillos -> 2==izquierdo  5==Derecho 
+        // Acerelacion = Acerelador - freno || Gatillos -> 4==Derecho  3==Izquierdo 
         // Direccion = 0/1 Joystick izquierdo || 3/4 Joystick Derecho
-        drive_info.drive.acceleration = (-1)*msg->axes[throttle] - (-1)*msg->axes[brake];
+        auto throttle_norm = ((-1)*msg->axes[throttle]  + 1) / 2;
+        auto breake_norm = ((-1)*msg->axes[brake] + 1) / 2;
+        drive_info.drive.acceleration = throttle_norm - breake_norm;
         // drive_info.drive.speed = 0;
         // drive_info.drive.steering_angle_velocity = 0;
         // drive_info.drive.jerk = 0;
@@ -53,8 +55,8 @@ int main(int argc, char* argv[]) {
     rclcpp::init(argc, argv);
     auto node = rclcpp::Node::make_shared("joy_to_cmd_vel");
 
-    node->declare_parameter("throttle", 5); // R2
-    node->declare_parameter("brake", 2);    // L2
+    node->declare_parameter("throttle", 4); // R2
+    node->declare_parameter("brake", 3);    // L2
     node->declare_parameter("steering", 0); // Joystick izquierdo horizontal
     node->declare_parameter("enable_button", 5);   // R1
     node->declare_parameter("dead_zone", 0.05);  

@@ -23,18 +23,28 @@ def generate_launch_description():
         parameters=[joy_params]
     )
 
-    # Nodo que traduce /joy a /cmd_vel
-    teleop_node_cmd = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(os.path.join(
-            get_package_share_directory('teleop_twist_joy'),
-                'launch',
-                'teleop-launch.py'))
-        )
-
+        # # Nodo que traduce /joy a /cmd_vel
+    # teleop_node_cmd = IncludeLaunchDescription(
+    #     PythonLaunchDescriptionSource(os.path.join(
+    #         get_package_share_directory('teleop_twist_joy'),
+    #             'launch',
+    #             'teleop-launch.py'))
+    #     )
     
+    joy_node = Node(
+        package='joy',
+        executable='joy_node',
+        name='joy_node',
+        output='screen',
+        parameters=[{
+            'dev': '/dev/input/js0',
+            'deadzone': 0.1,
+            'autorepeat_rate': 20.0
+        }]
+    )
     ld = LaunchDescription()
 
     ld.add_action(joy_node_cmd)
-    ld.add_action(teleop_node_cmd)
+    ld.add_action(joy_node)
 
     return ld
