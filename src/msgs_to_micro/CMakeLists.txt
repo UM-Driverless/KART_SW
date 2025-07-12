@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
-project(msgs_to_bpill)
+project(msgs_to_micro)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
@@ -19,18 +19,18 @@ set(dependencies
 include_directories(include)
 
 add_library(${PROJECT_NAME} SHARED
-  src/msgs_to_bpill/comms_bpill.cpp
+  src/msgs_to_micro/comms_micro.cpp
 
 )
 ament_target_dependencies(${PROJECT_NAME} ${dependencies})
 
-add_executable(comms_bpill src/main_comms.cpp)
-ament_target_dependencies(comms_bpill ${dependencies})
-target_link_libraries(comms_bpill ${PROJECT_NAME})
+add_executable(comms_micro src/main_comms.cpp)
+ament_target_dependencies(comms_micro ${dependencies})
+target_link_libraries(comms_micro ${PROJECT_NAME})
 
 install(TARGETS
   ${PROJECT_NAME}
-  comms_bpill
+  comms_micro
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION lib/${PROJECT_NAME}
