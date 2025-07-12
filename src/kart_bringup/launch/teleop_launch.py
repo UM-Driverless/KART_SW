@@ -14,7 +14,7 @@ def generate_launch_description():
         'teleop_params.yaml'
     )
 
-    # Nodo que lee el joystick y publica en /joy
+    # Nodo que lee /joy y crea msg de movimiento
     joy_node_cmd = Node(
         package='joy_to_cmd_vel',
         executable='joy_to_cmd_vel',
@@ -22,15 +22,8 @@ def generate_launch_description():
         output='screen',
         parameters=[joy_params]
     )
-
-        # # Nodo que traduce /joy a /cmd_vel
-    # teleop_node_cmd = IncludeLaunchDescription(
-    #     PythonLaunchDescriptionSource(os.path.join(
-    #         get_package_share_directory('teleop_twist_joy'),
-    #             'launch',
-    #             'teleop-launch.py'))
-    #     )
     
+    # Nodo que lee el mando, y deja sus valores en ROS2
     joy_node = Node(
         package='joy',
         executable='joy_node',
