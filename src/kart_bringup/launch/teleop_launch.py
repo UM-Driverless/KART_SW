@@ -35,9 +35,19 @@ def generate_launch_description():
             'autorepeat_rate': 20.0
         }]
     )
+
+    # Nodo que comunica Orin con microcontrolador
+    comms_node_cmd = Node(
+        package='msgs_to_micro',
+        executable='comms_micro',
+        name='comms_micro',
+        output='screen',
+    )
+
     ld = LaunchDescription()
 
     ld.add_action(joy_node_cmd)
     ld.add_action(joy_node)
+    ld.add_action(comms_node_cmd)
 
     return ld
