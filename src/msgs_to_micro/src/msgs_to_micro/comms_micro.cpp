@@ -8,10 +8,12 @@
 
 Comms_micro::Comms_micro() : Node("comms_micro")
 {
-    const char *uart_device = "/dev/ttyTHS1";  // Cambia según tu configuración
-    uart_fd_ = open(uart_device, O_RDWR | O_NOCTTY | O_SYNC);
+    const char *uart_device = "/dev/ttyTHS1";
+    uart_fd_ = open(uart_device, O_RDWR | O_NOCTTY | O_NDELAY);
     if (uart_fd_ < 0) {
-        RCLCPP_ERROR(this->get_logger(), "No se pudo abrir %s", uart_device);
+        RCLCPP_ERROR(this->get_logger(),
+                    "No se pudo abrir %s: (%d) %s",
+                    uart_device, errno, strerror(errno));
         return;
     }
 
