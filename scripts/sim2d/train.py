@@ -9,7 +9,7 @@ import time
 
 from controllers import GeometricController, NeuralNetController, NeuralNetV2Controller
 from ga import GeneticAlgorithm
-from sim import run_episode
+from sim import run_episode, set_track
 
 CONTROLLER_MAP = {
     "geometric": GeometricController,
@@ -28,17 +28,25 @@ def main():
                         help="Comma-separated controller types: "
                              "geometric, neural, neural_v2")
     parser.add_argument("--fitness", type=str, default="v1",
-                        choices=["v1", "v2", "v3", "v4"],
+                        choices=["v1", "v2", "v3", "v4", "v5"],
                         help="v1: distance+laps, v2: lap-time, "
                              "v3: track-keeping (nonlinear CTE penalty), "
                              "v4: boundary-aware (terminate outside cones)")
     parser.add_argument("--seed", type=str, default="",
                         help="Path to JSON weights to seed population with")
+    parser.add_argument("--track", type=str, default="oval",
+                        choices=["oval", "hairpin", "autocross"],
+                        help="Track to train on (default: oval)")
+    parser.add_argument("--max-steps", type=int, default=2000,
+                        help="Max simulation steps per episode (default: 2000)")
     parser.add_argument("--sigma", type=float, default=0.1,
                         help="Initial mutation sigma (default: 0.1, use 0.01-0.02 for fine-tuning)")
     parser.add_argument("--sigma-min", type=float, default=0.005,
                         help="Minimum mutation sigma")
     args = parser.parse_args()
+
+    # Set active track BEFORE forking workers
+    set_track(args.track, max_steps=args.max_steps)
 
     os.makedirs(args.output_dir, exist_ok=True)
 
@@ -65,7 +73,7 @@ def main():
             print(f"  {n_seed}/{args.pop_size} slots seeded, σ={seed_sigma}")
         gas[name] = ga
 
-    print(f"Training {list(gas.keys())} | "
+    print(f"Training {list(gas.keys())} on '{args.track}' track | "
           f"generations={args.generations}  pop={args.pop_size}  "
           f"workers={args.workers}  fitness={args.fitness}\n")
 
@@ -89,6 +97,7 @@ def main():
 
         payload = {
             "controller_type": name,
+            "track": args.track,
             "genes": ga.best_genes.tolist(),
             "fitness": ga.best_fitness,
             "fitness_mode": args.fitness,
