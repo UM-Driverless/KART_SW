@@ -90,7 +90,7 @@ class PerfectPerceptionNode(Node):
         self.declare_parameter("output_topic", "/perception/cones_3d")
         self.declare_parameter("camera_info_topic", "/zed/zed_node/rgb/camera_info")
         self.declare_parameter("max_range", 20.0)
-        self.declare_parameter("fov_deg", 80.0)
+        self.declare_parameter("fov_deg", 70.0)
         self.declare_parameter("publish_rate", 10.0)
         self.declare_parameter("camera_frame", "camera_link")
         # Camera offset from base_link (matching the kart model)

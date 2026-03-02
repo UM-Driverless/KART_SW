@@ -72,7 +72,7 @@ def _launch_setup(context):
     )
     gazebo_gui = ExecuteProcess(
         cmd=[
-            "ign", "gazebo",
+            "ign", "gazebo", "-r",
             world_file,
         ],
         output="screen",
@@ -183,7 +183,7 @@ def _launch_setup(context):
                 "cmd_vel_topic": "/kart/cmd_vel",
                 "controller_type": controller_type,
                 "weights_json": weights_json,
-                "max_speed": 4.5,
+                "max_speed": 10.0,
                 "min_speed": 0.5,
                 "steering_gain": 1.0,
                 "max_steer": 0.5,

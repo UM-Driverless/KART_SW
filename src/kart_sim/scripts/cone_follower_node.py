@@ -23,7 +23,9 @@ import math
 import numpy as np
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import QoSProfile, DurabilityPolicy, ReliabilityPolicy
 from geometry_msgs.msg import Twist
+from nav_msgs.msg import Odometry
 from vision_msgs.msg import Detection3DArray
 
 
@@ -64,7 +66,7 @@ class ConeFollowerNode(Node):
         # neural net weights (loaded for neural or neural_v2)
         self._nn_W1 = self._nn_b1 = self._nn_W2 = self._nn_b2 = None
         self._nn_max_steer = 0.5
-        self._nn_max_speed = 5.0
+        self._nn_max_speed = 10.0
         self._nn_input_size = 8    # v1 default
         self._nn_n_blue = 2        # cones per side for v1
         self._nn_n_yellow = 2
@@ -79,11 +81,26 @@ class ConeFollowerNode(Node):
         self.sub = self.create_subscription(
             Detection3DArray, det_topic, self._on_detections, 10
         )
+        # Subscribe to odometry for actual speed feedback
+        odom_qos = QoSProfile(
+            depth=10,
+            reliability=ReliabilityPolicy.BEST_EFFORT,
+            durability=DurabilityPolicy.VOLATILE,
+        )
+        self.odom_sub = self.create_subscription(
+            Odometry, "/model/kart/odom_gt", self._on_odom, odom_qos
+        )
+        self._actual_speed = 0.0
         self._last_steer = 0.0
         self.last_detection_time = self.get_clock().now()
         self.timer = self.create_timer(0.1, self._safety_check)
 
         self.get_logger().info(f"Controller type: {self.controller_type}")
+
+    def _on_odom(self, msg: Odometry):
+        vx = msg.twist.twist.linear.x
+        vy = msg.twist.twist.linear.y
+        self._actual_speed = math.sqrt(vx * vx + vy * vy)
 
     # ── neural net loading ────────────────────────────────────────────
 
@@ -146,7 +163,7 @@ class ConeFollowerNode(Node):
             if dist > 15.0:
                 continue
             angle = abs(math.atan2(left, fwd))
-            if angle > 1.0472:  # ±60° in radians
+            if angle > 0.6109:  # ±35° in radians (ZED 2i @ VGA = 70° total)
                 continue
             cones.append((class_id, fwd, left))
 
@@ -236,7 +253,7 @@ class ConeFollowerNode(Node):
             inp[nb * 2 + j * 2] = d / 15.0
             inp[nb * 2 + j * 2 + 1] = a / np.pi
         if self._nn_uses_speed:
-            inp[-1] = self._current_speed / self._nn_max_speed
+            inp[-1] = self._actual_speed / self._nn_max_speed
 
         hidden = np.tanh(inp @ self._nn_W1 + self._nn_b1)
         out = hidden @ self._nn_W2 + self._nn_b2
@@ -244,11 +261,11 @@ class ConeFollowerNode(Node):
         steer = float(np.tanh(out[0])) * self._nn_max_steer
         speed = float(1.0 / (1.0 + np.exp(-out[1]))) * self._nn_max_speed
         speed = max(self.min_speed, min(self.max_speed, speed))
-        self._current_speed = speed  # track for next iteration
 
         self._last_steer = steer
         self.get_logger().info(
-            f"[{self.controller_type}] steer={steer:.3f} speed={speed:.1f} "
+            f"[{self.controller_type}] steer={steer:.3f} cmd_spd={speed:.1f} "
+            f"act_spd={self._actual_speed:.1f} "
             f"blues={len(blues)} yellows={len(yellows)}"
         )
         return steer, speed

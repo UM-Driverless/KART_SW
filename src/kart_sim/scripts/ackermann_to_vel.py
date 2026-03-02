@@ -55,12 +55,9 @@ class AckermannToVel(Node):
         else:
             self._cur_linear = target_linear
 
-        ang_diff = target_angular - self._cur_angular
-        max_ang_change = MAX_ANGULAR_ACCEL * dt
-        if abs(ang_diff) > max_ang_change:
-            self._cur_angular += math.copysign(max_ang_change, ang_diff)
-        else:
-            self._cur_angular = target_angular
+        # No angular rate limit — the steering servo is fast and Gazebo
+        # physics already handles the kart's rotational inertia.
+        self._cur_angular = target_angular
 
         out = Twist()
         out.linear.x = self._cur_linear

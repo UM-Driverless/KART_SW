@@ -3,7 +3,7 @@
 import numpy as np
 
 from track import OVAL_TRACK, get_track
-from kart_model import KartState, step as kart_step, DT
+from kart_model import KartState, step as kart_step, DT, MAX_SPEED
 from perception import perceive
 
 DEFAULT_MAX_STEPS = 2000
@@ -11,21 +11,33 @@ BOUNDARY_DANGER = 0.5  # m — penalize when kart is within this distance of bou
 
 # Active track — set via set_track() before training, defaults to oval
 _active_track = OVAL_TRACK
+_active_tracks = None  # list of tracks for multi-track evaluation
 _max_steps = DEFAULT_MAX_STEPS
+_noise_std = 0.0       # perception noise (metres)
+_dropout = 0.0         # cone dropout probability
 
 
-def set_track(name_or_track, max_steps=None):
+def set_track(name_or_track, max_steps=None, noise_std=0.0, dropout=0.0):
     """Set the active track for all subsequent run_episode() calls.
 
     Must be called before forking worker processes.
     """
-    global _active_track, _max_steps
+    global _active_track, _active_tracks, _max_steps, _noise_std, _dropout
     if isinstance(name_or_track, str):
-        _active_track = get_track(name_or_track)
+        if "," in name_or_track:
+            names = [n.strip() for n in name_or_track.split(",")]
+            _active_tracks = [get_track(n) for n in names]
+            _active_track = _active_tracks[0]
+        else:
+            _active_track = get_track(name_or_track)
+            _active_tracks = None
     else:
         _active_track = name_or_track
+        _active_tracks = None
     if max_steps is not None:
         _max_steps = max_steps
+    _noise_std = noise_std
+    _dropout = dropout
 
 
 def run_episode(controller, max_steps=None, fitness_mode="v1"):
@@ -33,13 +45,14 @@ def run_episode(controller, max_steps=None, fitness_mode="v1"):
 
     Parameters
     ----------
-    fitness_mode : "v1" | "v2" | "v3" | "v4" | "v5"
+    fitness_mode : "v1" | "v2" | "v3" | "v4" | "v5" | "v6"
         v1: distance + lap bonus - CTE + speed (original)
         v2: lap-time based — completing laps fast is king
         v3: track-keeping first — nonlinear CTE⁴ penalty, reward progress,
             speed only matters through completing laps
         v4: boundary-aware — terminate if outside track, penalize near boundary
         v5: centered progress — each meter of progress scaled by centering
+        v6: centered fast progress — v5 × (1 + speed/max_speed)
 
     Returns
     -------
@@ -65,10 +78,13 @@ def run_episode(controller, max_steps=None, fitness_mode="v1"):
     boundary_penalty = 0.0
     min_boundary_dist = float('inf')
     weighted_progress = 0.0
+    speed_weighted_progress = 0.0
     steps = 0
 
     for _ in range(max_steps):
-        visible = perceive(state, track.blue_cones, track.yellow_cones, track.orange_cones)
+        visible = perceive(state, track.blue_cones, track.yellow_cones,
+                           track.orange_cones, noise_std=_noise_std,
+                           dropout=_dropout)
 
         if wants_speed:
             steer, speed_cmd = controller.control(visible,
@@ -100,7 +116,10 @@ def run_episode(controller, max_steps=None, fitness_mode="v1"):
         total_cte4 += cte_norm ** 4
 
         # Weighted progress: scale each step by centering quality
-        weighted_progress += ds * max(0.0, 1.0 - cte_norm ** 2)
+        centering = max(0.0, 1.0 - cte_norm ** 2)
+        weighted_progress += ds * centering
+        # Speed-weighted progress: reward going faster while centered
+        speed_weighted_progress += ds * centering * (1.0 + state.speed / MAX_SPEED)
 
         # Boundary check — distance to nearest boundary line segment
         bd = track.dist_to_boundary(state.x, state.y)
@@ -121,7 +140,10 @@ def run_episode(controller, max_steps=None, fitness_mode="v1"):
     laps = int(total_distance / track.track_length) if total_distance > 0 else 0
     time = steps * DT
 
-    if fitness_mode == "v5":
+    if fitness_mode == "v6":
+        # Centered fast progress: centering × speed, no separate lap bonus
+        fitness = speed_weighted_progress
+    elif fitness_mode == "v5":
         # Centered progress: each meter scaled by how centered the kart is
         fitness = weighted_progress + 200.0 * laps
     elif fitness_mode == "v4":
@@ -156,6 +178,37 @@ def run_episode(controller, max_steps=None, fitness_mode="v1"):
         "max_cte": max_cte,
         "cte_penalty": cte_penalty if fitness_mode in ("v3", "v4") else 0.0,
         "weighted_progress": weighted_progress,
+        "speed_weighted_progress": speed_weighted_progress,
         "min_boundary_dist": min_boundary_dist,
         "boundary_penalty": boundary_penalty,
     }
+
+
+def run_episode_multitrack(controller, fitness_mode="v1"):
+    """Evaluate on all active tracks; return min fitness (worst track).
+
+    Falls back to single-track if _active_tracks is not set.
+    """
+    global _active_track
+    tracks = _active_tracks or [_active_track]
+    results = []
+    saved = _active_track
+    for track in tracks:
+        _active_track = track
+        controller.reset()
+        r = run_episode(controller, fitness_mode=fitness_mode)
+        results.append(r)
+    _active_track = saved
+
+    # Average fitness across tracks — balanced pressure on all tracks
+    avg_fitness = sum(r["fitness"] for r in results) / len(results)
+    # Use the result from the worst track for other metrics
+    worst_idx = min(range(len(results)), key=lambda i: results[i]["fitness"])
+    result = dict(results[worst_idx])
+    result["fitness"] = avg_fitness
+    result["per_track"] = [{"track_length": t.track_length,
+                            "fitness": r["fitness"],
+                            "laps": r["laps"],
+                            "avg_cte": r["avg_cte"]}
+                           for t, r in zip(tracks, results)]
+    return result

@@ -125,13 +125,36 @@ class Track:
     def is_inside_track(self, x: float, y: float) -> bool:
         """True if (x, y) is on the track surface (between boundaries).
 
-        Uses a combined polygon: yellow cones forward + blue cones reversed.
-        This correctly handles tracks where blue/yellow swap inner/outer
-        (e.g. tracks with both left and right turns).
+        Uses a local approach: for the nearest blue and yellow boundary
+        segments, checks that the point is on the track-interior side of
+        each using cross products.  Robust for complex / non-convex tracks.
         """
-        poly_x = np.concatenate([self.yellow_cones[:, 0], self.blue_cones[::-1, 0]])
-        poly_y = np.concatenate([self.yellow_cones[:, 1], self.blue_cones[::-1, 1]])
-        return self._point_in_polygon(x, y, poly_x, poly_y)
+        # --- helper: signed distance to a polyline (positive = left of travel)
+        def _side_of_nearest(cones, px, py):
+            starts = cones
+            ends = np.roll(cones, -1, axis=0)
+            dx_s = ends[:, 0] - starts[:, 0]
+            dy_s = ends[:, 1] - starts[:, 1]
+            len_sq = dx_s * dx_s + dy_s * dy_s
+            apx = px - starts[:, 0]
+            apy = py - starts[:, 1]
+            t = np.clip((apx * dx_s + apy * dy_s) / len_sq, 0.0, 1.0)
+            proj_x = starts[:, 0] + t * dx_s
+            proj_y = starts[:, 1] + t * dy_s
+            dists = np.hypot(px - proj_x, py - proj_y)
+            idx = int(np.argmin(dists))
+            # Cross product: positive → point is left of segment direction
+            cross = dx_s[idx] * (py - starts[idx, 1]) - dy_s[idx] * (px - starts[idx, 0])
+            return float(dists[idx]), float(cross)
+
+        blue_dist, blue_cross = _side_of_nearest(self.blue_cones, x, y)
+        yellow_dist, yellow_cross = _side_of_nearest(self.yellow_cones, x, y)
+
+        # Blue cones are on the LEFT of travel direction → inside is to the RIGHT
+        # (cross < 0 means right of blue boundary → inside)
+        # Yellow cones are on the RIGHT → inside is to the LEFT
+        # (cross > 0 means left of yellow boundary → inside)
+        return blue_cross <= 0 and yellow_cross >= 0
 
     def dist_to_boundary(self, x: float, y: float) -> float:
         """Signed distance to nearest boundary segment (+inside, −outside)."""

@@ -1,4 +1,6 @@
 {
+  "controller_type": "neural_v2",
+  "track": "autocross",
   "genes": [
     -0.21364581352516615,
     -0.6259427647829214,
@@ -323,8 +325,26 @@
     -0.2306766740043313,
     1.881365114220349
   ],
-  "controller_type": "neural_v2",
   "fitness": 4917.151290957722,
   "fitness_mode": "v6",
-  "note": "CMA-ES trained with noise=0.15m dropout=0.05 on autocross"
+  "result": {
+    "fitness": 4917.783301483623,
+    "distance": 2484.409520603298,
+    "laps": 12,
+    "avg_cte": 0.10416324950260855,
+    "avg_speed": 9.90078224794953,
+    "steps": 5000,
+    "time": 250.0,
+    "max_cte": 0.5940557253421315,
+    "cte_penalty": 0.0,
+    "weighted_progress": 2462.896713229004,
+    "speed_weighted_progress": 4917.783301483623,
+    "min_boundary_dist": 0.8883848042970967,
+    "boundary_penalty": 0.0
+  },
+  "generations": 100,
+  "pop_size": 150,
+  "optimizer": "cma",
+  "noise_std": 0.15,
+  "dropout": 0.05
 }

@@ -1,20 +1,27 @@
-"""Simulated perception: FOV + range filter, output in optical frame."""
+"""Simulated perception: FOV + range filter, output in kart frame."""
 
 import numpy as np
 from kart_model import KartState
 
 CAMERA_OFFSET = 0.55          # m forward of chassis center
-FOV_HALF = np.radians(60)     # ±60° = 120° total
+FOV_HALF = np.radians(35)     # ±35° = 70° total (ZED 2i @ VGA)
 RANGE_MIN = 0.5               # m
 RANGE_MAX = 15.0              # m
 
 
-def perceive(state: KartState, blue_cones, yellow_cones, orange_cones):
+def perceive(state: KartState, blue_cones, yellow_cones, orange_cones,
+             noise_std=0.0, dropout=0.0):
     """Return cones visible from the kart's camera.
 
-    Each entry is ``(class_id, opt_x, opt_y, opt_z)`` in the camera
-    *optical* frame (Z = forward, X = right, Y = down) — the same
-    convention used by the real perception pipeline.
+    Each entry is ``(class_id, x, y, z)`` in the kart frame
+    (X = forward, Y = left, Z = up).
+
+    Parameters
+    ----------
+    noise_std : float
+        Gaussian noise added to cone positions (metres).  0 = perfect.
+    dropout : float
+        Probability of dropping each visible cone (0–1).  0 = no drops.
     """
     cos_yaw = np.cos(state.yaw)
     sin_yaw = np.sin(state.yaw)
@@ -42,7 +49,13 @@ def perceive(state: KartState, blue_cones, yellow_cones, orange_cones):
 
         mask = (dist >= RANGE_MIN) & (dist <= RANGE_MAX) & (np.abs(angle) <= FOV_HALF)
         for i in np.where(mask)[0]:
-            # Optical frame: Z=fwd, X=right (=-left), Y=down (=0 in 2-D)
-            visible.append((class_id, -float(left[i]), 0.0, float(fwd[i])))
+            if dropout > 0 and np.random.random() < dropout:
+                continue
+            fx = float(fwd[i])
+            fy = float(left[i])
+            if noise_std > 0:
+                fx += np.random.randn() * noise_std
+                fy += np.random.randn() * noise_std
+            visible.append((class_id, fx, fy, 0.0))
 
     return visible

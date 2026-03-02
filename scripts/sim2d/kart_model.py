@@ -4,7 +4,7 @@ import numpy as np
 
 WHEELBASE = 1.05   # m
 MAX_STEER = 0.5    # rad
-MAX_SPEED = 5.0    # m/s
+MAX_SPEED = 10.0   # m/s
 MAX_ACCEL = 2.0    # m/s²
 DT = 0.05          # s  (20 Hz, matching real controller rate)
 

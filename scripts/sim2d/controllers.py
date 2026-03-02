@@ -1,4 +1,4 @@
-"""Controllers: geometric, neural net v1, and neural net v2."""
+"""Controllers: geometric, neural net v1, v2, and v3."""
 
 import math
 import numpy as np
@@ -54,9 +54,9 @@ class GeometricController:
         min_bd = float("inf")
         min_yd = float("inf")
 
-        for cls, opt_x, _opt_y, opt_z in visible_cones:
-            fwd = opt_z
-            left = -opt_x
+        for cls, x, y, _z in visible_cones:
+            fwd = x
+            left = y
 
             if fwd < 0.5:
                 continue
@@ -115,7 +115,7 @@ class NeuralNetController:
                  + HIDDEN_SIZE * OUTPUT_SIZE + OUTPUT_SIZE)  # 90
 
     MAX_STEER = 0.5
-    MAX_SPEED = 5.0
+    MAX_SPEED = 10.0
 
     def __init__(self, genes):
         g = np.asarray(genes, dtype=np.float64)
@@ -135,15 +135,13 @@ class NeuralNetController:
         pass
 
     def control(self, visible_cones):
-        """Return ``(steer, speed)`` given cones in the optical frame."""
+        """Return ``(steer, speed)`` given cones in kart frame."""
         blues = []
         yellows = []
 
-        for cls, opt_x, _opt_y, opt_z in visible_cones:
-            fwd = opt_z
-            left = -opt_x
-            dist = math.hypot(fwd, left)
-            angle = math.atan2(left, fwd)
+        for cls, x, y, _z in visible_cones:
+            dist = math.hypot(x, y)
+            angle = math.atan2(y, x)
             if cls == "blue_cone":
                 blues.append((dist, angle))
             elif cls == "yellow_cone":
@@ -191,7 +189,7 @@ class NeuralNetV2Controller:
                  + HIDDEN_SIZE * OUTPUT_SIZE + OUTPUT_SIZE)  # 322
 
     MAX_STEER = 0.5
-    MAX_SPEED = 5.0
+    MAX_SPEED = 10.0
 
     def __init__(self, genes):
         g = np.asarray(genes, dtype=np.float64)
@@ -212,18 +210,16 @@ class NeuralNetV2Controller:
         self._last_speed = 0.0
 
     def control(self, visible_cones, current_speed=None):
-        """Return ``(steer, speed)`` given cones in the optical frame."""
+        """Return ``(steer, speed)`` given cones in kart frame."""
         if current_speed is not None:
             self._last_speed = current_speed
 
         blues = []
         yellows = []
 
-        for cls, opt_x, _opt_y, opt_z in visible_cones:
-            fwd = opt_z
-            left = -opt_x
-            dist = math.hypot(fwd, left)
-            angle = math.atan2(left, fwd)
+        for cls, x, y, _z in visible_cones:
+            dist = math.hypot(x, y)
+            angle = math.atan2(y, x)
             if cls == "blue_cone":
                 blues.append((dist, angle))
             elif cls == "yellow_cone":
@@ -249,4 +245,103 @@ class NeuralNetV2Controller:
 
         steer = float(np.tanh(out[0])) * self.MAX_STEER
         speed = float(1.0 / (1.0 + np.exp(-out[1]))) * self.MAX_SPEED
+        return steer, speed
+
+
+# ── Neural-net v3 controller ──────────────────────────────────────────────
+
+class NeuralNetV3Controller:
+    """Two-hidden-layer net with more inputs for richer decision-making.
+
+    Architecture
+    ------------
+    Input  (19): 4 nearest blue × (dist, angle)
+               + 4 nearest yellow × (dist, angle)
+               + current speed (normalized)
+               + current steer (normalized by MAX_STEER)
+               + steer rate  (delta steer / MAX_STEER, measures recent change)
+    Hidden1 (24): tanh activation
+    Hidden2 (12): tanh activation
+    Output   (2): tanh → steer,  sigmoid → speed
+
+    Total genes = 19×24 + 24 + 24×12 + 12 + 12×2 + 2 = 806
+    """
+
+    INPUT_SIZE = 19
+    HIDDEN1_SIZE = 24
+    HIDDEN2_SIZE = 12
+    OUTPUT_SIZE = 2
+    NUM_GENES = (INPUT_SIZE * HIDDEN1_SIZE + HIDDEN1_SIZE
+                 + HIDDEN1_SIZE * HIDDEN2_SIZE + HIDDEN2_SIZE
+                 + HIDDEN2_SIZE * OUTPUT_SIZE + OUTPUT_SIZE)  # 806
+
+    MAX_STEER = 0.5
+    MAX_SPEED = 10.0
+
+    def __init__(self, genes):
+        g = np.asarray(genes, dtype=np.float64)
+        self.genes = g
+        i = 0
+        n = self.INPUT_SIZE * self.HIDDEN1_SIZE
+        self.W1 = g[i:i + n].reshape(self.INPUT_SIZE, self.HIDDEN1_SIZE)
+        i += n
+        self.b1 = g[i:i + self.HIDDEN1_SIZE]
+        i += self.HIDDEN1_SIZE
+        n = self.HIDDEN1_SIZE * self.HIDDEN2_SIZE
+        self.W2 = g[i:i + n].reshape(self.HIDDEN1_SIZE, self.HIDDEN2_SIZE)
+        i += n
+        self.b2 = g[i:i + self.HIDDEN2_SIZE]
+        i += self.HIDDEN2_SIZE
+        n = self.HIDDEN2_SIZE * self.OUTPUT_SIZE
+        self.W3 = g[i:i + n].reshape(self.HIDDEN2_SIZE, self.OUTPUT_SIZE)
+        i += n
+        self.b3 = g[i:i + self.OUTPUT_SIZE]
+        self._last_speed = 0.0
+        self._last_steer = 0.0
+        self._prev_steer = 0.0
+
+    def reset(self):
+        self._last_speed = 0.0
+        self._last_steer = 0.0
+        self._prev_steer = 0.0
+
+    def control(self, visible_cones, current_speed=None):
+        """Return ``(steer, speed)`` given cones in kart frame."""
+        if current_speed is not None:
+            self._last_speed = current_speed
+
+        blues = []
+        yellows = []
+
+        for cls, x, y, _z in visible_cones:
+            dist = math.hypot(x, y)
+            angle = math.atan2(y, x)
+            if cls == "blue_cone":
+                blues.append((dist, angle))
+            elif cls == "yellow_cone":
+                yellows.append((dist, angle))
+
+        blues.sort()
+        yellows.sort()
+
+        inp = np.zeros(self.INPUT_SIZE)
+        for j, (d, a) in enumerate(blues[:4]):
+            inp[j * 2] = d / 15.0
+            inp[j * 2 + 1] = a / np.pi
+        for j, (d, a) in enumerate(yellows[:4]):
+            inp[8 + j * 2] = d / 15.0
+            inp[8 + j * 2 + 1] = a / np.pi
+        inp[16] = self._last_speed / self.MAX_SPEED
+        inp[17] = self._last_steer / self.MAX_STEER
+        inp[18] = (self._last_steer - self._prev_steer) / self.MAX_STEER
+
+        h1 = np.tanh(inp @ self.W1 + self.b1)
+        h2 = np.tanh(h1 @ self.W2 + self.b2)
+        out = h2 @ self.W3 + self.b3
+
+        steer = float(np.tanh(out[0])) * self.MAX_STEER
+        speed = float(1.0 / (1.0 + np.exp(-out[1]))) * self.MAX_SPEED
+
+        self._prev_steer = self._last_steer
+        self._last_steer = steer
         return steer, speed

@@ -41,29 +41,65 @@ Claude Code runs on the Mac. The Gazebo simulator runs on the UTM VM (Ubuntu 22.
 - **Gazebo validated by user** — user opened Gazebo from UTM GUI, shared screenshot showing cones rendered correctly
 - **Controller runs** — logs showed `neural_v2` steering with `blues=5-7 yellows=4-6`, kart navigating the track
 
+### What's done (2026-03-01, in-VM session)
+- **Claude Code running on VM** — confirmed working, no SSH/Wayland issues
+- **Neural controller retrained on autocross** — 50 generations, seeded from oval weights
+  - **6 laps, 1263m, avg_cte=0.24m, avg_speed=5.0m/s** on autocross
+  - Also generalizes to hairpin: **8 laps, avg_cte=0.34m**
+  - Weights deployed to `src/kart_sim/config/neural_v2_weights.json`, package rebuilt
+- **`is_inside_track` bug fixed** — polygon self-intersection on complex tracks caused false "outside" detection at the seam (cone N-1 → cone 0). Replaced with cross-product approach.
+- **`--track` arg added to `train.py`** — can now train on any track: `python3 train.py --track=autocross`
+- **`--max-steps` arg added** — longer episodes for bigger tracks
+- **Sigma restart in GA** — prevents premature convergence (restarts sigma after 30 stagnant gens)
+
+### What's done (2026-03-02, training improvements)
+- **CMA-ES optimizer added** — `--optimizer cma` flag in train.py. Uses `cma` Python package. Much more sample-efficient than basic GA.
+- **NeuralNetV3Controller** — 2-hidden-layer net (19→24→12→2, 806 genes). Extra inputs: current steer + steer rate.
+- **Perception noise** — `--noise` (std in metres) and `--dropout` (cone drop probability) flags.
+- **Multi-track training** — `--track oval,hairpin,autocross` evaluates on all tracks, averages fitness.
+- **5 experiments run on y540-ubuntu-local** (12 cores, 15GB RAM, venv at `~/cma_venv`):
+
+| Experiment | Fitness | Laps | avg_cte | avg_speed | Notes |
+|---|---|---|---|---|---|
+| CMA-V2 autocross (seeded) | **4934.7** | 12 | **0.07m** | 9.9 m/s | Best centering |
+| CMA-V2 noisy (noise=0.15, dropout=0.05) | 4917.2 | 12 | 0.10m | 9.9 m/s | **Best for real-world** |
+| CMA-V3 from scratch | 4702.1 | 12 | 0.27m | 9.8 m/s | From scratch, 100 gens |
+| CMA-V3 fine-tuned | **4905.8** | 12 | 0.14m | 9.9 m/s | Approaching V2 |
+| CMA-V2 multitrack-avg | 4894.1 | 18* | 0.13m | 9.9 m/s | *18 laps on oval, overfit |
+
+- **Cross-track generalization**: Single-track models don't generalize well between tracks (different geometry/spawn). This is expected — tracks are too different.
+- **Deployed weights**: noise-robust CMA-V2 deployed to `neural_v2_weights.json`
+
 ### What's NOT done
-- **Gazebo screenshot by Claude** — blocked by Wayland/SSH issues (see above)
-- **Neural controller retraining** — current weights are trained on the oval track. Need to retrain on autocross for optimal performance (the kart drives but may not handle all turns well)
+- **Gazebo visual validation** — need to launch Gazebo with `track:=autocross` and confirm kart completes laps visually
 - **`visualize.py` bug** — `GeometricController.control()` missing `current_speed` kwarg. Pre-existing, not blocking.
+- **Recurrent controller (LSTM/GRU)** — could improve temporal decision-making
 
 ## What we want to do with the simulator
 
 ### Immediate goals
-1. **Validate the neural_v2 controller on the autocross track in Gazebo** — visually confirm the kart completes laps without leaving the track. This requires taking a screenshot/video from Gazebo (blocked until Claude runs on VM or user provides screenshots).
-2. **Retrain on autocross** — run `python train.py` with the autocross track in the 2D sim to get weights optimized for this layout. Current weights are oval-trained.
-3. **Deploy retrained weights** — copy best weights to `src/kart_sim/config/neural_v2_weights.json`, rebuild on VM, test in Gazebo.
+1. **Validate in Gazebo** — launch `ros2 launch kart_sim simulation.launch.py track:=autocross`, visually confirm the kart completes laps
 
 ### Longer term
 - Test on real hardware (Orin) once controller is validated in simulation
 - Try the YOLO perception pipeline (`use_yolo:=true`) instead of perfect perception
-- Consider adding more track layouts for robustness testing
+- Explore recurrent networks (LSTM-like) for temporal context
 
 ---
 
 ## TODO
-- [ ] **Document Claude Code on VM setup** once confirmed working (add to `vm_environment.md`)
-- [ ] Retrain neural_v2 on autocross track
+- [x] ~~Install Claude Code on VM~~ (confirmed working 2026-03-01)
+- [x] ~~Retrain neural_v2 on autocross track~~ (6 laps, fitness=2457)
+- [x] ~~Fix `is_inside_track` bug~~ (cross-product approach)
+- [x] ~~Add CMA-ES optimizer~~ (2026-03-02)
+- [x] ~~Add NeuralNetV3 controller~~ (2-hidden-layer, 806 genes)
+- [x] ~~Add perception noise/dropout~~ (for sim-to-real robustness)
+- [x] ~~Multi-track training support~~ (avg fitness across tracks)
+- [x] ~~Deploy noise-robust weights~~ (CMA-V2 noisy → neural_v2_weights.json)
+- [ ] **Validate in Gazebo** — launch with `track:=autocross` and confirm visually
+- [ ] **Document Claude Code on VM setup** (add to `vm_environment.md`)
 - [ ] Fix `visualize.py` GeometricController bug (low priority)
+- [ ] Explore recurrent (LSTM-like) controller for temporal context
 
 ---
 

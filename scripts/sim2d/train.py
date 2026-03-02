@@ -7,14 +7,16 @@ import multiprocessing
 import os
 import time
 
-from controllers import GeometricController, NeuralNetController, NeuralNetV2Controller
-from ga import GeneticAlgorithm
-from sim import run_episode, set_track
+from controllers import (GeometricController, NeuralNetController,
+                         NeuralNetV2Controller, NeuralNetV3Controller)
+from ga import GeneticAlgorithm, CMAESOptimizer
+from sim import run_episode, run_episode_multitrack, set_track
 
 CONTROLLER_MAP = {
     "geometric": GeometricController,
     "neural": NeuralNetController,
     "neural_v2": NeuralNetV2Controller,
+    "neural_v3": NeuralNetV3Controller,
 }
 
 
@@ -26,27 +28,35 @@ def main():
     parser.add_argument("--output-dir", type=str, default="results")
     parser.add_argument("--controllers", type=str, default="geometric,neural",
                         help="Comma-separated controller types: "
-                             "geometric, neural, neural_v2")
+                             "geometric, neural, neural_v2, neural_v3")
     parser.add_argument("--fitness", type=str, default="v1",
-                        choices=["v1", "v2", "v3", "v4", "v5"],
+                        choices=["v1", "v2", "v3", "v4", "v5", "v6"],
                         help="v1: distance+laps, v2: lap-time, "
                              "v3: track-keeping (nonlinear CTE penalty), "
                              "v4: boundary-aware (terminate outside cones)")
     parser.add_argument("--seed", type=str, default="",
                         help="Path to JSON weights to seed population with")
     parser.add_argument("--track", type=str, default="oval",
-                        choices=["oval", "hairpin", "autocross"],
-                        help="Track to train on (default: oval)")
+                        help="Track name or comma-separated for multi-track "
+                             "(e.g. 'autocross' or 'oval,hairpin,autocross')")
     parser.add_argument("--max-steps", type=int, default=2000,
                         help="Max simulation steps per episode (default: 2000)")
     parser.add_argument("--sigma", type=float, default=0.1,
                         help="Initial mutation sigma (default: 0.1, use 0.01-0.02 for fine-tuning)")
     parser.add_argument("--sigma-min", type=float, default=0.005,
                         help="Minimum mutation sigma")
+    parser.add_argument("--optimizer", type=str, default="ga",
+                        choices=["ga", "cma"],
+                        help="Optimizer: ga (genetic algorithm) or cma (CMA-ES)")
+    parser.add_argument("--noise", type=float, default=0.0,
+                        help="Perception noise std in metres (default: 0, try 0.1-0.3)")
+    parser.add_argument("--dropout", type=float, default=0.0,
+                        help="Cone dropout probability (default: 0, try 0.05-0.15)")
     args = parser.parse_args()
 
     # Set active track BEFORE forking workers
-    set_track(args.track, max_steps=args.max_steps)
+    set_track(args.track, max_steps=args.max_steps,
+              noise_std=args.noise, dropout=args.dropout)
 
     os.makedirs(args.output_dir, exist_ok=True)
 
@@ -54,28 +64,45 @@ def main():
     gas = {}
     for name in names:
         cls = CONTROLLER_MAP[name]
-        ga = GeneticAlgorithm(cls, pop_size=args.pop_size,
-                              fitness_mode=args.fitness,
-                              mutation_sigma=args.sigma,
-                              sigma_min=args.sigma_min)
+
+        # Load seed genes if provided
+        seed_genes = None
         if args.seed:
             import numpy as np
             with open(args.seed) as f:
                 seed_data = json.load(f)
             seed_genes = np.array(seed_data["genes"], dtype=np.float64)
-            # Seed entire population around the seed weights
-            seed_sigma = args.sigma
-            n_seed = min(args.pop_size, max(20, args.pop_size // 2))
-            ga.population[0] = seed_genes.copy()
-            for i in range(1, n_seed):
-                ga.population[i] = seed_genes + np.random.randn(len(seed_genes)) * seed_sigma
-            print(f"  Seeded {name} from {args.seed} (fitness={seed_data.get('fitness', '?')})")
-            print(f"  {n_seed}/{args.pop_size} slots seeded, σ={seed_sigma}")
-        gas[name] = ga
 
+        if args.optimizer == "cma":
+            opt = CMAESOptimizer(cls, pop_size=args.pop_size, sigma0=args.sigma,
+                                 fitness_mode=args.fitness,
+                                 seed_genes=seed_genes)
+            if seed_genes is not None:
+                print(f"  CMA-ES seeded {name} from {args.seed} (fitness={seed_data.get('fitness', '?')})")
+        else:
+            opt = GeneticAlgorithm(cls, pop_size=args.pop_size,
+                                   fitness_mode=args.fitness,
+                                   mutation_sigma=args.sigma,
+                                   sigma_min=args.sigma_min)
+            if seed_genes is not None:
+                seed_sigma = args.sigma
+                n_seed = min(args.pop_size, max(20, args.pop_size // 2))
+                opt.population[0] = seed_genes.copy()
+                for i in range(1, n_seed):
+                    opt.population[i] = seed_genes + np.random.randn(len(seed_genes)) * seed_sigma
+                print(f"  GA seeded {name} from {args.seed} (fitness={seed_data.get('fitness', '?')})")
+                print(f"  {n_seed}/{args.pop_size} slots seeded, σ={seed_sigma}")
+        gas[name] = opt
+
+    extra = ""
+    if args.noise > 0:
+        extra += f"  noise={args.noise}m"
+    if args.dropout > 0:
+        extra += f"  dropout={args.dropout}"
     print(f"Training {list(gas.keys())} on '{args.track}' track | "
-          f"generations={args.generations}  pop={args.pop_size}  "
-          f"workers={args.workers}  fitness={args.fitness}\n")
+          f"optimizer={args.optimizer}  generations={args.generations}  "
+          f"pop={args.pop_size}  workers={args.workers}  "
+          f"fitness={args.fitness}{extra}\n")
 
     for gen in range(args.generations):
         t0 = time.time()
@@ -104,6 +131,9 @@ def main():
             "result": result,
             "generations": args.generations,
             "pop_size": args.pop_size,
+            "optimizer": args.optimizer,
+            "noise_std": args.noise,
+            "dropout": args.dropout,
         }
 
         path = os.path.join(args.output_dir, f"best_{name}.json")
