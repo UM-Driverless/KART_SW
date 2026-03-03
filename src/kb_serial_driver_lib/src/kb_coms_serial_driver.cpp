@@ -484,7 +484,8 @@ speed_t SerialDriver::baudrate_to_flag(uint32_t baudrate) const
     {
         case 9600: return B9600;
         case 115200: return B115200;
+        case 460800: return B460800;
         case 1000000: return B1000000;
-        default: return B115200;
+        default: return B460800;
     }
 }

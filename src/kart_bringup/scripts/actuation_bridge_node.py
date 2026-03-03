@@ -59,10 +59,12 @@ class ActuationBridgeNode(Node):
             self._last_brake = int(min(1.0, -accel) * 255.0)
 
     def _send_frames(self):
-        # ORIN_TARG_STEERING (0x22): payload = s8
+        # ORIN_TARG_STEERING (0x22): payload = [direction, magnitude]
         steer_frame = Frame()
         steer_frame.type = Frame.ORIN_TARG_STEERING
-        steer_frame.payload = list(struct.pack("b", self._last_steer))
+        direction = 0 if self._last_steer >= 0 else 1
+        magnitude = min(255, abs(self._last_steer) * 2)  # scale s8 [-127,127] → u8
+        steer_frame.payload = [direction, magnitude]
 
         # ORIN_TARG_THROTTLE (0x20): payload = u8
         throttle_frame = Frame()

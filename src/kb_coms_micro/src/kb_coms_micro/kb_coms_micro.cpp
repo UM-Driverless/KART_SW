@@ -4,7 +4,7 @@ KB_coms_micro::KB_coms_micro() : Node("kb_coms_micro_node") {
 
     // Declare parameters with defaults
     this->declare_parameter<std::string>("serial_port", "/dev/serial/by-id/usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller_0001-if00-port0");
-    this->declare_parameter<int>("baudrate", 115200);
+    this->declare_parameter<int>("baudrate", 460800);
 
     // Get parameters
     std::string port;
