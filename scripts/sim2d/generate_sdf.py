@@ -4,12 +4,14 @@
 Usage:
     python generate_sdf.py autocross > ../../src/kart_sim/worlds/autocross_track.sdf
     python generate_sdf.py hairpin   > ../../src/kart_sim/worlds/hairpin_track.sdf
+    python generate_sdf.py "random:seed=42" > random_track.sdf
+    python generate_sdf.py "random:seed=42" --save-track random42.json > random42.sdf
 """
 
 import argparse
 import sys
 
-from track import get_track
+from track import get_track, track_to_json
 
 SDF_HEADER = """\
 <?xml version="1.0"?>
@@ -69,7 +71,7 @@ SDF_FOOTER = """
 
 def generate(track_name: str) -> str:
     track = get_track(track_name)
-    world_name = f"{track_name}_track"
+    world_name = f"{track.name}_track"
     lines = []
 
     lines.append(SDF_HEADER.format(
@@ -107,8 +109,18 @@ def generate(track_name: str) -> str:
 
 def main():
     parser = argparse.ArgumentParser(description='Generate Gazebo SDF from track.py')
-    parser.add_argument('track', help='Track name (oval, hairpin, autocross)')
+    parser.add_argument('track',
+                        help='Track: built-in name (oval, hairpin, autocross), '
+                             'JSON path, or random spec (random:seed=42)')
+    parser.add_argument('--save-track', metavar='PATH',
+                        help='Save the track definition to a JSON file')
     args = parser.parse_args()
+
+    if args.save_track:
+        track = get_track(args.track)
+        track_to_json(track, args.save_track)
+        print(f"Saved track → {args.save_track}", file=sys.stderr)
+
     print(generate(args.track))
 
 

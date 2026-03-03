@@ -12,7 +12,7 @@ LLMs have no persistent memory between sessions. Every conversation starts fresh
 
 | File | Purpose |
 |---|---|
-| `architecture.md` | Package structure, node graph, message types, topic map |
+| `architecture.md` | Package structure, node graph, message types, topic map, ESP32 UART routing & protocol |
 | `simulation.md` | Gazebo setup, known issues, rendering quirks, how to test |
 | `vm_environment.md` | UTM VM specifics: SSH, sudo, installed packages, limitations |
 | `orin_environment.md` | Jetson Orin specifics: hardware, ZED camera, live pipeline, known issues |
@@ -51,3 +51,4 @@ LLMs have no persistent memory between sessions. Every conversation starts fresh
 - **Check for stale processes** — Before launching ROS nodes, check if instances are already running
 - **Odom is relative** — Gazebo odometry starts at (0,0), not at the world pose
 - **No GPU in VM** — Everything renders via LLVMpipe. Keep resolutions low, disable shadows
+- **Hardware is on the Orin, not the Mac** — ESP32, ZED camera, actuators are all physically on the Orin. Always `ssh orin` for flashing, USB checks, ROS node launches, and any hardware interaction. The Mac is only for editing code.

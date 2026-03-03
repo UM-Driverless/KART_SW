@@ -1,10 +1,14 @@
 """Track definitions: cone positions, centerline, and boundary geometry.
 
 Each track is a ``Track`` dataclass that precomputes its centerline and
-boundary segments in ``__post_init__``.  Two tracks are provided:
+boundary segments in ``__post_init__``.  Built-in tracks:
 
 * **oval** — the original fs_track.sdf oval (R≈20 m)
 * **hairpin** — complex track with left sweeper + S-chicane (both L/R turns)
+* **autocross** — larger (~80×60 m), gentler curves, mixed L/R turns
+
+Tracks can also be loaded from JSON or generated randomly via
+``random-track-generator`` (lazy import — only needed for generation).
 
 Backward-compatible module-level aliases (``BLUE_CONES``, ``CENTERLINE_XY``,
 ``project_to_centerline``, …) point to ``OVAL_TRACK`` so that files that
@@ -13,6 +17,8 @@ have not been updated yet continue to work.
 
 from __future__ import annotations
 
+import json as _json
+import os
 from dataclasses import dataclass, field
 from typing import Tuple
 
@@ -364,7 +370,144 @@ AUTOCROSS_TRACK = Track(
 
 
 # ---------------------------------------------------------------------------
-# Registry
+# Random track generation (lazy import of random-track-generator)
+# ---------------------------------------------------------------------------
+
+def _resample_boundary(cones: np.ndarray, n: int) -> np.ndarray:
+    """Interpolate a closed cone boundary to *n* evenly-spaced points."""
+    closed = np.vstack([cones, cones[0:1]])
+    diffs = np.diff(closed, axis=0)
+    seg_len = np.hypot(diffs[:, 0], diffs[:, 1])
+    cum = np.zeros(len(closed))
+    cum[1:] = np.cumsum(seg_len)
+    total = cum[-1]
+    targets = np.linspace(0, total, n, endpoint=False)
+    out = np.empty((n, 2))
+    for i, s in enumerate(targets):
+        idx = int(np.searchsorted(cum, s, side="right")) - 1
+        idx = min(idx, len(cones) - 1)
+        frac = (s - cum[idx]) / seg_len[idx] if seg_len[idx] > 0 else 0.0
+        out[i] = closed[idx] + frac * (closed[idx + 1] - closed[idx])
+    return out
+
+
+def _generate_in_subprocess(n_points, n_regions, max_bound, mode, seed, timeout=30):
+    """Run generate_track in a subprocess to handle seeds that hang."""
+    import subprocess
+    import sys
+
+    code = (
+        f"import json, numpy as np\n"
+        f"from random_track_generator import generate_track\n"
+        f"t=generate_track(n_points={n_points},n_regions={n_regions},"
+        f"min_bound=5,max_bound={max_bound},mode={mode!r},seed={seed!r})\n"
+        f"json.dump(dict(left=np.asarray(t.cones_left).tolist(),"
+        f"right=np.asarray(t.cones_right).tolist()),__import__('sys').stdout)"
+    )
+    try:
+        r = subprocess.run(
+            [sys.executable, "-c", code],
+            capture_output=True, text=True, timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(
+            f"random-track-generator hung for seed={seed} (timeout={timeout}s). "
+            f"Try a different seed."
+        )
+    if r.returncode != 0:
+        raise RuntimeError(f"random-track-generator failed: {r.stderr.strip()[:200]}")
+    data = _json.loads(r.stdout)
+    return np.array(data["left"]), np.array(data["right"])
+
+
+def random_track(
+    seed: int | None = None,
+    mode: str = "expand",
+    n_points: int = 5,
+    n_regions: int = 2,
+    max_bound: float = 40.0,
+) -> Track:
+    """Generate a random track using ``random-track-generator``.
+
+    Requires ``pip install random-track-generator``.
+
+    Note: some seed/param combinations cause the generator to hang.
+    A 30 s subprocess timeout is used; try a different seed if it fails.
+    """
+    left, right = _generate_in_subprocess(n_points, n_regions, max_bound, mode, seed)
+
+    # Resample both to equal length (use max of the two)
+    n_cones = max(len(left), len(right))
+    blue = _resample_boundary(left, n_cones)
+    yellow = _resample_boundary(right, n_cones)
+
+    # Spawn: midpoint of first cone pair, heading toward second pair
+    spawn = (blue[0] + yellow[0]) / 2.0
+    next_mid = (blue[1] + yellow[1]) / 2.0
+    d = next_mid - spawn
+    spawn_yaw = float(np.arctan2(d[1], d[0]))
+
+    # Orange cones at start/finish (2 per side of start line)
+    perp = np.array([-np.sin(spawn_yaw), np.cos(spawn_yaw)])
+    hw = np.median(np.linalg.norm(blue - yellow, axis=1)) / 2.0
+    orange = np.array([
+        spawn + hw * perp - 0.5 * np.array([np.cos(spawn_yaw), np.sin(spawn_yaw)]),
+        spawn + hw * perp + 0.5 * np.array([np.cos(spawn_yaw), np.sin(spawn_yaw)]),
+        spawn - hw * perp - 0.5 * np.array([np.cos(spawn_yaw), np.sin(spawn_yaw)]),
+        spawn - hw * perp + 0.5 * np.array([np.cos(spawn_yaw), np.sin(spawn_yaw)]),
+    ])
+
+    name = f"random_s{seed}" if seed is not None else "random"
+    return Track(
+        name=name,
+        blue_cones=blue,
+        yellow_cones=yellow,
+        orange_cones=orange,
+        spawn_x=float(spawn[0]),
+        spawn_y=float(spawn[1]),
+        spawn_yaw=spawn_yaw,
+        half_track_width=float(hw),
+    )
+
+
+# ---------------------------------------------------------------------------
+# JSON serialization
+# ---------------------------------------------------------------------------
+
+def track_to_json(track: Track, path: str) -> None:
+    """Save a track to a JSON file for reproducibility."""
+    data = {
+        "name": track.name,
+        "blue_cones": track.blue_cones.tolist(),
+        "yellow_cones": track.yellow_cones.tolist(),
+        "orange_cones": track.orange_cones.tolist(),
+        "spawn_x": track.spawn_x,
+        "spawn_y": track.spawn_y,
+        "spawn_yaw": track.spawn_yaw,
+        "half_track_width": track.half_track_width,
+    }
+    with open(path, "w") as f:
+        _json.dump(data, f, indent=2)
+
+
+def track_from_json(path: str) -> Track:
+    """Load a track from a JSON file."""
+    with open(path) as f:
+        data = _json.load(f)
+    return Track(
+        name=data.get("name", os.path.basename(path)),
+        blue_cones=np.array(data["blue_cones"]),
+        yellow_cones=np.array(data["yellow_cones"]),
+        orange_cones=np.array(data["orange_cones"]),
+        spawn_x=data["spawn_x"],
+        spawn_y=data["spawn_y"],
+        spawn_yaw=data["spawn_yaw"],
+        half_track_width=data.get("half_track_width", 1.5),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Registry / lookup
 # ---------------------------------------------------------------------------
 
 TRACKS = {
@@ -374,9 +517,48 @@ TRACKS = {
 }
 
 
+def _parse_random_spec(spec: str) -> dict:
+    """Parse ``"random:seed=42,mode=expand,max_bound=80"`` → kwargs dict."""
+    kwargs: dict = {}
+    if ":" not in spec:
+        return kwargs
+    params = spec.split(":", 1)[1]
+    for part in params.split(","):
+        k, _, v = part.partition("=")
+        k = k.strip()
+        v = v.strip()
+        if k == "seed":
+            kwargs["seed"] = int(v)
+        elif k == "mode":
+            kwargs["mode"] = v
+        elif k == "n_points":
+            kwargs["n_points"] = int(v)
+        elif k == "n_regions":
+            kwargs["n_regions"] = int(v)
+        elif k == "max_bound":
+            kwargs["max_bound"] = float(v)
+    return kwargs
+
+
 def get_track(name: str) -> Track:
-    """Look up a track by name. Raises KeyError if not found."""
-    return TRACKS[name]
+    """Look up a track by name, JSON path, or random spec.
+
+    Accepted forms:
+    - Built-in name: ``"oval"``, ``"hairpin"``, ``"autocross"``
+    - JSON file path: ``"path/to/track.json"``
+    - Random: ``"random"`` or ``"random:seed=42,mode=expand,max_bound=80"``
+    """
+    if name in TRACKS:
+        return TRACKS[name]
+    if name.endswith(".json"):
+        return track_from_json(name)
+    if name == "random" or name.startswith("random:"):
+        kwargs = _parse_random_spec(name)
+        return random_track(**kwargs)
+    raise KeyError(
+        f"Unknown track: {name!r}. "
+        f"Use one of {list(TRACKS)}, a .json path, or 'random[:opts]'"
+    )
 
 
 # ---------------------------------------------------------------------------

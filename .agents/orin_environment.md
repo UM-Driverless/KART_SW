@@ -11,7 +11,10 @@
 | Storage | 476 GB NVMe SSD (root filesystem) + 57 GB eMMC (bootloader only) |
 | Display | DisplayPort only (no HDMI). DP-to-HDMI adapter + dummy plug for AnyDesk |
 | Camera | ZED 2 stereo (USB, SN 21983349) |
-| CAN bus | `can0`, `can1` interfaces (for ESP32 comms) |
+| ESP32 | ESP32-D0WD-V3 via USB (`/dev/ttyUSB0`), 460800 baud |
+| Steering sensor | AS5600 magnetic encoder (I2C: SDA=GPIO21, SCL=GPIO22) |
+| Actuators | Steering H-bridge, throttle DAC, brake DAC |
+| CAN bus | `can0`, `can1` interfaces (unused, was for old ESP32 comms) |
 
 ## Access
 ```bash
@@ -40,6 +43,7 @@ ssh orin 'echo "0" | sudo -S <command>'
 | Python | 3.10.12 (system) |
 | numpy | 1.26.4 (must be <2, cv2 compiled against numpy 1.x) |
 | ultralytics | 8.4.14 |
+| PlatformIO | 6.1.19 (`/home/orin/.local/bin/pio`) |
 | AnyDesk | Installed |
 
 ## Environment Setup
@@ -62,8 +66,8 @@ export LD_LIBRARY_PATH=/usr/local/cuda-12.6/targets/aarch64-linux/lib:$(find ~/.
 | Path | Description |
 |---|---|
 | `/home/orin/kart_brain` | Main ROS2 workspace (this repo) |
+| `~/Desktop/kart_medulla` | ESP32 firmware (PlatformIO project) |
 | `~/Desktop/KART_SW` | Old copy of kart_sw (can be deleted) |
-| `~/Desktop/kart_medulla` | ESP32 firmware (PlatformIO) — **not present**, needs cloning from https://github.com/UM-Driverless/kart_medulla |
 
 ## ZED Camera
 - USB device: `2b03:f780 STEREOLABS ZED 2`
@@ -86,6 +90,22 @@ ros2 run kart_perception yolo_detector --ros-args \
 DISPLAY=:1 XAUTHORITY=/run/user/1000/gdm/Xauthority \
   ros2 run rqt_image_view rqt_image_view /perception/yolo/annotated &
 ```
+
+## ESP32 Firmware (kart_medulla)
+
+```bash
+# Build and flash (from Orin)
+cd ~/Desktop/kart_medulla
+/home/orin/.local/bin/pio run --target upload --environment esp32dev
+
+# Note: `pio` is not in PATH via ssh; use full path
+```
+
+- **UART0** (USB, `/dev/ttyUSB0`): Binary protocol frames only — no logs
+- **UART2** (GPIO17 TX, GPIO16 RX): Debug log output (ESP-IDF ESP_LOGx)
+- Logs are redirected via `esp_log_set_vprintf()` in `app_main()`
+- The `KB_Coms_micro` ROS node bridges `/dev/ttyUSB0` ↔ ROS2 Frame topics
+- See `architecture.md` for protocol details and message types
 
 ## Known Issues
 1. **torch needs LD_LIBRARY_PATH** set for `libnvJitLink.so.12` (see Environment Setup above)

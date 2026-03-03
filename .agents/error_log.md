@@ -143,6 +143,13 @@ Tracks mistakes made during development and the prevention mechanisms added. Eve
 - Rule: **After creating or modifying any file under `src/`, scp the files to the VM and rebuild there.** Files in `src/` are not used directly — only the installed copies in `install/` are. Don't just tell the user — do it yourself via SSH.
 - Rule: **Development happens on Mac, but Gazebo runs on the VM.** Use `scp` to copy changed files, then `ssh utm "source /opt/ros/humble/setup.bash && cd ~/kart_brain && colcon build --packages-select <pkg>"` to rebuild. Note: `bash -lc` does NOT source `.bashrc` on the VM (non-interactive guard), so always source ROS explicitly in SSH commands.
 
+## 2026-03-03 - Tried to flash ESP32 from Mac instead of Orin
+**What happened:** When asked to flash the ESP32 and update code on the Orin, checked for USB devices on the local Mac instead of SSHing to the Orin. The Mac has no kart hardware connected — the ESP32, cameras, and actuators are all physically on the Orin.
+**Prevention added:**
+- Rule: **ALL hardware (ESP32, cameras, actuators) is on the Orin.** The Mac is only for development and editing. Never try to interact with kart hardware from the Mac.
+- Rule: **For any hardware interaction** (flashing, running ROS nodes, checking USB devices, serial comms), always SSH to the Orin first.
+- Rule: **The Orin is the deployment target.** Code is edited locally on the Mac, then pushed/copied to the Orin. The Mac never runs hardware-facing commands.
+
 ## 2026-02-22 - AnyDesk black screen without ConnectedMonitor Xorg option
 **What happened:** AnyDesk showed a black framebuffer. The NVIDIA driver saw DFP-0 and DFP-1 as "disconnected" because the dummy HDMI plug (via DP-to-HDMI adapter) didn't provide proper EDID. Without a connected monitor, Xorg had no screen.
 **Prevention added:**

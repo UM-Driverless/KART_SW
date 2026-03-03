@@ -7,7 +7,7 @@ kb_interfaces/Frame messages on /orin/throttle, /orin/brake,
 relays over UART to the ESP32.
 
 Scaling:
-  - steering_angle [-1, 1] → direction + magnitude u8
+  - steering_angle (radians) → int16 big-endian, radians × 1000
   - acceleration > 0 → THROTTLE u8 [0, 255]
   - acceleration < 0 → BRAKE u8 [0, 255]
 """
@@ -45,12 +45,12 @@ class ActuationBridgeNode(Node):
         self.timer = self.create_timer(1.0 / rate, self._send_frames)
 
     def _on_cmd(self, msg: AckermannDriveStamped):
-        steer = msg.drive.steering_angle  # [-1, 1]
+        steer = msg.drive.steering_angle  # radians
         accel = msg.drive.acceleration     # [-1, 1]
 
-        # Steering: clamp and scale to s8
-        steer_clamped = max(-1.0, min(1.0, steer))
-        self._last_steer = int(steer_clamped * 127.0)
+        # Steering: signed int16, radians × 1000
+        steer_i16 = int(steer * 1000.0)
+        self._last_steer = max(-32768, min(32767, steer_i16))
 
         # Throttle / brake split
         if accel >= 0:
@@ -61,12 +61,13 @@ class ActuationBridgeNode(Node):
             self._last_brake = int(min(1.0, -accel) * 255.0)
 
     def _send_frames(self):
-        # ORIN_TARG_STEERING (0x22): payload = [direction, magnitude]
+        # ORIN_TARG_STEERING (0x22): int16 big-endian, radians × 1000
         steer_frame = Frame()
         steer_frame.type = Frame.ORIN_TARG_STEERING
-        direction = 0 if self._last_steer >= 0 else 1
-        magnitude = min(255, abs(self._last_steer) * 2)  # scale s8 [-127,127] → u8
-        steer_frame.payload = [direction, magnitude]
+        steer_frame.payload = [
+            (self._last_steer >> 8) & 0xFF,
+            self._last_steer & 0xFF,
+        ]
 
         # ORIN_TARG_THROTTLE (0x20): payload = u8
         throttle_frame = Frame()

@@ -8,8 +8,7 @@ that kb_coms_micro subscribes to and relays over UART to the ESP32.
 Payload encoding (matches ESP32 km_coms.c KM_COMS_ProccessPayload):
   - ORIN_TARG_THROTTLE (0x20): payload[0] = u8 [0, 255]
   - ORIN_TARG_BRAKING  (0x21): payload[0] = u8 [0, 255]
-  - ORIN_TARG_STEERING (0x22): payload[0] = direction (0=positive, 1=negative)
-                                payload[1] = magnitude u8 [0, 255]
+  - ORIN_TARG_STEERING (0x22): int16 big-endian, radians × 1000
 """
 
 import rclpy
@@ -41,8 +40,7 @@ class CmdVelBridgeNode(Node):
 
         self._throttle = 0
         self._brake = 0
-        self._steer_dir = 0
-        self._steer_mag = 0
+        self._steer_i16 = 0
 
         self.timer = self.create_timer(1.0 / rate, self._send_frames)
         self.get_logger().info(f"CmdVelBridge: {in_topic} @ {rate} Hz")
@@ -59,13 +57,10 @@ class CmdVelBridgeNode(Node):
             self._throttle = 0
             self._brake = int(min(1.0, -speed / self.max_speed) * 255.0)
 
-        # Steering: direction + magnitude
+        # Steering: signed int16, radians × 1000, big-endian
         steer_clamped = max(-self.max_steer, min(self.max_steer, steer))
-        if steer_clamped >= 0:
-            self._steer_dir = 0
-        else:
-            self._steer_dir = 1
-        self._steer_mag = int(abs(steer_clamped) / self.max_steer * 255.0)
+        steer_i16 = int(steer_clamped * 1000.0)
+        self._steer_i16 = max(-32768, min(32767, steer_i16))
 
     def _send_frames(self):
         throttle_frame = Frame()
@@ -78,7 +73,10 @@ class CmdVelBridgeNode(Node):
 
         steer_frame = Frame()
         steer_frame.type = Frame.ORIN_TARG_STEERING
-        steer_frame.payload = [self._steer_dir, self._steer_mag]
+        steer_frame.payload = [
+            (self._steer_i16 >> 8) & 0xFF,
+            self._steer_i16 & 0xFF,
+        ]
 
         self.throttle_pub.publish(throttle_frame)
         self.brake_pub.publish(brake_frame)

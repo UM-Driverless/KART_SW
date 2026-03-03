@@ -111,6 +111,8 @@
 
 ### Real Hardware Mode (kart_bringup)
 
+> **All hardware runs on the Jetson Orin.** The ESP32, ZED camera, and actuators are physically connected to the Orin. Code is edited on the Mac, then pushed/copied to the Orin via git or scp. Never attempt to flash the ESP32, check USB devices, or run ROS hardware nodes from the Mac. Always `ssh orin` first.
+
 ```
 ZED Camera → /zed/zed_node/rgb/image_rect_color
            → /zed/zed_node/depth/depth_registered
@@ -120,10 +122,54 @@ Perception pipeline (same nodes, same topics)
   → /perception/cones_3d
 
 Controller (cone_follower or future planner)
-  → /actuation_cmd (AckermannDriveStamped)
+  → /kart/cmd_vel (Twist)
 
-msgs_to_micro → ESP32 serial → actuators
+cmd_vel_bridge_node.py
+  → /orin/steering, /orin/throttle, /orin/braking (Frame msgs)
+
+KB_Coms_micro (C++ serial bridge)
+  → UART0 (USB /dev/ttyUSB0) → ESP32
+
+ESP32 (kart_medulla firmware)
+  → steering motor (H-bridge), throttle DAC, brake DAC
+  → AS5600 angle sensor (I2C) → steering feedback
+  → publishes: /esp32/heartbeat, /esp32/steering, etc.
 ```
+
+### ESP32 UART Routing
+
+The ESP32 has two active UARTs:
+
+| UART | Pins | Connection | Purpose |
+|------|------|------------|---------|
+| UART0 | GPIO1 (TX), GPIO3 (RX) | USB to Orin (`/dev/ttyUSB0`) | **Binary protocol only** — framed messages between ESP32 and Orin |
+| UART2 | GPIO17 (TX), GPIO16 (RX) | Header wires | **Debug logs** — ESP-IDF `ESP_LOGx` output redirected here |
+
+ESP-IDF log output is redirected to UART2 via `esp_log_set_vprintf()` in `app_main()`. This keeps UART0 clean for `kb_coms_micro` to parse binary frames without log text corruption.
+
+**To read debug logs**: connect a USB-to-serial adapter to GPIO17/GPIO16, open at 460800 baud.
+
+### ESP32 Protocol (km_coms)
+
+Frame format: `| SOF (0xAA) | LEN | TYPE | PAYLOAD | CRC8 |`
+
+- CRC8: XOR over LEN, TYPE, and PAYLOAD bytes
+- Max frame size: 255 bytes
+
+**Steering encoding**: int16 big-endian, value = radians × 1000.
+- Example: 0.25 rad → 250 → payload `[0x00, 0xFA]`
+- Range: -32.768 to +32.767 rad (far exceeds physical limits)
+
+**Throttle/brake encoding**: single byte, 0-255 = % of max effort (maps to 8-bit DAC).
+
+Key message types (ESP32 → Orin):
+- `ESP_HEARTBEAT` (0x08): 4-byte payload `[0xDE, 0xAD, 0xBE, 0xEF]`, 1 Hz
+- `ESP_ACT_STEERING` (0x02): 2-byte int16 rad×1000 feedback, 10 Hz
+
+Key message types (Orin → ESP32):
+- `ORIN_TARG_STEERING` (0x22): 2-byte int16 rad×1000 target
+- `ORIN_TARG_THROTTLE` (0x23): 1-byte effort 0-255
+- `ORIN_TARG_BRAKING` (0x24): 1-byte effort 0-255
 
 ## Message Types
 

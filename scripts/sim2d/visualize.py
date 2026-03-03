@@ -90,8 +90,9 @@ def main():
     parser.add_argument("--default", action="store_true",
                         help="Run default geometric parameters")
     parser.add_argument("--track", type=str, default=None,
-                        choices=["oval", "hairpin", "autocross"],
-                        help="Track (default: from JSON or oval)")
+                        help="Track: built-in name (oval, hairpin, autocross), "
+                             "JSON path, or random spec (random:seed=42). "
+                             "Default: from JSON metadata or oval.")
     parser.add_argument("--save", type=str, default=None,
                         help="Save plot to file instead of showing")
     args = parser.parse_args()

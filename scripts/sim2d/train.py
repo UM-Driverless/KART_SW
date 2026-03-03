@@ -11,6 +11,7 @@ from controllers import (GeometricController, NeuralNetController,
                          NeuralNetV2Controller, NeuralNetV3Controller)
 from ga import GeneticAlgorithm, CMAESOptimizer
 from sim import run_episode, run_episode_multitrack, set_track
+from track import track_to_json, get_track as _get_track
 
 CONTROLLER_MAP = {
     "geometric": GeometricController,
@@ -37,8 +38,9 @@ def main():
     parser.add_argument("--seed", type=str, default="",
                         help="Path to JSON weights to seed population with")
     parser.add_argument("--track", type=str, default="oval",
-                        help="Track name or comma-separated for multi-track "
-                             "(e.g. 'autocross' or 'oval,hairpin,autocross')")
+                        help="Track: built-in name (oval, hairpin, autocross), "
+                             "JSON path, or random spec (random:seed=42). "
+                             "Comma-separated for multi-track.")
     parser.add_argument("--max-steps", type=int, default=2000,
                         help="Max simulation steps per episode (default: 2000)")
     parser.add_argument("--sigma", type=float, default=0.1,
@@ -59,6 +61,15 @@ def main():
               noise_std=args.noise, dropout=args.dropout)
 
     os.makedirs(args.output_dir, exist_ok=True)
+
+    # Auto-save random tracks for reproducibility
+    for track_spec in args.track.split(","):
+        track_spec = track_spec.strip()
+        if track_spec == "random" or track_spec.startswith("random:"):
+            trk = _get_track(track_spec)
+            save_path = os.path.join(args.output_dir, f"track_{trk.name}.json")
+            track_to_json(trk, save_path)
+            print(f"Saved random track → {save_path}")
 
     names = [n.strip() for n in args.controllers.split(",")]
     gas = {}
