@@ -23,86 +23,49 @@
 3. Verify depth image quality — cone forward distances seem short (~1-3m for cones that should be ~5m away), which could be a depth image issue separate from CameraInfo
 4. Consider adding a ramp-up delay or pausing Gazebo until all nodes are ready
 
+## Train YOLOv11 Cone Detector (In-House)
+
+**Status:** Dataset ready on Orin, blocked on PyTorch CUDA.
+
+**Dataset (on Orin at `~/kart_brain/training/perception/data/`):**
+- 23,450 images (19,933 train / 3,517 val), 479,934 annotations
+- Sources: Prueba FSOCO (9.9k), FSAE Cone (9.9k), TBReAI (2.1k), ARECE 3 (1.5k)
+
+**Blockers:**
+- [ ] **Fix PyTorch CUDA on Orin** — torch crashes on import: `ImportError: libcudss.so.0`. Need Jetson-specific wheels from `pypi.jetson-ai-lab.dev` (was down as of 2026-02-22). Always pin `numpy<2` after reinstall.
+
+**To train (once PyTorch CUDA is fixed):**
+```bash
+cd ~/kart_brain
+python3 training/perception/train.py --epochs 100 --batch 16
+```
+
+**After training:**
+- Evaluate and replace `models/perception/yolo/nava_yolov11_2026_02.pt` if better
+- See `training/README.md` for full details
+
 ## Rebuild kart_brain on Orin
 
 **Status:** Pending — build failed due to missing `ackermann_msgs` (now installed).
 
 **What's needed:**
 ```bash
-source /opt/ros/humble/setup.bash && cd ~/kart_brain && colcon build
+cd ~/kart_brain && colcon build
 ```
-`ros-humble-ackermann-msgs` was installed but the build hasn't been re-run yet.
-
-## AnyDesk Remote Access
-
-**Status:** Not working — Orin shows "Client Offline" from Mac.
-
-**Problem:** AnyDesk service is running and ID is `721489674`, but the Orin can't reach AnyDesk relay servers. The Xorg config (`/etc/X11/xorg.conf.d/10-virtual-display.conf` with `ConnectedMonitor DFP-0`) was added but needs a reboot to take effect (X server must restart to load it).
-
-**What's needed:**
-1. Power on the Orin (reboot will apply the Xorg config)
-2. Verify AnyDesk comes online: connect from Mac using ID `721489674`
-3. If still offline, check if the university network (Robots_urjc) blocks AnyDesk relay traffic
-4. Fallback: use SSH (`ssh orin`) — always works on the same network
-
-## Fix PyTorch CUDA Support on Orin
-
-**Status:** Blocked — Jetson AI Lab wheel index (`pypi.jetson-ai-lab.dev`) is unreachable (DNS doesn't resolve from either Orin or Mac as of 2026-02-22).
-
-**Problem:** PyTorch installed as `torch 2.10.0+cpu` (CPU-only) because pip fell back to PyPI when the Jetson-specific index was down. `torch.cuda.is_available()` returns `False`.
-
-**What's needed:**
-1. Wait for `pypi.jetson-ai-lab.dev` to come back online, then:
-   ```bash
-   pip3 install --no-cache-dir --force-reinstall \
-     --extra-index-url https://pypi.jetson-ai-lab.dev/jp6/cu126 \
-     torch torchvision
-   pip3 install --no-cache-dir 'numpy<2'  # force-reinstall may pull numpy>=2
-   ```
-2. Verify: `python3 -c "import torch; print(torch.cuda.is_available())"` → `True`
-3. If the index stays down, look for alternative Jetson PyTorch wheels at https://developer.download.nvidia.com/compute/redist/jp/ or build from source
-
-**Important:** Always pin `numpy<2` after any torch reinstall — torch's dependencies may pull numpy 2.x which breaks `cv2` and `pyzed`.
-
-## Install Gazebo Simulation on Orin
-
-**Status:** Ready — NVMe is now root with 419 GB free.
-
-**What's needed:**
-```bash
-sudo apt install ros-humble-ros-gz  # ~3-4 GB with all dependencies
-```
-
-**Once installed:**
-- All simulation code is already in `src/kart_sim/` (worlds, models, launch files)
-- See `.agents/simulation.md` for how to run
-- The sim was developed and tested in a UTM VM (see `.agents/vm_environment.md`)
 
 ## ESP32 Communication
 
-**Status:** Not started on Orin
+**Status:** Bridge nodes written, protocol documented, needs live testing.
+
+**What's done:**
+- `actuation_bridge_node.py` and `cmd_vel_bridge_node.py` exist
+- `docs/ACTUATION_PROTOCOL.md` defines the serial protocol
+- ESP32 firmware at `~/Desktop/kart_medulla`
 
 **What's needed:**
-1. Explore `src/kb_coms_micro/` package (ROS2 serial comms to ESP32)
-2. Check `kart_medulla` firmware at `~/Desktop/kart_medulla` (ESP32, PlatformIO)
-3. Understand actuation protocol — see `docs/ACTUATION_PROTOCOL.md`
-4. Wire ESP32 via USB serial (`/dev/ttyTHS1` or USB)
-5. Test sending steering + throttle commands via ROS2 topics
-
-## Document Hardware/Software Setup
-
-**Status:** Done
-
-**Context:** The [UM-Driverless repo](https://github.com/UM-Driverless/driverless) documents the same physical kart hardware but with a different software stack (Xavier NX, KVASER CAN, FSDS simulator). That info was used as reference to document our current setup (AGX Orin, ESP32/UART, Gazebo).
-
-**What was done:**
-1. UM-Driverless repo studied — hardware details extracted and adapted for our current setup
-2. Hardware overview table added to this repo's README
-3. Extensive docs in `kart_docs/`:
-    - [Assembly overview](https://um-driverless.github.io/kart_docs/assembly/) — hardware overview table with all subsystems
-    - [Getting Started](https://um-driverless.github.io/kart_docs/software/ros2/getting-started/) — full sim + real hardware setup guide
-    - [Architecture](https://um-driverless.github.io/kart_docs/software/ros2/architecture/) — system diagrams and topic maps
-    - [Orin Setup](https://um-driverless.github.io/kart_docs/assembly/electronics/orin-setup/) — complete flash + software install guide
+1. Wire ESP32 via USB serial
+2. Flash firmware: `cd ~/Desktop/kart_medulla && ~/.local/bin/pio run --target upload --environment esp32dev`
+3. Test sending steering + throttle commands via ROS2 topics
 
 ## Investigate Zombie/Stale Process Accumulation
 

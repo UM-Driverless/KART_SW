@@ -1,0 +1,13 @@
+# Ultralytics YOLO dataset config for cone detection.
+# Used by: python training/perception/train.py
+# Data populated by: python training/perception/prepare_dataset.py
+
+path: data  # relative to this file's directory
+train: images/train
+val: images/val
+
+names:
+  0: blue_cone
+  1: yellow_cone
+  2: orange_cone
+  3: large_orange_cone

@@ -1,0 +1,129 @@
+# Dataset sources for cone detection training.
+# Each source can be enabled/disabled independently.
+# prepare_dataset.py reads this file to know what to download and convert.
+
+sources:
+  fsoco_v2:
+    enabled: false  # requires manual git clone
+    name: "FSOCO v2"
+    url: "https://github.com/fsoco/fsoco-dataset"
+    format: supervisely
+    images: ~11500
+    license: MIT
+    local_path: null
+    class_map:
+      blue_cone: blue_cone
+      yellow_cone: yellow_cone
+      orange_cone: orange_cone
+      large_orange_cone: large_orange_cone
+      unknown_cone: null
+
+  prueba_fsoco:
+    enabled: true
+    name: "Prueba FSOCO (Roboflow)"
+    url: "https://universe.roboflow.com/dataset-segmentetion-fsoco/prueba-tjdft"
+    format: roboflow
+    roboflow:
+      workspace: "dataset-segmentetion-fsoco"
+      project: "prueba-tjdft"
+      version: 4
+    images: ~9898
+    license: "CC BY 4.0"
+    class_map:
+      blue_cone: blue_cone
+      yellow_cone: yellow_cone
+      orange_cone: orange_cone
+      large_orange_cone: large_orange_cone
+      unknown_cone: null  # skip
+
+  fsae_cone:
+    enabled: true
+    name: "FSAE Cone (Roboflow)"
+    url: "https://universe.roboflow.com/fsae/fsae-cone/dataset/1"
+    format: yolo  # manual browser download, unzipped on Orin
+    local_path: data/_downloads/fsae_cone  # relative paths resolved by script
+    images: ~9899
+    license: "CC BY 4.0"
+    class_map:
+      blue_cone: blue_cone
+      yellow_cone: yellow_cone
+      orange_cone: orange_cone
+      large_orange_cone: large_orange_cone
+      unknown_cone: null  # skip
+
+  tbreai_fs_cones:
+    enabled: true
+    name: "TBReAI Formula Student Cones (Roboflow)"
+    url: "https://universe.roboflow.com/tbreai-public/formula-student-cones/dataset/1"
+    format: yolo
+    local_path: data/_downloads/tbreai_fs_cones
+    images: ~2128
+    license: MIT
+    notes: "Only 3 classes: blue cone, yellow cone, big orange"
+    class_map:
+      blue cone: blue_cone
+      yellow cone: yellow_cone
+      big orange: large_orange_cone
+
+  arece_3:
+    enabled: true
+    name: "ARECE 3 — Cone Detection (Roboflow)"
+    url: "https://universe.roboflow.com/formula-student-driverless-arece-3/cone-detection-bldji"
+    format: yolo
+    local_path: data/_downloads/arece_3
+    images: ~1529
+    license: "CC BY 4.0"
+    class_map:
+      blue_cone: blue_cone
+      yellow_cone: yellow_cone
+      orange_cone: orange_cone
+      large_orange_cone: large_orange_cone
+      unknown_cone: null  # skip
+
+  uq_racing:
+    enabled: false  # v5 classes are junk (people's names), only 795 images — not worth it
+    name: "UQ Racing — FSAE Cones (Roboflow)"
+    url: "https://universe.roboflow.com/uq-racing/fsae-cones"
+    format: yolo
+    local_path: data/_downloads/uq_racing
+    images: ~795
+    license: "CC BY 4.0"
+    notes: "13 classes — many are people's names (junk). Only map cone classes."
+    class_map:
+      blue_cone: blue_cone
+      yellow_cone: yellow_cone
+      small_orange_cone: orange_cone
+      large_orange_cone: large_orange_cone
+      cone: null        # ambiguous, skip
+      \: null           # junk
+      dom: null
+      Eduard: null
+      jed: null
+      Lehan: null
+      maddy: null
+      Tyler: null
+      tynan: null
+
+  mit_driverless:
+    enabled: false
+    name: "MIT Driverless"
+    url: "https://github.com/cv-core/MIT-Driverless-CV-TrainingInfra"
+    format: yolo
+    license: "Apache-2.0"
+    local_path: null
+    class_map:
+      blue_cone: blue_cone
+      yellow_cone: yellow_cone
+      orange_cone: orange_cone
+      large_orange_cone: large_orange_cone
+
+  own_data:
+    enabled: false
+    name: "Own data"
+    format: yolo
+    local_path: null
+    class_map:
+      blue_cone: blue_cone
+      yellow_cone: yellow_cone
+      orange_cone: orange_cone
+      large_orange_cone: large_orange_cone
