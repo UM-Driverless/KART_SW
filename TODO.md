@@ -53,19 +53,30 @@ python3 training/perception/train.py --epochs 100 --batch 16
 cd ~/kart_brain && colcon build
 ```
 
-## ESP32 Communication
+## ESP32 Steering Hardware — Partially Working
 
-**Status:** Bridge nodes written, protocol documented, needs live testing.
+**Status:** Sensor reads working, motor not yet verified. Firmware deployed.
 
-**What's done:**
-- `actuation_bridge_node.py` and `cmd_vel_bridge_node.py` exist
-- `docs/ACTUATION_PROTOCOL.md` defines the serial protocol
-- ESP32 firmware at `~/Desktop/kart_medulla`
+**What was fixed (2026-03-03):**
+- **Root cause found:** I2C timeout was 1000ms × 2 transactions = 2s per read, blocking the 100ms control task. Reduced `I2C_MASTER_TIMEOUT_MS` to 50 in `km_sdir.c`.
+- **Control task reordered:** feedback + actuator commands execute BEFORE the I2C sensor read, so even if I2C is slow, frames still flow.
+- **AS5600 sensor confirmed working:** I2C scan finds it at 0x36, raw angle reads ~3956/4095 (~2.93 rad). Sensor data flows to `/esp32/steering` at ~2.25 Hz.
+- **Heartbeat stable:** 0xDEADBEEF on `/esp32/heartbeat`.
+- **Flash baud fix:** default 460800 fails on this board. Use `PLATFORMIO_UPLOAD_SPEED=115200` for flash.
 
-**What's needed:**
-1. Wire ESP32 via USB serial
-2. Flash firmware: `cd ~/Desktop/kart_medulla && ~/.local/bin/pio run --target upload --environment esp32dev`
-3. Test sending steering + throttle commands via ROS2 topics
+**Modified files (on Orin at `~/Desktop/kart_medulla`, and local at `~/repos/kart_medulla`):**
+- `components/km_sdir/km_sdir.c` — I2C timeout 1000→50ms
+- `main/main.c` — init sensor test, control task reorder, seed initial angle
+
+**What's left:**
+1. [ ] **Verify motor moves** — sent 0.5 rad target via `/orin/steering` but angle didn't change. After sustained publishing at 10 Hz the serial link dropped (ESP32 or kb_coms_micro crashed). Need to:
+   - Restart kb_coms_micro: `ros2 run kb_coms_micro KB_Coms_micro`
+   - Send a single target: `ros2 topic pub --once /orin/steering kb_interfaces/msg/Frame "{type: 34, payload: [1, 244]}"`
+   - Physically check if the steering motor moves
+   - If no movement: check H-bridge power supply, GPIO27 (PWM) and GPIO14 (DIR) wiring
+2. [ ] **Investigate ~2 Hz rate** — control task should run at 10 Hz (100ms period) but only achieves ~2.25 Hz. Each I2C read succeeds but takes ~400ms somehow. Might be `vTaskDelayUntil` interaction or `KM_SDIR_ResetI2C` being called too often.
+3. [ ] **Test full pipeline** — once motor verified: `cmd_vel_bridge_node.py` → `/orin/steering` → ESP32 → motor → `/esp32/steering` feedback converges
+4. [ ] **Serial flooding protection** — publishing targets at 10 Hz killed the link. The comms_task (20 Hz RX) may not handle bursts well. Consider rate-limiting or investigating crash cause.
 
 ## Investigate Zombie/Stale Process Accumulation
 
