@@ -2,15 +2,15 @@
 """Bridge between ROS2 actuation commands and ESP32 serial frames.
 
 Subscribes to /actuation_cmd (AckermannDriveStamped) and publishes
-kb_interfaces/Frame messages on /esp32/tx for kb_coms_micro to send
-over serial.
+kb_interfaces/Frame messages on /orin/throttle, /orin/brake,
+/orin/steering — the topics that kb_coms_micro subscribes to and
+relays over UART to the ESP32.
 
-Scaling (matches ACTUATION_PROTOCOL.md V1):
-  - steering_angle [-1, 1] → STEER s8 [-127, 127] (positive = left)
+Scaling:
+  - steering_angle [-1, 1] → direction + magnitude u8
   - acceleration > 0 → THROTTLE u8 [0, 255]
   - acceleration < 0 → BRAKE u8 [0, 255]
 """
-import struct
 
 import rclpy
 from rclpy.node import Node
@@ -23,14 +23,16 @@ class ActuationBridgeNode(Node):
         super().__init__("actuation_bridge")
 
         self.declare_parameter("input_topic", "/actuation_cmd")
-        self.declare_parameter("output_topic", "/esp32/tx")
         self.declare_parameter("rate_hz", 20.0)
 
         in_topic = str(self.get_parameter("input_topic").value)
-        out_topic = str(self.get_parameter("output_topic").value)
         rate = float(self.get_parameter("rate_hz").value)
 
-        self.frame_pub = self.create_publisher(Frame, out_topic, 10)
+        # Publish to the /orin/* topics that kb_coms_micro subscribes to
+        self.throttle_pub = self.create_publisher(Frame, "/orin/throttle", 10)
+        self.brake_pub = self.create_publisher(Frame, "/orin/brake", 10)
+        self.steering_pub = self.create_publisher(Frame, "/orin/steering", 10)
+
         self.sub = self.create_subscription(
             AckermannDriveStamped, in_topic, self._on_cmd, 10
         )
@@ -76,9 +78,9 @@ class ActuationBridgeNode(Node):
         brake_frame.type = Frame.ORIN_TARG_BRAKING
         brake_frame.payload = [self._last_brake]
 
-        self.frame_pub.publish(steer_frame)
-        self.frame_pub.publish(throttle_frame)
-        self.frame_pub.publish(brake_frame)
+        self.steering_pub.publish(steer_frame)
+        self.throttle_pub.publish(throttle_frame)
+        self.brake_pub.publish(brake_frame)
 
 
 def main():

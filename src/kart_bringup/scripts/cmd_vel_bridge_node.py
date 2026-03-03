@@ -2,7 +2,8 @@
 """Bridge from Twist (cone_follower output) to ESP32 serial frames.
 
 Subscribes to /kart/cmd_vel (Twist) and publishes kb_interfaces/Frame
-messages on /esp32/tx for kb_coms_micro to relay over UART.
+messages on /orin/throttle, /orin/brake, /orin/steering — the topics
+that kb_coms_micro subscribes to and relays over UART to the ESP32.
 
 Payload encoding (matches ESP32 km_coms.c KM_COMS_ProccessPayload):
   - ORIN_TARG_THROTTLE (0x20): payload[0] = u8 [0, 255]
@@ -22,18 +23,20 @@ class CmdVelBridgeNode(Node):
         super().__init__("cmd_vel_bridge")
 
         self.declare_parameter("input_topic", "/kart/cmd_vel")
-        self.declare_parameter("output_topic", "/esp32/tx")
         self.declare_parameter("rate_hz", 20.0)
         self.declare_parameter("max_speed", 5.0)
         self.declare_parameter("max_steer", 0.5)
 
         in_topic = str(self.get_parameter("input_topic").value)
-        out_topic = str(self.get_parameter("output_topic").value)
         rate = float(self.get_parameter("rate_hz").value)
         self.max_speed = float(self.get_parameter("max_speed").value)
         self.max_steer = float(self.get_parameter("max_steer").value)
 
-        self.frame_pub = self.create_publisher(Frame, out_topic, 10)
+        # Publish to the /orin/* topics that kb_coms_micro subscribes to
+        self.throttle_pub = self.create_publisher(Frame, "/orin/throttle", 10)
+        self.brake_pub = self.create_publisher(Frame, "/orin/brake", 10)
+        self.steering_pub = self.create_publisher(Frame, "/orin/steering", 10)
+
         self.sub = self.create_subscription(Twist, in_topic, self._on_cmd, 10)
 
         self._throttle = 0
@@ -42,9 +45,7 @@ class CmdVelBridgeNode(Node):
         self._steer_mag = 0
 
         self.timer = self.create_timer(1.0 / rate, self._send_frames)
-        self.get_logger().info(
-            f"CmdVelBridge: {in_topic} -> {out_topic} @ {rate} Hz"
-        )
+        self.get_logger().info(f"CmdVelBridge: {in_topic} @ {rate} Hz")
 
     def _on_cmd(self, msg: Twist):
         speed = msg.linear.x
@@ -79,9 +80,9 @@ class CmdVelBridgeNode(Node):
         steer_frame.type = Frame.ORIN_TARG_STEERING
         steer_frame.payload = [self._steer_dir, self._steer_mag]
 
-        self.frame_pub.publish(throttle_frame)
-        self.frame_pub.publish(brake_frame)
-        self.frame_pub.publish(steer_frame)
+        self.throttle_pub.publish(throttle_frame)
+        self.brake_pub.publish(brake_frame)
+        self.steering_pub.publish(steer_frame)
 
 
 def main():
