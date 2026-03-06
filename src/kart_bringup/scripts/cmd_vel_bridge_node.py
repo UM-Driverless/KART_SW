@@ -22,7 +22,7 @@ class CmdVelBridgeNode(Node):
         super().__init__("cmd_vel_bridge")
 
         self.declare_parameter("input_topic", "/kart/cmd_vel")
-        self.declare_parameter("rate_hz", 20.0)
+        self.declare_parameter("rate_hz", 100.0)
         self.declare_parameter("max_speed", 5.0)
         self.declare_parameter("max_steer", 0.5)
 

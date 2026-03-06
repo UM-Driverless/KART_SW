@@ -23,7 +23,7 @@ class ActuationBridgeNode(Node):
         super().__init__("actuation_bridge")
 
         self.declare_parameter("input_topic", "/actuation_cmd")
-        self.declare_parameter("rate_hz", 20.0)
+        self.declare_parameter("rate_hz", 100.0)
 
         in_topic = str(self.get_parameter("input_topic").value)
         rate = float(self.get_parameter("rate_hz").value)
