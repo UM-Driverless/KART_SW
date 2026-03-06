@@ -124,8 +124,8 @@ Perception pipeline (same nodes, same topics)
 Controller (cone_follower or future planner)
   → /kart/cmd_vel (Twist)
 
-cmd_vel_bridge_node.py
-  → /orin/steering, /orin/throttle, /orin/braking (Frame msgs)
+cmd_vel_bridge_node.py (100 Hz)
+  → /orin/steering, /orin/throttle, /orin/brake (Frame msgs)
 
 KB_Coms_micro (C++ serial bridge)
   → UART0 (USB /dev/ttyUSB0) → ESP32
@@ -153,8 +153,10 @@ ESP-IDF log output is redirected to UART2 via `esp_log_set_vprintf()` in `app_ma
 
 Frame format: `| SOF (0xAA) | LEN | TYPE | PAYLOAD | CRC8 |`
 
-- CRC8: XOR over LEN, TYPE, and PAYLOAD bytes
+- CRC8: poly 0x07 over LEN, TYPE, and PAYLOAD bytes
 - Max frame size: 255 bytes
+- UART0 @ 460800 baud (CP2102 USB bridge)
+- Comms task: 100 Hz, Control task: 100 Hz
 
 **Steering encoding**: int16 big-endian, value = radians × 1000.
 - Example: 0.25 rad → 250 → payload `[0x00, 0xFA]`
@@ -164,12 +166,13 @@ Frame format: `| SOF (0xAA) | LEN | TYPE | PAYLOAD | CRC8 |`
 
 Key message types (ESP32 → Orin):
 - `ESP_HEARTBEAT` (0x08): 4-byte payload `[0xDE, 0xAD, 0xBE, 0xEF]`, 1 Hz
-- `ESP_ACT_STEERING` (0x02): 2-byte int16 rad×1000 feedback, 10 Hz
+- `ESP_ACT_STEERING` (0x04): 2-byte int16 rad×1000 feedback, 100 Hz
 
 Key message types (Orin → ESP32):
+- `ORIN_TARG_THROTTLE` (0x20): 1-byte effort 0-255
+- `ORIN_TARG_BRAKING` (0x21): 1-byte effort 0-255
 - `ORIN_TARG_STEERING` (0x22): 2-byte int16 rad×1000 target
-- `ORIN_TARG_THROTTLE` (0x23): 1-byte effort 0-255
-- `ORIN_TARG_BRAKING` (0x24): 1-byte effort 0-255
+- `ORIN_COMPLETE` (0x27): 7 bytes (throttle, brake, steering×2, mission, state, shutdown)
 
 ## Message Types
 
