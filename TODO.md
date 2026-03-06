@@ -1,5 +1,32 @@
 # TODO
 
+## Steering Calibration (ESP32)
+
+**Status:** Calibration firmware exists (`cal_main.c`) but needs rework.
+
+**Current state:** AS5600 raw = **4003** when physically straight. Design assumes center = 2048. Off by ~172°.
+
+**What to build:**
+1. Drive motor left at fixed PWM (~50%) until it hits the mechanical limit, record raw AS5600 value
+2. Drive motor right at fixed PWM until limit, record raw AS5600 value
+3. Compute center as midpoint of the two limits
+4. Save left_raw, right_raw, center to NVS
+5. Real firmware reads center from NVS on boot and uses it as `centerOffset`
+
+**The 4096→0 wraparound:** The AS5600 is a 12-bit absolute encoder (0-4095). The jump from 4095→0 can land anywhere in the steering range depending on magnet orientation. After calibration we know left_raw and right_raw — if the jump falls between them (e.g. left=3800, right=200), the center computation must handle circular math. But once the center offset is applied, the firmware converts to a signed angle range (e.g. -0.7 to +0.7 rad) and the wraparound disappears — the physical steering range is always <360°, so after centering there's no jump in the usable range. **Not an issue after mapping.**
+
+## Real-Time Sensor Dashboard (ESP32/FreeRTOS)
+
+**Status:** Not started.
+
+**Problem:** Reading a single sensor value (e.g. AS5600 raw) currently requires flashing a new firmware, waiting ~1 min for build, and capturing serial output. This is too slow for debugging.
+
+**Ideas:**
+- Add a "debug mode" message type in the binary protocol — Orin sends a request, ESP32 replies with all sensor values (raw ADCs, AS5600, hall sensors, DAC outputs, PID state) in one frame
+- ROS2 node on Orin that decodes and prints/publishes these values
+- Or: a lightweight UART command that the ESP32 responds to without needing ROS2 (e.g. send `0xAA 0x01 0xFF 0x__` → ESP32 dumps sensor state as text for 5 seconds, then resumes binary mode)
+- Consider a web dashboard via ESP32 WiFi (low priority)
+
 ## Kart Still Oversteers with YOLO Pipeline (Simulation)
 
 **Status:** CameraInfo intrinsics fixed, midpoint-angle steering implemented, but kart still doesn't drive properly.

@@ -31,6 +31,7 @@ LLMs have no persistent memory between sessions. Every conversation starts fresh
 1. **Before starting:** Read `AGENTS.md` (root) → relevant `.agents/` files
 2. **During work:** Follow architecture conventions from `architecture.md`
 3. **Before commit:** Build, verify, `git status` + `git diff`
+3b. **After commit: ALWAYS push immediately** — multiple machines (Mac, Orin) work on the same repos, so unpushed commits cause conflicts
 4. **If something breaks:** Document in `error_log.md`, add prevention
 5. **If recurring:** Create postmortem in `postmortems/`
 
