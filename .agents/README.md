@@ -45,6 +45,10 @@ LLMs have no persistent memory between sessions. Every conversation starts fresh
 | **y540 laptop** (flash host) | — | `ssh y540` (Robots_urjc WiFi, DHCP) |
 | **UTM VM** (simulation) | `vm_environment.md` | `ssh utm` (192.168.65.2) |
 
+## Conventions
+
+- When the user says "your memory" or "your notes", they mean `AGENTS.md` and `.agents/` — NOT the Claude auto-memory directory
+
 ## Key Principles
 
 - **Document what was painful** — If you spent time debugging something, write it down
