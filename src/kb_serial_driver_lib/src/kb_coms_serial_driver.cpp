@@ -253,36 +253,38 @@ void SerialDriver::close_port()
  */
 void SerialDriver::rx_loop()
 {
-    static uint8_t buffer[256];       // Buffer de lectura
-    static uint16_t bytes_in_buffer = 0; // Bytes válidos en el buffer
+    uint8_t buffer[256];
+    uint16_t bytes_in_buffer = 0;
+
+    // Reset parser state on (re)entry to avoid stale data from previous thread
+    state_ = State::WAIT_SOF;
+    len_ = 0;
+    type_ = 0;
+    index_ = 0;
+    payload_.clear();
 
     while (running_ && fd_ >= 0)
     {
-        uint16_t n = read(fd_, buffer + bytes_in_buffer, sizeof(buffer) - bytes_in_buffer);
+        ssize_t n = read(fd_, buffer + bytes_in_buffer, sizeof(buffer) - bytes_in_buffer);
 
         if (n <= 0) {
             std::cerr << "Error durante lectura" << std::endl;
             close_port();
             return;
         }
-        bytes_in_buffer += n;
+        bytes_in_buffer += static_cast<uint16_t>(n);
 
-        uint16_t processed = 0; // Contador de bytes procesados
-
-        for (uint16_t i = 0; i < bytes_in_buffer; ++i){
-            if(process_byte(buffer[i])) {
-                processed++;
-                break;
-            }
-
+        // Process all received bytes
+        uint16_t processed = 0;
+        for (uint16_t i = 0; i < bytes_in_buffer; ++i) {
+            process_byte(buffer[i]);
             processed++;
         }
 
-        // Mover los bytes no procesados al principio del buffer
+        // Move unprocessed bytes to start of buffer
         if (processed < bytes_in_buffer) {
             memmove(buffer, buffer + processed, bytes_in_buffer - processed);
             bytes_in_buffer -= processed;
-
         } else {
             bytes_in_buffer = 0;
         }
