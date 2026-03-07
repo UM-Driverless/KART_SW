@@ -28,7 +28,7 @@ class DashboardNode(Node):
         self.declare_parameter("port", 8080)
         self.port = self.get_parameter("port").value
 
-        qos = QoSProfile(depth=10, reliability=ReliabilityPolicy.BEST_EFFORT)
+        qos = QoSProfile(depth=10, reliability=ReliabilityPolicy.RELIABLE)
 
         # ESP32 → Orin telemetry
         self.create_subscription(Frame, "/esp32/heartbeat", self._on_heartbeat, qos)
