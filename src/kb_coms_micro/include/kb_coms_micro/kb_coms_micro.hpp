@@ -27,6 +27,8 @@ class KB_coms_micro : public rclcpp::Node {
       ESP_ACT_SHUTDOWN        = 0x07,
       ESP_HEARTBEAT           = 0x08,
       ESP_COMPLETE            = 0x09,
+      ESP_DIAG_STEERING       = 0x0A,
+      ESP_HEALTH_STATUS       = 0x0B,
 
       // ==========================
       // Orin --> ESP32 (0x20 - 0x3F)
@@ -39,6 +41,7 @@ class KB_coms_micro : public rclcpp::Node {
       ORIN_HEARTBEAT          = 0x25,
       ORIN_SHUTDOWN           = 0x26,
       ORIN_COMPLETE           = 0x27,
+      ORIN_CALIBRATE_STEERING = 0x28,
 
       // ==========================
       // Others (0x40 - 0xFF)
