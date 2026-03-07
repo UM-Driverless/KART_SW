@@ -206,17 +206,20 @@ async def run_websocket_server(state: DashboardState, node: DashboardNode, port:
 
         # Serve HTML
         if path == "/" or path == "/index.html":
-            html = HTML_PATH.read_text()
-            writer.write(
+            body = HTML_PATH.read_bytes()
+            header = (
                 f"HTTP/1.1 200 OK\r\n"
                 f"Content-Type: text/html; charset=utf-8\r\n"
-                f"Content-Length: {len(html.encode())}\r\n"
-                f"Cache-Control: no-cache\r\n\r\n".encode() + html.encode()
-            )
+                f"Content-Length: {len(body)}\r\n"
+                f"Connection: close\r\n"
+                f"Cache-Control: no-cache\r\n\r\n"
+            ).encode()
+            writer.write(header + body)
         else:
-            writer.write(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n")
+            writer.write(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
         await writer.drain()
         writer.close()
+        await writer.wait_closed()
 
     async def handle_ws(reader, writer, state, node):
         """Handle incoming WebSocket frames (commands from browser)."""
