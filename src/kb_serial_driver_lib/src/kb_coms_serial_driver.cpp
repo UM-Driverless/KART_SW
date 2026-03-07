@@ -104,7 +104,6 @@ void SerialDriver::send(uint8_t type,
     
     std::lock_guard<std::mutex> lock(tx_mutex_);
     tx_queue_.push(build_frame(type, payload));
-    std::cerr << "Numero de mensajes en la cola: " << tx_queue_.size() << std::endl;
     tx_cv_.notify_one();
 }
 
@@ -214,12 +213,12 @@ bool SerialDriver::open_port()
     
     if (tcsetattr(fd_, TCSANOW, &tty) != 0)
     {
-        std::cout << "No se ha podido abrir el puerto: " << port_ << std::endl;
+        std::cerr << "Serial: failed to open " << port_ << std::endl;
         close_port();
         return false;
     }
         
-    std::cout << "Puerto " << port_ << " abierto correctamente en fd: " << fd_ << std::endl;
+    std::cerr << "Serial: opened " << port_ << " fd=" << fd_ << std::endl;
     return true;
 }
 
@@ -268,7 +267,7 @@ void SerialDriver::rx_loop()
         ssize_t n = read(fd_, buffer + bytes_in_buffer, sizeof(buffer) - bytes_in_buffer);
 
         if (n <= 0) {
-            std::cerr << "Error durante lectura" << std::endl;
+            std::cerr << "Serial: read error" << std::endl;
             close_port();
             return;
         }
@@ -404,7 +403,7 @@ int SerialDriver::process_byte(uint8_t byte)
                 return 1;
 
             } else {
-                std::cout << "Error, el CRC no coincide" << std::endl;
+                std::cerr << "Serial: CRC mismatch" << std::endl;
                 rx_crc_error_++;
             }
 

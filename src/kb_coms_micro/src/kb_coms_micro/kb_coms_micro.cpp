@@ -76,7 +76,7 @@ void KB_coms_micro::kb_coms_OrinHeartbeat(void) {
 
 // Callback de mensajes de la ESP
 void KB_coms_micro::kb_coms_RXcallback(const SerialDriver::Frame &frame_esp) {
-    RCLCPP_INFO(this->get_logger(), "Se ha recibido un msg: %d", frame_esp.type);
+    RCLCPP_DEBUG(this->get_logger(), "Se ha recibido un msg: %d", frame_esp.type);
 
     // TODO: Procesar los payloads
 
