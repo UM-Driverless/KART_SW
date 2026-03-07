@@ -132,7 +132,7 @@ class Esp32SimNode(Node):
 
     def _publish_health(self):
         msg = Frame()
-        msg.type = Frame.ESP_HEALTH_STATUS
+        msg.type = 0x0B  # ESP_HEALTH_STATUS (may not be in older kb_interfaces builds)
         # flags: magnet_ok | i2c_ok | heap_ok = 0x07
         # agc=50, heap=200KB, errors=0
         msg.payload = [0x07, 50, 0x00, 200, 0]
