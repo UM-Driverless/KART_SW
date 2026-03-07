@@ -2,7 +2,7 @@
 
 ## Connection
 ```bash
-ssh utm                    # configured in ~/.ssh/config → 192.168.65.2
+ssh utm                    # configured in ~/.ssh/config → 192.168.64.3 (static IP)
 ssh -X utm                 # with X11 forwarding (for RViz, Gazebo GUI)
 ```
 
@@ -145,8 +145,8 @@ Gazebo + ros-gz consumed ~3-4 GB. With ~17 GB free, there's room for additional 
 - ROS bag recordings
 
 ## Network
-- VM accessible at 192.168.65.2 from host Mac
-- Host Mac accessible from VM at 192.168.65.1
+- VM accessible at 192.168.64.3 from host Mac (static IP, configured in /etc/netplan/)
+- Host Mac accessible from VM at 192.168.64.1
 - Internet access works (for apt, pip, etc.)
 
 ## Known Quirks

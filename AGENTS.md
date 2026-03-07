@@ -18,7 +18,7 @@ Before making any changes to the kart_brain workspace, consult:
 - **Full details:** `.agents/orin_environment.md`
 
 ### UTM VM (Simulation)
-- **Connection:** `ssh utm` (192.168.65.2)
+- **Connection:** `ssh utm` (192.168.64.3, static IP)
 - **Workspace:** `~/kart_brain/`
 - **Simulator:** Gazebo Fortress (headless, CPU rendering)
 - **sudo password:** `0`
