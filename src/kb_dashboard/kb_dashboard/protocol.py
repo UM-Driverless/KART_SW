@@ -12,6 +12,7 @@ ESP_HEARTBEAT = 0x08
 ORIN_TARG_THROTTLE = 0x20
 ORIN_TARG_BRAKING = 0x21
 ORIN_TARG_STEERING = 0x22
+ESP_HEALTH_STATUS = 0x0B
 
 MISSIONS = {
     "manual": 0,
@@ -36,6 +37,21 @@ def decode_u8(payload) -> int:
     return payload[0] if payload else 0
 
 
+def decode_health(payload) -> dict:
+    """Decode ESP_HEALTH_STATUS: [flags, agc, heap_h, heap_l, err_count]."""
+    if len(payload) < 5:
+        return {}
+    flags = payload[0]
+    return {
+        "health_magnet_ok": bool(flags & 0x01),
+        "health_i2c_ok": bool(flags & 0x02),
+        "health_heap_ok": bool(flags & 0x04),
+        "health_agc": payload[1],
+        "health_heap_kb": (payload[2] << 8) | payload[3],
+        "health_i2c_errors": payload[4],
+    }
+
+
 class DashboardState:
     """Thread-safe telemetry state."""
 
@@ -53,6 +69,12 @@ class DashboardState:
             "orin_cmd_throttle": 0,   # target throttle 0-255
             "orin_cmd_brake": 0,      # target brake 0-255
             "orin_cmd_steering_rad": 0.0,
+            "health_magnet_ok": False,
+            "health_i2c_ok": False,
+            "health_heap_ok": False,
+            "health_agc": 0,
+            "health_heap_kb": 0,
+            "health_i2c_errors": 0,
             "mission": "manual",
             "state": "idle",  # idle | running | ebs
         }

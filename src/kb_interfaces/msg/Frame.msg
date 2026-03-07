@@ -10,6 +10,8 @@ uint8 ESP_MACHINE_STATE     = 0x06
 uint8 ESP_ACT_SHUTDOWN      = 0x07
 uint8 ESP_HEARTBEAT         = 0x08
 uint8 ESP_COMPLETE          = 0x09
+uint8 ESP_DIAG_STEERING     = 0x0A
+uint8 ESP_HEALTH_STATUS     = 0x0B
 
 
 # ==========================

@@ -17,7 +17,7 @@ from rclpy.qos import QoSProfile, ReliabilityPolicy
 from kb_interfaces.msg import Frame
 from std_msgs.msg import String
 
-from kb_dashboard.protocol import DashboardState, decode_steering, decode_u8
+from kb_dashboard.protocol import DashboardState, decode_steering, decode_u8, decode_health
 from kb_dashboard.server import run_websocket_server
 
 
@@ -37,6 +37,7 @@ class DashboardNode(Node):
         self.create_subscription(Frame, "/esp32/acceleration", self._on_esp_accel, qos)
         self.create_subscription(Frame, "/esp32/throttle", self._on_esp_throttle, qos)
         self.create_subscription(Frame, "/esp32/braking", self._on_esp_braking, qos)
+        self.create_subscription(Frame, "/esp32/health", self._on_esp_health, qos)
 
         # Orin → ESP32 commands (to show what we're sending)
         self.create_subscription(Frame, "/orin/throttle", self._on_orin_throttle, qos)
@@ -72,6 +73,11 @@ class DashboardNode(Node):
 
     def _on_esp_braking(self, msg: Frame):
         self.state.update("esp32_braking", decode_u8(list(msg.payload)) / 255.0)
+
+    def _on_esp_health(self, msg: Frame):
+        fields = decode_health(list(msg.payload))
+        for k, v in fields.items():
+            self.state.update(k, v)
 
     def _on_orin_throttle(self, msg: Frame):
         self.state.update("orin_cmd_throttle", decode_u8(list(msg.payload)))

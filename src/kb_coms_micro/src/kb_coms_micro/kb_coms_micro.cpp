@@ -29,6 +29,7 @@ KB_coms_micro::KB_coms_micro() : Node("kb_coms_micro_node") {
 
     esp_shutdown_pub_ = create_publisher<kb_interfaces::msg::Frame>("/esp32/shutdown", 10);
 
+    esp_health_pub_ = create_publisher<kb_interfaces::msg::Frame>("/esp32/health", 10);
 
     // Create Subscriptors
     orin_throttle_sub_ = create_subscription<kb_interfaces::msg::Frame>(
@@ -165,6 +166,14 @@ void KB_coms_micro::kb_coms_RXcallback(const SerialDriver::Frame &frame_esp) {
 
         esp_heart_pub_->publish(msg_orin8);
 
+        break;
+    }
+
+    case kb_interfaces::msg::Frame::ESP_HEALTH_STATUS: {
+        kb_interfaces::msg::Frame health_msg;
+        health_msg.type = frame_esp.type;
+        health_msg.payload = frame_esp.payload;
+        esp_health_pub_->publish(health_msg);
         break;
     }
 

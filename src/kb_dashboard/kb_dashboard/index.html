@@ -52,6 +52,12 @@ body { min-height: 100vh; -webkit-tap-highlight-color: transparent; }
     <div class="conn-dot" id="connDot"></div>
   </div>
 </div>
+<div id="healthBar" style="max-width:480px;margin:0 auto;padding:0 12px 4px;display:flex;gap:6px;font-size:10px;font-family:monospace;opacity:0.7">
+  <span id="hMag" title="Magnet">MAG --</span>
+  <span id="hI2c" title="I2C bus">I2C --</span>
+  <span id="hHeap" title="Free heap">HEAP --</span>
+  <span id="hAgc" title="AGC gain">AGC --</span>
+</div>
 <div id="app"></div>
 
 <script>
@@ -60,24 +66,31 @@ body { min-height: 100vh; -webkit-tap-highlight-color: transparent; }
 // ═══════════════════════════════════════════════════════
 const $ = id => document.getElementById(id);
 const deg = r => (r * 180 / Math.PI).toFixed(1);
-const WS_URL = `ws://${location.host}/ws`;
+const WS_URL = `ws://${location.hostname}:${parseInt(location.port||80)+1}/`;
 let ws = null, reconnectTimer = null, lastData = null, skinCleanup = null;
 
 function connect() {
+  if (typeof dbgLog==='function') dbgLog('WS connecting to '+WS_URL);
   ws = new WebSocket(WS_URL);
   ws.onopen = () => {
+    if (typeof dbgLog==='function') dbgLog('WS OPEN');
     const d = $('connDot'); if (d) d.classList.add('ok');
     if (reconnectTimer) { clearInterval(reconnectTimer); reconnectTimer = null; }
   };
-  ws.onclose = () => {
+  ws.onclose = (ev) => {
+    if (typeof dbgLog==='function') dbgLog('WS CLOSE code='+ev.code+' reason='+ev.reason+' clean='+ev.wasClean);
     const d = $('connDot'); if (d) d.classList.remove('ok');
     if (!reconnectTimer) reconnectTimer = setInterval(connect, 2000);
   };
-  ws.onerror = () => ws.close();
+  ws.onerror = (ev) => { if (typeof dbgLog==='function') dbgLog('WS ERROR '+ev.type); ws.close(); };
   ws.onmessage = e => {
     try {
       lastData = JSON.parse(e.data);
+      // Reflect ESP32 heartbeat in the connection dot (green only when HB alive)
+      const d = $('connDot');
+      if (d) { if (lastData.esp32_heartbeat) d.classList.add('ok'); else d.classList.remove('ok'); }
       SKINS[currentSkin].update(lastData);
+      updateHealth(lastData);
     } catch {}
   };
 }
@@ -812,6 +825,21 @@ function updateMissions(d) {
   document.querySelectorAll('.mis-btn').forEach(b => b.classList.toggle('sel', b.dataset.m === d.mission));
 }
 
+function updateHealth(d) {
+  const ok='#2ecc71', bad='#e74c3c', dim='#888';
+  const hm=$('hMag'), hi=$('hI2c'), hh=$('hHeap'), ha=$('hAgc');
+  if (!hm) return;
+  if (d.health_agc === undefined) return; // no health data yet
+  hm.textContent = d.health_magnet_ok ? 'MAG OK' : 'MAG BAD';
+  hm.style.color = d.health_magnet_ok ? ok : bad;
+  hi.textContent = d.health_i2c_ok ? 'I2C OK' : 'I2C ERR '+d.health_i2c_errors;
+  hi.style.color = d.health_i2c_ok ? ok : bad;
+  hh.textContent = 'HEAP '+d.health_heap_kb+'K';
+  hh.style.color = d.health_heap_ok ? dim : bad;
+  ha.textContent = 'AGC '+d.health_agc;
+  ha.style.color = (d.health_agc >= 20 && d.health_agc <= 235) ? dim : bad;
+}
+
 // G-G diagram for Default skin
 function drawGG(latG, lonG, borderC, dimC, accentC, blur) {
   const canvas = $('ggCanvas'); if (!canvas) return;
@@ -864,8 +892,14 @@ function applySkin(id) {
   if (lastData) skin.update(lastData);
 }
 
-applySkin(currentSkin);
-connect();
+// Debug overlay
+const dbg = document.createElement('div');
+dbg.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:#000c;color:#0f0;font:12px monospace;padding:6px;z-index:9999;max-height:120px;overflow:auto';
+document.body.appendChild(dbg);
+function dbgLog(s) { dbg.textContent = s + '\n' + dbg.textContent; }
+window.onerror = (m,s,l,c,e) => dbgLog('ERR: '+m+' @'+l+':'+c);
+try { applySkin(currentSkin); dbgLog('applySkin OK'); } catch(e) { dbgLog('applySkin FAIL: '+e.message); }
+try { connect(); dbgLog('connect() called, WS_URL='+WS_URL); } catch(e) { dbgLog('connect FAIL: '+e.message); }
 </script>
 </body>
 </html>
