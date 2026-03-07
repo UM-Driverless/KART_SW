@@ -168,6 +168,18 @@ cd ~/kart_brain && colcon build
 
 **Network:** For now, Orin and phones on the same WiFi. For race day, Orin runs its own hotspot (can coexist with WiFi via second interface or `nmcli`).
 
+## Verify Steering Angle Sensor Mapping
+
+**Status:** Not started
+
+**Problem:** Need to confirm the raw AS5600 values map correctly to steering angle in radians around the Z axis (Z = up). Our coordinate system is **X forward, Y left, Z up** — so a **positive steering angle means turning left**.
+
+**What to check:**
+1. Read raw AS5600 values while physically turning the wheel left and right
+2. Verify the sign convention: turning left → positive rad, turning right → negative rad
+3. Verify the magnitude: check known physical angles (e.g. full lock) against the reported radian values
+4. If the mapping is inverted or offset, fix it in `km_sdir.c` (the AS5600 → rad conversion)
+
 ## Long-Term
 
 - Explore YOLO acceleration via ONNX/TensorRT on Jetson

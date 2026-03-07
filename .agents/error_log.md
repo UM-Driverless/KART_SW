@@ -150,6 +150,19 @@ Tracks mistakes made during development and the prevention mechanisms added. Eve
 - Rule: **For any hardware interaction** (flashing, running ROS nodes, checking USB devices, serial comms), always SSH to the Orin first.
 - Rule: **The Orin is the deployment target.** Code is edited locally on the Mac, then pushed/copied to the Orin. The Mac never runs hardware-facing commands.
 
+## 2026-03-07 - ZED "CAMERA NOT DETECTED" after reboot
+**What happened:** After rebooting the Orin, the ZED SDK reported `CAMERA NOT DETECTED` even though `lsusb` showed the device (`2b03:f780 STEREOLABS ZED 2`). The ZED ROS wrapper and `pyzed.sl` both failed to open the camera. Physical re-plugging fixed it, but that's not viable for unattended operation.
+**Root cause:** The USB controller doesn't fully re-enumerate the ZED after a warm reboot. The device appears in `lsusb` but the SDK can't claim the interface.
+**Fix:** Software USB reset — toggle the device's `authorized` sysfs attribute:
+```bash
+echo "0" | sudo -S bash -c "echo 0 > /sys/bus/usb/devices/2-3.2/authorized && sleep 1 && echo 1 > /sys/bus/usb/devices/2-3.2/authorized"
+```
+**Prevention added:**
+- Added the software USB reset to `run_autonomous.sh` (runs automatically before ZED launch)
+- Added to `autonomous.launch.py` documentation in `.agents/orin_environment.md`
+- Rule: **The ZED is at USB path `2-3.2` (SuperSpeed 5 Gbps).** If it moves to a different port, find the new path with `lsusb -t`.
+- Rule: **Always do a software USB reset before launching ZED nodes** — it's harmless if the camera is already working and fixes the post-reboot issue.
+
 ## 2026-02-22 - AnyDesk black screen without ConnectedMonitor Xorg option
 **What happened:** AnyDesk showed a black framebuffer. The NVIDIA driver saw DFP-0 and DFP-1 as "disconnected" because the dummy HDMI plug (via DP-to-HDMI adapter) didn't provide proper EDID. Without a connected monitor, Xorg had no screen.
 **Prevention added:**

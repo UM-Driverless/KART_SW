@@ -28,14 +28,22 @@
 │   │       └── perception_test.launch.py     Offline testing
 │   │
 │   ├── kart_bringup/               (ament_cmake) Hardware launch files
-│   │   ├── launch/teleop_launch.py
+│   │   ├── launch/
+│   │   │   ├── autonomous.launch.py      Full pipeline (perception→control→comms→dashboard)
+│   │   │   ├── comms_test.launch.py      Safe testing (comms + dashboard only, no commands)
+│   │   │   └── teleop_launch.py          Joystick teleop
+│   │   ├── scripts/
+│   │   │   └── cmd_vel_bridge_node.py    Twist → Frame msgs (100 Hz)
 │   │   └── config/teleop_params.yaml
 │   │
+│   ├── kb_coms_micro/              (ament_cmake, C++) Serial bridge (ROS ↔ ESP32 UART)
+│   ├── kb_interfaces/              (ament_cmake) Custom msg/srv (Frame.msg)
+│   ├── kb_serial_driver_lib/       (ament_cmake, C++) Low-level serial driver
+│   ├── kb_dashboard/               (ament_python) Web dashboard (port 8080)
 │   ├── joy_to_cmd_vel/             (ament_cmake, C++) Joystick → Twist
-│   ├── msgs_to_micro/              (ament_cmake, C++) ROS → ESP32 serial
 │   └── ThirdParty/
 │
-├── models/perception/yolo/best_adri.pt   YOLO weights (YOLOv5 custom)
+├── models/perception/yolo/nava_yolov11_2026_02.pt  YOLO weights (YOLOv11, primary)
 ├── test_data/driverless_test_media/      Test images/videos
 ├── scripts/                              Workspace utility scripts
 ├── build/ install/ log/                  colcon output (gitignored)
@@ -138,16 +146,13 @@ ESP32 (kart_medulla firmware)
 
 ### ESP32 UART Routing
 
-The ESP32 has two active UARTs:
+The ESP32 uses only UART0:
 
 | UART | Pins | Connection | Purpose |
 |------|------|------------|---------|
 | UART0 | GPIO1 (TX), GPIO3 (RX) | USB to Orin (`/dev/ttyUSB0`) | **Binary protocol only** — framed messages between ESP32 and Orin |
-| UART2 | GPIO17 (TX), GPIO16 (RX) | Header wires | **Debug logs** — ESP-IDF `ESP_LOGx` output redirected here |
 
-ESP-IDF log output is redirected to UART2 via `esp_log_set_vprintf()` in `app_main()`. This keeps UART0 clean for `kb_coms_micro` to parse binary frames without log text corruption.
-
-**To read debug logs**: connect a USB-to-serial adapter to GPIO17/GPIO16, open at 460800 baud.
+**UART2 was removed** — GPIO17/GPIO16 are reserved for hall sensors on the PCB. All ESP-IDF logs are suppressed (`esp_log_level_set("*", ESP_LOG_NONE)`) because UART0 is shared with the binary protocol.
 
 ### ESP32 Protocol (km_coms)
 
@@ -155,8 +160,8 @@ Frame format: `| SOF (0xAA) | LEN | TYPE | PAYLOAD | CRC8 |`
 
 - CRC8: poly 0x07 over LEN, TYPE, and PAYLOAD bytes
 - Max frame size: 255 bytes
-- UART0 @ 460800 baud (CP2102 USB bridge)
-- Comms task: 100 Hz, Control task: 100 Hz
+- UART0 @ **115200** baud (CP2102 USB bridge — max reliable flash/runtime baud for CP2102)
+- Comms task: **20 Hz**, Control task: **10 Hz**, Heartbeat: **1 Hz**
 
 **Steering encoding**: int16 big-endian, value = radians × 1000.
 - Example: 0.25 rad → 250 → payload `[0x00, 0xFA]`
@@ -180,7 +185,13 @@ Key message types (Orin → ESP32):
 |---|---|---|
 | `/perception/cones_2d` | `vision_msgs/Detection2DArray` | bbox center, class_id, score |
 | `/perception/cones_3d` | `vision_msgs/Detection3DArray` | 3D position, class_id, score |
-| `/kart/cmd_vel` | `geometry_msgs/Twist` | linear.x (speed), angular.z (steering) |
+| `/perception/yolo/annotated` | `sensor_msgs/Image` | Camera feed with YOLO bounding boxes (view with rqt_image_view) |
+| `/kart/cmd_vel` | `geometry_msgs/Twist` | linear.x (speed), angular.z (steering rad) |
+| `/orin/steering` | `kb_interfaces/Frame` | Steering target frame (int16 BE, rad×1000) |
+| `/orin/throttle` | `kb_interfaces/Frame` | Throttle target frame (u8, 0-255) |
+| `/orin/brake` | `kb_interfaces/Frame` | Brake target frame (u8, 0-255) |
+| `/esp32/steering` | `kb_interfaces/Frame` | Steering feedback from ESP32 |
+| `/esp32/heartbeat` | `kb_interfaces/Frame` | ESP32 heartbeat |
 | `/model/kart/odometry` | `nav_msgs/Odometry` | pose (position + orientation), twist |
 | Camera topics | `sensor_msgs/Image` | RGB 640x360, Depth 32FC1 |
 | `/zed/.../camera_info` | `sensor_msgs/CameraInfo` | Intrinsics (fx, fy, cx, cy) |
