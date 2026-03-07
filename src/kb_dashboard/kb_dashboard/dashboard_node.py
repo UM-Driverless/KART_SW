@@ -45,7 +45,7 @@ MISSIONS = {
 HTML_PATH = Path(__file__).parent / "index.html"
 
 
-def decode_steering(payload: list[int]) -> float:
+def decode_steering(payload) -> float:
     """Decode int16 big-endian steering (rad × 1000) → float radians."""
     if len(payload) >= 2:
         raw = struct.unpack(">h", bytes(payload[:2]))[0]
@@ -53,7 +53,7 @@ def decode_steering(payload: list[int]) -> float:
     return 0.0
 
 
-def decode_u8(payload: list[int]) -> int:
+def decode_u8(payload) -> int:
     return payload[0] if payload else 0
 
 
@@ -267,6 +267,7 @@ async def run_websocket_server(state: DashboardState, node: DashboardNode, port:
                 node.get_logger().info(f"State set: {new_state}")
 
     def ws_send(writer: asyncio.StreamWriter, data: bytes, opcode=0x1):
+        nonlocal clients
         frame = bytearray()
         frame.append(0x80 | opcode)
         if len(data) < 126:
@@ -284,6 +285,7 @@ async def run_websocket_server(state: DashboardState, node: DashboardNode, port:
             clients.discard(writer)
 
     async def broadcast_loop():
+        nonlocal clients
         while True:
             await asyncio.sleep(0.1)  # 10 Hz
             if not clients:
