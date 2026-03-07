@@ -390,7 +390,7 @@ body::before { content:''; position:fixed; inset:0; background:repeating-linear-
   },
 
   update(d) {
-    $('ksSteer').textContent = deg(d.esp32_steering_rad);
+    $('ksSteer').textContent = deg(d.esp32_steering_rad) + ' (raw '+d.esp32_steering_raw+')';
     $('ksSpeed').textContent = (d.esp32_speed*3.6).toFixed(1);
     $('ksThr').textContent = String(Math.round(d.esp32_throttle*100)).padStart(3,'0');
     $('ksBrk').textContent = String(Math.round(d.esp32_braking*100)).padStart(3,'0');
@@ -555,7 +555,7 @@ body { font-family:'Inter',sans-serif; background:#0a0a0a; color:#f5f5f5; }
     const spd = d.esp32_speed*3.6;
     const accelTotal = Math.sqrt(d.esp32_accel_lat**2 + d.esp32_accel_lon**2);
     $('tBigSpeed').textContent = spd.toFixed(1);
-    $('tBigSteer').textContent = deg(d.esp32_steering_rad);
+    $('tBigSteer').textContent = deg(d.esp32_steering_rad) + ' (raw '+d.esp32_steering_raw+')';
     $('tBigAccel').textContent = accelTotal.toFixed(1);
 
     $('tsSteer').textContent = deg(d.esp32_steering_rad);
@@ -744,7 +744,7 @@ body::before { content:''; position:fixed; inset:0; pointer-events:none; backgro
   },
 
   update(d) {
-    $('hsSteer').textContent = deg(d.esp32_steering_rad);
+    $('hsSteer').textContent = deg(d.esp32_steering_rad) + ' (raw '+d.esp32_steering_raw+')';
     $('hsSpeed').textContent = (d.esp32_speed*3.6).toFixed(1);
     $('hsThr').textContent = Math.round(d.esp32_throttle*100);
     $('hsBrk').textContent = Math.round(d.esp32_braking*100);
