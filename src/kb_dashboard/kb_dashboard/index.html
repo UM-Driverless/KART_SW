@@ -125,73 +125,75 @@ document.addEventListener('click', e => { if (!e.target.closest('.skin-select'))
 const skinDefault = {
   name: 'Default',
   css: `
-body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro', system-ui, sans-serif; background: #0a0a0f; color: #e0e0e8; }
-#topbarTitle { color: #e0e0e8; }
+body { font-family:'Inter',-apple-system,BlinkMacSystemFont,'SF Pro',system-ui,sans-serif; background:#0a0a0f; color:#e0e0e8; }
+#topbarTitle { color:#888; font-weight:500; font-size:11px; letter-spacing:4px; text-transform:uppercase; }
 .conn-dot { background:#e74c3c; }
-.conn-dot.ok { background:#2ecc71; }
-.skin-btn { background:none; border:1px solid #2a2a3a; border-radius:6px; color:#6a6a7a; }
-.skin-dropdown { background:#14141f; border:1px solid #2a2a3a; border-radius:8px; overflow:hidden; }
-.skin-option { background:#14141f; color:#e0e0e8; font-family:inherit; }
+.conn-dot.ok { background:#2ecc71; box-shadow:0 0 8px #2ecc71; }
+.skin-btn { background:none; border:1px solid #2a2a3a; border-radius:100px; color:#6a6a7a; font-family:'Inter',sans-serif; font-weight:500; letter-spacing:1px; }
+.skin-dropdown { background:#14141f; border:1px solid #2a2a3a; border-radius:14px; overflow:hidden; }
+.skin-option { background:#14141f; color:#e0e0e8; font-family:'Inter',sans-serif; font-weight:500; }
 .skin-option:hover { background:#1e1e30; }
 .skin-option.active { color:#4a9eff; }
 
 .sbar { display:flex; gap:8px; margin-bottom:12px; }
-.spill { flex:1; text-align:center; padding:6px 4px; border-radius:8px; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; background:#14141f; border:1px solid #2a2a3a; }
+.spill { flex:1; text-align:center; padding:6px 4px; border-radius:100px; font-size:10px; font-weight:500; text-transform:uppercase; letter-spacing:1.5px; background:#14141f; border:1px solid #2a2a3a; }
 .spill.act { border-color:#4a9eff; color:#4a9eff; }
 .spill.hb-ok { border-color:#2ecc71; color:#2ecc71; }
 .spill.hb-bad { border-color:#e74c3c; color:#e74c3c; }
 
-.card { background:#14141f; border:1px solid #2a2a3a; border-radius:12px; padding:14px; margin-bottom:10px; }
-.card-t { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:1px; color:#6a6a7a; margin-bottom:10px; }
+.card { background:#14141f; border:1px solid #2a2a3a; border-radius:16px; padding:16px; margin-bottom:10px; position:relative; overflow:hidden; }
+.card-t { font-size:9px; font-weight:600; text-transform:uppercase; letter-spacing:2px; color:#6a6a7a; margin-bottom:12px; }
 .tg { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
-.ti { background:#0a0a0f; border-radius:8px; padding:10px; }
-.tl { font-size:10px; color:#6a6a7a; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px; }
-.tv { font-size:22px; font-weight:700; font-variant-numeric:tabular-nums; }
-.tu { font-size:12px; color:#6a6a7a; font-weight:400; }
+.ti { background:#0a0a0f; border-radius:12px; padding:14px 16px; position:relative; overflow:hidden; }
+.tl { font-size:10px; color:#6a6a7a; text-transform:uppercase; letter-spacing:1px; font-weight:500; margin-bottom:8px; }
+.tv { font-size:30px; font-weight:300; font-variant-numeric:tabular-nums; letter-spacing:-1px; line-height:1; }
+.tu { font-size:10px; color:#6a6a7a; font-weight:400; letter-spacing:1px; }
 .ta { font-size:13px; color:#4a9eff; font-weight:500; margin-left:4px; }
+.ti-bar { position:absolute; bottom:0; left:0; right:0; height:2px; background:#2a2a3a; }
+.ti-bar-fill { height:100%; transition:width 0.4s cubic-bezier(0.4,0,0.2,1); border-radius:0 1px 1px 0; }
 
-.steer-bg { width:100%; height:24px; background:#0a0a0f; border-radius:12px; position:relative; overflow:hidden; margin-top:8px; }
+.steer-bg { width:100%; height:20px; background:#0a0a0f; border-radius:10px; position:relative; overflow:hidden; margin-top:10px; }
 .steer-ctr { position:absolute; left:50%; top:0; bottom:0; width:2px; background:#6a6a7a; transform:translateX(-50%); }
-.steer-fill { position:absolute; top:2px; bottom:2px; background:#4a9eff; border-radius:10px; transition:left 0.1s, width 0.1s; }
+.steer-fill { position:absolute; top:2px; bottom:2px; background:#4a9eff; border-radius:8px; transition:left 0.1s, width 0.1s; }
 .steer-cmd { position:absolute; top:0; bottom:0; width:3px; background:#f39c12; border-radius:2px; transition:left 0.1s; }
 
-.gg-row { display:flex; gap:10px; align-items:center; margin-top:8px; }
+.gg-row { display:flex; gap:12px; align-items:center; margin-top:10px; }
 .gg-wrap { position:relative; width:140px; height:140px; flex-shrink:0; }
 .gg-canvas { width:100%; height:100%; border-radius:50%; background:#0a0a0f; border:1px solid #2a2a3a; }
-.gg-labels { flex:1; display:flex; flex-direction:column; gap:4px; }
-.gg-vl { font-size:10px; color:#6a6a7a; text-transform:uppercase; }
-.gg-v { font-size:14px; font-weight:600; font-variant-numeric:tabular-nums; }
+.gg-labels { flex:1; display:flex; flex-direction:column; gap:6px; }
+.gg-vl { font-size:9px; color:#6a6a7a; text-transform:uppercase; letter-spacing:2px; font-weight:500; }
+.gg-v { font-size:18px; font-weight:300; font-variant-numeric:tabular-nums; letter-spacing:-0.5px; }
 
-.ped-row { display:flex; gap:10px; margin-top:10px; }
+.ped-row { display:flex; gap:10px; margin-top:12px; }
 .ped-item { flex:1; }
-.ped-lbl { font-size:10px; color:#6a6a7a; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px; display:flex; justify-content:space-between; }
-.ped-lbl span { color:#e0e0e8; font-weight:600; font-variant-numeric:tabular-nums; }
-.ped-track { width:100%; height:20px; background:#0a0a0f; border-radius:10px; overflow:hidden; }
-.ped-fill { height:100%; border-radius:10px; transition:width 0.1s; }
+.ped-lbl { font-size:10px; color:#6a6a7a; text-transform:uppercase; letter-spacing:1px; font-weight:500; margin-bottom:6px; display:flex; justify-content:space-between; }
+.ped-lbl span { color:#e0e0e8; font-weight:300; font-size:18px; font-variant-numeric:tabular-nums; letter-spacing:-0.5px; }
+.ped-track { width:100%; height:6px; background:#0a0a0f; border-radius:3px; overflow:hidden; }
+.ped-fill { height:100%; border-radius:3px; transition:width 0.4s cubic-bezier(0.4,0,0.2,1); }
 .ped-fill.thr { background:#2ecc71; }
 .ped-fill.brk { background:#e74c3c; }
 
-.trg-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; }
-.trg-item { background:#0a0a0f; border-radius:8px; padding:8px; text-align:center; }
-.trg-lbl { font-size:10px; color:#6a6a7a; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:2px; }
-.trg-val { font-size:16px; font-weight:600; font-variant-numeric:tabular-nums; color:#f39c12; }
+.trg-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; }
+.trg-item { background:#0a0a0f; border-radius:12px; padding:14px 8px; text-align:center; position:relative; overflow:hidden; }
+.trg-lbl { font-size:9px; color:#6a6a7a; text-transform:uppercase; letter-spacing:1px; font-weight:500; margin-bottom:8px; }
+.trg-val { font-size:26px; font-weight:300; font-variant-numeric:tabular-nums; color:#f39c12; letter-spacing:-0.5px; line-height:1; }
 
-.mis-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; }
-.mis-btn { padding:12px 4px; border-radius:8px; border:2px solid #2a2a3a; background:#0a0a0f; color:#e0e0e8; font-size:12px; font-weight:600; cursor:pointer; text-align:center; -webkit-user-select:none; user-select:none; font-family:inherit; }
-.mis-btn:active { transform:scale(0.95); }
-.mis-btn.sel { border-color:#4a9eff; background:rgba(74,158,255,0.12); color:#4a9eff; }
-.ctrl-row { display:flex; gap:8px; margin-top:10px; }
-.ctrl-btn { flex:1; padding:16px 8px; border-radius:12px; border:none; font-size:15px; font-weight:700; cursor:pointer; text-transform:uppercase; -webkit-user-select:none; user-select:none; font-family:inherit; }
+.mis-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:5px; }
+.mis-btn { padding:10px 4px; border-radius:12px; border:1px solid #2a2a3a; background:#0a0a0f; color:#6a6a7a; font-size:9px; font-weight:500; letter-spacing:1px; text-transform:uppercase; cursor:pointer; text-align:center; -webkit-user-select:none; user-select:none; font-family:'Inter',sans-serif; }
+.mis-btn:active { transform:scale(0.96); }
+.mis-btn.sel { border-color:#4a9eff; background:rgba(74,158,255,0.10); color:#4a9eff; }
+.ctrl-row { display:flex; gap:6px; margin-top:10px; }
+.ctrl-btn { flex:1; padding:14px 8px; border-radius:14px; border:1px solid; font-size:11px; font-weight:600; letter-spacing:1.5px; cursor:pointer; text-transform:uppercase; -webkit-user-select:none; user-select:none; font-family:'Inter',sans-serif; }
 .ctrl-btn:active { transform:scale(0.96); }
-.ctrl-btn.go { background:#2ecc71; color:#fff; }
-.ctrl-btn.stop { background:#e74c3c; color:#fff; }
-.ctrl-btn.ebs { background:#f39c12; color:#fff; }
+.ctrl-btn.go { background:#2ecc71; border-color:#2ecc71; color:#fff; }
+.ctrl-btn.stop { background:transparent; border-color:#2a2a3a; color:#888; }
+.ctrl-btn.ebs { background:transparent; border-color:rgba(243,156,18,0.4); color:#f39c12; }
 `,
   render() { return `<div class="container">
   <div class="sbar"><div class="spill" id="pillState">IDLE</div><div class="spill" id="pillMission">MANUAL</div><div class="spill" id="pillHb">HB --</div></div>
   <div class="card"><div class="card-t">Kart State</div>
-    <div class="tg"><div class="ti"><div class="tl">Steering</div><div class="tv" id="vSteer">0.0 <span class="tu">°</span></div></div>
-    <div class="ti"><div class="tl">Speed</div><div class="tv" id="vSpeed">0.0 <span class="tu">km/h</span></div></div></div>
+    <div class="tg"><div class="ti"><div class="tl">Steering</div><div class="tv" id="vSteer">0.0 <span class="tu">°</span></div><div class="ti-bar"><div class="ti-bar-fill" id="steerBarFill" style="width:0%;background:#4a9eff"></div></div></div>
+    <div class="ti"><div class="tl">Speed</div><div class="tv" id="vSpeed">0.0 <span class="tu">km/h</span></div><div class="ti-bar"><div class="ti-bar-fill" id="speedBarFill" style="width:0%;background:#2ecc71"></div></div></div></div>
     <div class="steer-bg"><div class="steer-ctr"></div><div class="steer-fill" id="steerFill"></div><div class="steer-cmd" id="steerCmd"></div></div>
     <div class="gg-row"><div class="gg-wrap"><canvas class="gg-canvas" id="ggCanvas" width="140" height="140"></canvas></div>
     <div class="gg-labels"><div><div class="gg-vl">Lateral</div><div class="gg-v" id="vALat">0.00 g</div></div><div><div class="gg-vl">Longitudinal</div><div class="gg-v" id="vALon">0.00 g</div></div><div><div class="gg-vl">Total</div><div class="gg-v" id="vATotal">0.00 g</div></div></div></div>
@@ -204,7 +206,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro', system-ui, sans
     <div class="trg-item"><div class="trg-lbl">Brake</div><div class="trg-val" id="cBrk">0%</div></div></div></div>
   <div class="card"><div class="card-t">Mission</div>
     <div class="mis-grid" id="misGrid"><button class="mis-btn sel" data-m="manual">Manual</button><button class="mis-btn" data-m="acceleration">Accel</button><button class="mis-btn" data-m="skidpad">Skidpad</button><button class="mis-btn" data-m="autocross">Autocross</button><button class="mis-btn" data-m="trackdrive">Trackdrive</button><button class="mis-btn" data-m="inspection">Inspect</button></div>
-    <div class="ctrl-row"><button class="ctrl-btn go" onclick="wsSend({action:'set_state',state:'running'})">START</button><button class="ctrl-btn stop" onclick="wsSend({action:'set_state',state:'idle'})">STOP</button><button class="ctrl-btn ebs" onclick="wsSend({action:'set_state',state:'ebs'})">EBS</button></div>
+    <div class="ctrl-row"><button class="ctrl-btn go" onclick="wsSend({action:'set_state',state:'running'})">Start</button><button class="ctrl-btn stop" onclick="wsSend({action:'set_state',state:'idle'})">Stop</button><button class="ctrl-btn ebs" onclick="wsSend({action:'set_state',state:'ebs'})">EBS</button></div>
   </div></div>`; },
 
   init() {
@@ -216,6 +218,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro', system-ui, sans
   update(d) {
     $('vSteer').innerHTML = `${deg(d.esp32_steering_rad)} <span class="tu">°</span>`;
     $('vSpeed').innerHTML = `${(d.esp32_speed*3.6).toFixed(1)} <span class="tu">km/h</span>`;
+    $('steerBarFill').style.width = Math.min(Math.abs(d.esp32_steering_rad)/1*100,100)+'%';
+    $('speedBarFill').style.width = Math.min(d.esp32_speed/30*100,100)+'%';
     updateSteerBar(d, 'steerFill', 'steerCmd');
     const latG = d.esp32_accel_lat/9.81, lonG = d.esp32_accel_lon/9.81;
     drawGG(latG, lonG, '#2a2a3a', '#6a6a7a40', '#4a9eff', 8);
