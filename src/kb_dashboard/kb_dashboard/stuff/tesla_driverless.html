@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>UM Driverless — Tesla Flow</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<style>
+:root {
+  --bg: #0a0a0a;
+  --bg1: #111111;
+  --bg2: #161616;
+  --bg3: #1c1c1c;
+  --border: #2a2a2a;
+  --border2: #222222;
+  --text: #f5f5f5;
+  --text2: #888;
+  --text3: #444;
+  --accent: #e8e8e8;
+  --red: #e53935;
+  --green: #43a047;
+  --amber: #fb8c00;
+  --blue: #1e88e5;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Inter', sans-serif;
+  color: var(--text);
+  padding: 24px;
+}
+
+/* ── SHELL ── */
+.shell {
+  width: 100%;
+  max-width: 400px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* ── TOP BAR ── */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 2px;
+  margin-bottom: 10px;
+}
+.wordmark {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 4px;
+  color: var(--text2);
+  text-transform: uppercase;
+}
+.sys-pill {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 12px;
+  border-radius: 100px;
+  border: 1px solid var(--border);
+  background: var(--bg1);
+  transition: all 0.4s;
+}
+.sys-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--text3);
+  transition: background 0.4s, box-shadow 0.4s;
+}
+.sys-label {
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 1.5px;
+  color: var(--text3);
+  text-transform: uppercase;
+  transition: color 0.4s;
+}
+
+/* ── CAR VISUAL ── */
+.car-section {
+  background: var(--bg1);
+  border: 1px solid var(--border2);
+  border-radius: 20px;
+  padding: 28px 24px 20px;
+  position: relative;
+  overflow: hidden;
+}
+
+.car-svg-wrap {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 20px;
+  position: relative;
+}
+
+.car-svg-wrap svg {
+  width: 260px;
+  opacity: 0.9;
+}
+
+/* speed ring */
+.speed-ring-wrap {
+  position: absolute;
+  bottom: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 140px;
+  height: 70px;
+  overflow: hidden;
+}
+.speed-ring-wrap svg { width: 140px; height: 140px; margin-top: 0; }
+
+.car-stats {
+  display: flex;
+  justify-content: space-around;
+  padding-top: 14px;
+  border-top: 1px solid var(--border2);
+}
+.car-stat { text-align: center; }
+.car-stat-val {
+  font-size: 22px;
+  font-weight: 300;
+  color: var(--text);
+  letter-spacing: -0.5px;
+  line-height: 1;
+}
+.car-stat-unit {
+  font-size: 10px;
+  color: var(--text3);
+  margin-top: 3px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+/* glow under car */
+.car-glow {
+  position: absolute;
+  bottom: 0; left: 50%;
+  transform: translateX(-50%);
+  width: 200px; height: 40px;
+  background: radial-gradient(ellipse, rgba(30,136,229,0.12), transparent 70%);
+  pointer-events: none;
+  transition: opacity 0.6s;
+  opacity: 0;
+}
+
+/* ── MODE TABS ── */
+.tabs {
+  display: flex;
+  background: var(--bg1);
+  border: 1px solid var(--border2);
+  border-radius: 14px;
+  padding: 4px;
+  gap: 2px;
+}
+.tab {
+  flex: 1;
+  padding: 8px;
+  background: transparent;
+  border: none;
+  border-radius: 10px;
+  color: var(--text3);
+  font-family: 'Inter', sans-serif;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.tab.active {
+  background: var(--bg3);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+.tab:hover:not(.active) { color: var(--text2); }
+
+/* ── SENSOR GRID ── */
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+
+.card {
+  background: var(--bg1);
+  border: 1px solid var(--border2);
+  border-radius: 16px;
+  padding: 16px 16px 14px;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.3s;
+}
+.card-label {
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 1px;
+  color: var(--text3);
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+.card-val {
+  font-size: 30px;
+  font-weight: 300;
+  color: var(--text);
+  letter-spacing: -1px;
+  line-height: 1;
+  transition: color 0.3s;
+}
+.card-unit {
+  font-size: 10px;
+  color: var(--text3);
+  margin-top: 4px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.card-bar {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 2px;
+  background: var(--border2);
+}
+.card-bar-fill {
+  height: 100%;
+  border-radius: 0 0 0 0;
+  transition: width 0.4s cubic-bezier(0.4,0,0.2,1), background 0.4s;
+  background: var(--text3);
+  width: 0%;
+}
+
+/* small cmd card */
+.cmd-card {
+  background: var(--bg1);
+  border: 1px solid var(--border2);
+  border-radius: 14px;
+  padding: 14px 12px;
+  text-align: center;
+}
+.cmd-label {
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 1px;
+  color: var(--text3);
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+.cmd-val {
+  font-size: 26px;
+  font-weight: 300;
+  color: var(--text);
+  letter-spacing: -0.5px;
+  line-height: 1;
+}
+
+/* ── SECTION LABEL ── */
+.sec-label {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  color: var(--text3);
+  text-transform: uppercase;
+  padding: 0 2px;
+  margin-bottom: 2px;
+  margin-top: 4px;
+}
+
+/* ── MISSION ── */
+.mission-grid {
+  display: grid;
+  grid-template-columns: repeat(3,1fr);
+  gap: 5px;
+}
+.mis-btn {
+  padding: 10px 4px;
+  background: var(--bg1);
+  border: 1px solid var(--border2);
+  border-radius: 12px;
+  color: var(--text3);
+  font-family: 'Inter', sans-serif;
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.18s;
+}
+.mis-btn:hover { color: var(--text2); border-color: var(--border); }
+.mis-btn.active {
+  background: var(--bg3);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+/* ── CONTROLS ── */
+.ctrl-row { display: flex; gap: 6px; }
+.ctrl-btn {
+  flex: 1;
+  padding: 14px;
+  border-radius: 14px;
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  cursor: pointer;
+  border: 1px solid;
+  transition: all 0.18s;
+}
+.ctrl-btn:hover:not(:disabled) { opacity: 0.85; transform: translateY(-1px); }
+.ctrl-btn:disabled { opacity: 0.25; cursor: default; transform: none; }
+
+.btn-start {
+  background: var(--green);
+  border-color: var(--green);
+  color: #fff;
+}
+.btn-stop {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--text2);
+}
+.btn-ebs {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--amber);
+  border-color: #fb8c0040;
+}
+.btn-ebs.armed {
+  background: rgba(251,140,0,0.08);
+  border-color: var(--amber);
+}
+
+/* ── DIVIDER ── */
+.div { height: 1px; background: var(--border2); margin: 2px 0; }
+
+/* ── ANIMATIONS ── */
+@keyframes fadein { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+.shell > * { animation: fadein 0.5s ease both; }
+.shell > *:nth-child(1){animation-delay:.0s}
+.shell > *:nth-child(2){animation-delay:.05s}
+.shell > *:nth-child(3){animation-delay:.08s}
+.shell > *:nth-child(4){animation-delay:.11s}
+.shell > *:nth-child(5){animation-delay:.14s}
+.shell > *:nth-child(6){animation-delay:.17s}
+.shell > *:nth-child(7){animation-delay:.20s}
+.shell > *:nth-child(8){animation-delay:.23s}
+.shell > *:nth-child(9){animation-delay:.26s}
+
+@keyframes breathe {
+  0%,100% { opacity:0.10 }
+  50%      { opacity:0.22 }
+}
+</style>
+</head>
+<body>
+
+<div class="shell">
+
+  <!-- TOP BAR -->
+  <div class="topbar">
+    <div class="wordmark">UM Driverless</div>
+    <div class="sys-pill" id="sysPill">
+      <div class="sys-dot" id="sysDot"></div>
+      <span class="sys-label" id="sysLabel">Standby</span>
+    </div>
+  </div>
+
+  <!-- CAR VISUAL -->
+  <div class="car-section" id="carSection">
+    <div class="car-glow" id="carGlow"></div>
+    <div class="car-svg-wrap">
+      <!-- Side profile Tesla-ish EV -->
+      <svg viewBox="0 0 320 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <!-- Body -->
+        <path d="M 30 72
+                 L 28 58
+                 Q 30 46 50 38
+                 Q 70 30 100 26
+                 Q 130 22 160 22
+                 Q 190 22 210 26
+                 Q 238 32 255 46
+                 Q 268 56 272 66
+                 L 275 72 Z"
+              fill="#1e1e1e" stroke="#333" stroke-width="1"/>
+        <!-- Roof glass -->
+        <path d="M 95 38 Q 105 24 140 22 Q 180 20 210 26 Q 230 30 248 44 L 95 44 Z"
+              fill="#0d1a2a" stroke="#1e88e5" stroke-width="0.5" stroke-opacity="0.4"/>
+        <!-- Underbody flat -->
+        <rect x="30" y="72" width="245" height="6" rx="2" fill="#161616" stroke="#2a2a2a" stroke-width="0.5"/>
+        <!-- Front wheel arch -->
+        <circle cx="85" cy="80" r="18" fill="#111" stroke="#333" stroke-width="1"/>
+        <circle cx="85" cy="80" r="12" fill="#0a0a0a" stroke="#444" stroke-width="0.8"/>
+        <circle cx="85" cy="80" r="4" fill="#222"/>
+        <!-- Rear wheel arch -->
+        <circle cx="225" cy="80" r="18" fill="#111" stroke="#333" stroke-width="1"/>
+        <circle cx="225" cy="80" r="12" fill="#0a0a0a" stroke="#444" stroke-width="0.8"/>
+        <circle cx="225" cy="80" r="4" fill="#222"/>
+        <!-- Headlight -->
+        <path d="M 260 55 Q 270 60 272 66 L 258 66 Z" fill="#1e88e5" opacity="0.7"/>
+        <line x1="272" y1="62" x2="295" y2="58" stroke="#1e88e5" stroke-width="1" stroke-opacity="0.5"/>
+        <!-- Tail light -->
+        <rect x="28" y="56" width="4" height="10" rx="1" fill="#e53935" opacity="0.8"/>
+        <!-- Door line -->
+        <line x1="155" y1="28" x2="158" y2="72" stroke="#2a2a2a" stroke-width="0.8"/>
+        <!-- Handle -->
+        <rect x="170" y="46" width="14" height="3" rx="1.5" fill="#222" stroke="#333" stroke-width="0.5"/>
+        <!-- Charge port glow (animated) -->
+        <circle id="chargePort" cx="30" cy="50" r="3" fill="#1e88e5" opacity="0"/>
+      </svg>
+    </div>
+    <div class="car-stats">
+      <div class="car-stat">
+        <div class="car-stat-val" id="bigSpeed">0.0</div>
+        <div class="car-stat-unit">m/s</div>
+      </div>
+      <div class="car-stat">
+        <div class="car-stat-val" id="bigSteer">0.000</div>
+        <div class="car-stat-unit">rad</div>
+      </div>
+      <div class="car-stat">
+        <div class="car-stat-val" id="bigAccel">0.0</div>
+        <div class="car-stat-unit">m/s²</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODE TABS -->
+  <div class="tabs">
+    <button class="tab active" onclick="setMode(this)">Idle</button>
+    <button class="tab" onclick="setMode(this)">Manual</button>
+    <button class="tab" onclick="setMode(this)">Auto</button>
+  </div>
+
+  <!-- SENSOR CARDS -->
+  <div class="sec-label">Sensors</div>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-label">Steering</div>
+      <div class="card-val" id="sv-steer">0.000</div>
+      <div class="card-unit">rad</div>
+      <div class="card-bar"><div class="card-bar-fill" id="sb-steer" style="background:#1e88e5"></div></div>
+    </div>
+    <div class="card">
+      <div class="card-label">Speed</div>
+      <div class="card-val" id="sv-speed">0.00</div>
+      <div class="card-unit">m/s</div>
+      <div class="card-bar"><div class="card-bar-fill" id="sb-speed" style="background:#43a047"></div></div>
+    </div>
+    <div class="card">
+      <div class="card-label">Accel</div>
+      <div class="card-val" id="sv-accel">0.00</div>
+      <div class="card-unit">m/s²</div>
+      <div class="card-bar"><div class="card-bar-fill" id="sb-accel" style="background:#fb8c00"></div></div>
+    </div>
+    <div class="card">
+      <div class="card-label">Braking</div>
+      <div class="card-val" id="sv-brake">0</div>
+      <div class="card-unit">/255</div>
+      <div class="card-bar"><div class="card-bar-fill" id="sb-brake" style="background:#e53935"></div></div>
+    </div>
+  </div>
+
+  <!-- ORIN COMMANDS -->
+  <div class="sec-label">Commands</div>
+  <div class="grid-3">
+    <div class="cmd-card">
+      <div class="cmd-label">Throttle</div>
+      <div class="cmd-val" id="ov-thr">0</div>
+    </div>
+    <div class="cmd-card">
+      <div class="cmd-label">Brake</div>
+      <div class="cmd-val" id="ov-brk">0</div>
+    </div>
+    <div class="cmd-card">
+      <div class="cmd-label">Steer</div>
+      <div class="cmd-val" id="ov-str">0.00</div>
+    </div>
+  </div>
+
+  <!-- MISSION -->
+  <div class="sec-label">Mission</div>
+  <div class="mission-grid">
+    <button class="mis-btn active" onclick="setMission(this)">Manual</button>
+    <button class="mis-btn" onclick="setMission(this)">Accel</button>
+    <button class="mis-btn" onclick="setMission(this)">Skidpad</button>
+    <button class="mis-btn" onclick="setMission(this)">Autocross</button>
+    <button class="mis-btn" onclick="setMission(this)">Trackdrive</button>
+    <button class="mis-btn" onclick="setMission(this)">Inspect</button>
+  </div>
+
+  <!-- CONTROLS -->
+  <div class="ctrl-row">
+    <button class="ctrl-btn btn-start" id="btnStart" onclick="doStart()">Start</button>
+    <button class="ctrl-btn btn-stop" onclick="doStop()">Stop</button>
+    <button class="ctrl-btn btn-ebs" id="btnEbs" onclick="doEbs()">EBS</button>
+  </div>
+
+</div><!-- /shell -->
+
+<script>
+let running = false, ebsOn = false, simInterval;
+
+/* ── STATUS ── */
+function updateStatus() {
+  const dot = document.getElementById('sysDot');
+  const lbl = document.getElementById('sysLabel');
+  const pill = document.getElementById('sysPill');
+  const glow = document.getElementById('carGlow');
+
+  if (ebsOn) {
+    dot.style.background = '#fb8c00';
+    dot.style.boxShadow = '0 0 6px #fb8c00';
+    lbl.style.color = '#fb8c00';
+    lbl.textContent = 'EBS Active';
+    glow.style.opacity = '0';
+  } else if (running) {
+    dot.style.background = '#43a047';
+    dot.style.boxShadow = '0 0 8px #43a047';
+    lbl.style.color = '#43a047';
+    lbl.textContent = 'Running';
+    glow.style.background = 'radial-gradient(ellipse, rgba(67,160,71,0.14), transparent 70%)';
+    glow.style.opacity = '1';
+    glow.style.animation = 'breathe 2s infinite';
+  } else {
+    dot.style.background = '#444';
+    dot.style.boxShadow = 'none';
+    lbl.style.color = '#444';
+    lbl.textContent = 'Standby';
+    glow.style.opacity = '0';
+    glow.style.animation = 'none';
+  }
+}
+
+/* ── HELPERS ── */
+function sv(id,v){ document.getElementById(id).textContent = v; }
+function sb(id,p){ document.getElementById(id).style.width = Math.min(p,100)+'%'; }
+
+function resetAll() {
+  ['sv-steer','sv-speed','sv-accel'].forEach(id => sv(id,'0.00'));
+  sv('sv-steer','0.000'); sv('sv-brake','0');
+  sv('ov-thr','0'); sv('ov-brk','0'); sv('ov-str','0.00');
+  sv('bigSpeed','0.0'); sv('bigSteer','0.000'); sv('bigAccel','0.0');
+  ['sb-steer','sb-speed','sb-accel','sb-brake'].forEach(id => sb(id,0));
+}
+
+function runSim() {
+  const t = Date.now();
+  const steer = Math.sin(t/2000)*0.45;
+  const speed = 18 + Math.sin(t/1500)*6;
+  const accel = 3.2 + Math.cos(t/1200)*1.8;
+  const brake = Math.max(0, Math.floor(Math.sin(t/3000)*40));
+  const thr   = Math.floor(60 + Math.sin(t/1500)*30);
+  const brk   = Math.max(0, Math.floor(Math.sin(t/3000)*30));
+
+  sv('sv-steer', steer.toFixed(3)); sv('sv-speed', speed.toFixed(2));
+  sv('sv-accel', accel.toFixed(2)); sv('sv-brake', brake);
+  sv('ov-thr', thr); sv('ov-brk', brk); sv('ov-str', steer.toFixed(2));
+  sv('bigSpeed', speed.toFixed(1)); sv('bigSteer', steer.toFixed(3)); sv('bigAccel', accel.toFixed(1));
+
+  sb('sb-steer', Math.abs(steer)/1*100);
+  sb('sb-speed', speed/30*100);
+  sb('sb-accel', accel/10*100);
+  sb('sb-brake', brake/255*100);
+}
+
+/* ── CONTROLS ── */
+function doStart() {
+  if (running) return;
+  running=true; ebsOn=false;
+  document.getElementById('btnStart').disabled=true;
+  document.getElementById('btnEbs').classList.remove('armed');
+  simInterval=setInterval(runSim,80);
+  updateStatus();
+}
+function doStop() {
+  running=false;
+  document.getElementById('btnStart').disabled=false;
+  clearInterval(simInterval); resetAll(); updateStatus();
+}
+function doEbs() {
+  ebsOn=true; running=false;
+  document.getElementById('btnStart').disabled=false;
+  document.getElementById('btnEbs').classList.add('armed');
+  clearInterval(simInterval); resetAll(); updateStatus();
+}
+function setMode(btn) {
+  document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+}
+function setMission(btn) {
+  document.querySelectorAll('.mis-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+updateStatus();
+</script>
+</body>
+</html>

@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>UM Driverless</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;800;900&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    min-height: 100vh;
+    background: #050508;
+    font-family: 'Rajdhani', sans-serif;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    overflow-x: hidden;
+  }
+  body::before {
+    content: '';
+    position: fixed; inset: 0; pointer-events: none;
+    background:
+      radial-gradient(ellipse at 30% 20%, rgba(0,180,255,0.05) 0%, transparent 50%),
+      radial-gradient(ellipse at 70% 80%, rgba(255,60,0,0.04) 0%, transparent 50%);
+  }
+
+  .wrap { width: 100%; max-width: 420px; position: relative; }
+
+  /* HEADER */
+  .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+  .header-sub { font-family: 'Orbitron', sans-serif; font-size: 10px; letter-spacing: 5px; color: rgba(255,255,255,0.25); margin-bottom: 4px; }
+  .header-title { font-family: 'Orbitron', sans-serif; font-size: 22px; font-weight: 900; letter-spacing: 3px; color: #fff; text-shadow: 0 0 30px rgba(0,180,255,0.5); }
+  .status-pill {
+    display: flex; align-items: center; gap: 8px;
+    border-radius: 20px; padding: 6px 14px;
+    transition: all 0.3s;
+  }
+  .status-dot { width: 7px; height: 7px; border-radius: 50%; }
+  .status-dot.pulse { animation: pulse 1s infinite; }
+  .status-text { font-family: 'Orbitron', sans-serif; font-size: 9px; letter-spacing: 2px; font-weight: 700; }
+
+  /* TABS */
+  .tabs {
+    display: flex; gap: 6px; margin-bottom: 16px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 12px; padding: 6px;
+  }
+  .tab {
+    flex: 1; padding: 8px 4px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    color: rgba(255,255,255,0.3);
+    font-family: 'Orbitron', sans-serif;
+    font-size: 9px; letter-spacing: 1.5px; font-weight: 700;
+    cursor: pointer; transition: all 0.2s;
+  }
+  .tab.active {
+    background: rgba(0,180,255,0.15);
+    border-color: rgba(0,180,255,0.4);
+    color: #00b4ff;
+    text-shadow: 0 0 15px #00b4ff;
+  }
+
+  /* HEARTBEAT */
+  .hb-bar {
+    display: flex; align-items: center; gap: 10px;
+    background: rgba(255,255,255,0.02);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 10px; padding: 8px 16px;
+    margin-bottom: 16px;
+  }
+  .hb-label { font-family: 'Orbitron', sans-serif; font-size: 9px; letter-spacing: 2px; color: rgba(255,255,255,0.25); white-space: nowrap; }
+  .hb-beats { flex: 1; display: flex; gap: 3px; align-items: center; }
+  .hb-beat { flex: 1; border-radius: 2px; transition: all 0.08s; background: rgba(255,255,255,0.06); }
+  .hb-status { font-family: 'Orbitron', sans-serif; font-size: 9px; letter-spacing: 1px; color: rgba(255,255,255,0.2); }
+
+  /* SECTION CARD */
+  .section {
+    background: rgba(255,255,255,0.02);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 16px; padding: 16px;
+    margin-bottom: 12px;
+  }
+  .section-title {
+    font-family: 'Orbitron', sans-serif; font-size: 9px;
+    letter-spacing: 3px; color: rgba(255,255,255,0.2);
+    margin-bottom: 14px; display: flex; align-items: center; gap: 8px;
+  }
+  .section-dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
+
+  /* SENSOR GRID */
+  .sensor-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .metric-card {
+    background: linear-gradient(135deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.01) 100%);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px; padding: 14px 16px;
+    position: relative; overflow: hidden;
+  }
+  .metric-top-line {
+    position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    opacity: 0.8;
+  }
+  .metric-label { font-family: 'Rajdhani', sans-serif; font-size: 9px; letter-spacing: 2px; color: rgba(255,255,255,0.35); margin-bottom: 8px; text-transform: uppercase; }
+  .metric-value-row { display: flex; align-items: baseline; gap: 6px; }
+  .metric-value { font-family: 'Orbitron', sans-serif; font-size: 26px; font-weight: 700; color: #fff; line-height: 1; letter-spacing: -1px; }
+  .metric-unit { font-family: 'Rajdhani', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 1px; }
+  .metric-bar-bg { height: 3px; background: rgba(255,255,255,0.06); border-radius: 2px; overflow: hidden; margin-top: 10px; }
+  .metric-bar-fill { height: 100%; border-radius: 2px; transition: width 0.4s cubic-bezier(0.4,0,0.2,1); }
+
+  /* ORIN COMMANDS */
+  .cmd-row { display: flex; gap: 8px; }
+  .cmd-pill {
+    flex: 1; background: rgba(0,0,0,0.4);
+    border-radius: 10px; padding: 12px 10px;
+    text-align: center; position: relative; overflow: hidden;
+  }
+  .cmd-pill-glow { position: absolute; inset: 0; }
+  .cmd-pill-label { font-family: 'Rajdhani', sans-serif; font-size: 8px; letter-spacing: 2px; color: rgba(255,255,255,0.3); margin-bottom: 6px; text-transform: uppercase; position: relative; }
+  .cmd-pill-value { font-family: 'Orbitron', sans-serif; font-size: 22px; font-weight: 800; line-height: 1; position: relative; }
+  .cmd-pill-unit { font-size: 10px; margin-left: 2px; opacity: 0.7; }
+
+  /* MISSION */
+  .mission-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 14px; }
+  .mission-btn {
+    padding: 10px 6px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 10px;
+    color: rgba(255,255,255,0.45);
+    font-family: 'Orbitron', sans-serif;
+    font-size: 8px; letter-spacing: 1px; font-weight: 700;
+    cursor: pointer; transition: all 0.2s;
+  }
+  .mission-btn.active {
+    background: rgba(255,149,0,0.12);
+    border-color: rgba(255,149,0,0.5);
+    color: #ff9500;
+    text-shadow: 0 0 10px #ff9500;
+  }
+
+  /* CONTROL BUTTONS */
+  .ctrl-row { display: flex; gap: 8px; }
+  .ctrl-btn {
+    flex: 1; padding: 14px;
+    border-radius: 12px;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 11px; font-weight: 900; letter-spacing: 3px;
+    cursor: pointer; transition: all 0.2s;
+    border: 2px solid;
+  }
+  .ctrl-btn:hover:not(:disabled) { transform: translateY(-2px); }
+  .ctrl-btn:disabled { opacity: 0.35; cursor: default; transform: none; }
+
+  .btn-start {
+    background: rgba(57,255,20,0.15); border-color: rgba(57,255,20,0.6);
+    color: #39ff14; text-shadow: 0 0 15px #39ff14;
+    box-shadow: 0 0 20px rgba(57,255,20,0.15), inset 0 0 20px rgba(57,255,20,0.05);
+  }
+  .btn-start:disabled { background: rgba(57,255,20,0.04); border-color: rgba(57,255,20,0.15); color: rgba(57,255,20,0.3); text-shadow: none; box-shadow: none; }
+  .btn-stop { background: rgba(255,48,96,0.1); border-color: rgba(255,48,96,0.4); color: #ff3060; text-shadow: 0 0 15px #ff3060; }
+  .btn-ebs { background: rgba(255,170,0,0.1); border-color: rgba(255,170,0,0.4); color: #ffaa00; text-shadow: 0 0 15px #ffaa00; }
+  .btn-ebs.active { background: rgba(255,170,0,0.25); border-color: rgba(255,170,0,0.8); box-shadow: 0 0 25px rgba(255,170,0,0.25); }
+
+  /* FOOTER */
+  .footer { text-align: center; font-family: 'Orbitron', sans-serif; font-size: 8px; letter-spacing: 3px; color: rgba(255,255,255,0.1); margin-top: 4px; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.3; transform: scale(0.75); }
+  }
+  @keyframes fadein {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .wrap > * { animation: fadein 0.4s ease both; }
+  .wrap > *:nth-child(1) { animation-delay: 0.0s; }
+  .wrap > *:nth-child(2) { animation-delay: 0.05s; }
+  .wrap > *:nth-child(3) { animation-delay: 0.1s; }
+  .wrap > *:nth-child(4) { animation-delay: 0.15s; }
+  .wrap > *:nth-child(5) { animation-delay: 0.2s; }
+  .wrap > *:nth-child(6) { animation-delay: 0.25s; }
+  .wrap > *:nth-child(7) { animation-delay: 0.3s; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div>
+      <div class="header-sub">FORMULA STUDENT</div>
+      <div class="header-title">UM DRIVERLESS</div>
+    </div>
+    <div id="statusPill" class="status-pill">
+      <div id="statusDot" class="status-dot"></div>
+      <span id="statusText" class="status-text"></span>
+    </div>
+  </div>
+
+  <!-- MODE TABS -->
+  <div class="tabs">
+    <button class="tab active" data-mode="IDLE" onclick="setMode(this)">IDLE</button>
+    <button class="tab" data-mode="MANUAL" onclick="setMode(this)">MANUAL</button>
+    <button class="tab" data-mode="AUTONOMOUS" onclick="setMode(this)">AUTONOMOUS</button>
+  </div>
+
+  <!-- HEARTBEAT -->
+  <div class="hb-bar">
+    <div class="hb-label">HEARTBEAT</div>
+    <div class="hb-beats" id="hbBeats"></div>
+    <div class="hb-status" id="hbStatus">--</div>
+  </div>
+
+  <!-- ESP32 SENSORS -->
+  <div class="section">
+    <div class="section-title">
+      <div class="section-dot" style="background:#00b4ff;box-shadow:0 0 6px #00b4ff"></div>
+      ESP32 SENSORS
+    </div>
+    <div class="sensor-grid">
+      <div class="metric-card">
+        <div class="metric-top-line" style="background:linear-gradient(90deg,transparent,#00b4ff,transparent)"></div>
+        <div class="metric-label">⟳ STEERING</div>
+        <div class="metric-value-row">
+          <span class="metric-value" id="val-steering">0.000</span>
+          <span class="metric-unit" style="color:#00b4ff">rad</span>
+        </div>
+        <div class="metric-bar-bg"><div class="metric-bar-fill" id="bar-steering" style="background:linear-gradient(90deg,#00b4ff88,#00b4ff);box-shadow:0 0 8px #00b4ff;width:0%"></div></div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-top-line" style="background:linear-gradient(90deg,transparent,#39ff14,transparent)"></div>
+        <div class="metric-label">▶ SPEED</div>
+        <div class="metric-value-row">
+          <span class="metric-value" id="val-speed">0.00</span>
+          <span class="metric-unit" style="color:#39ff14">m/s</span>
+        </div>
+        <div class="metric-bar-bg"><div class="metric-bar-fill" id="bar-speed" style="background:linear-gradient(90deg,#39ff1488,#39ff14);box-shadow:0 0 8px #39ff14;width:0%"></div></div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-top-line" style="background:linear-gradient(90deg,transparent,#ff9500,transparent)"></div>
+        <div class="metric-label">↑ ACCEL</div>
+        <div class="metric-value-row">
+          <span class="metric-value" id="val-accel">0.00</span>
+          <span class="metric-unit" style="color:#ff9500">m/s²</span>
+        </div>
+        <div class="metric-bar-bg"><div class="metric-bar-fill" id="bar-accel" style="background:linear-gradient(90deg,#ff950088,#ff9500);box-shadow:0 0 8px #ff9500;width:0%"></div></div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-top-line" style="background:linear-gradient(90deg,transparent,#ff3060,transparent)"></div>
+        <div class="metric-label">■ BRAKING</div>
+        <div class="metric-value-row">
+          <span class="metric-value" id="val-braking">0</span>
+          <span class="metric-unit" style="color:#ff3060">/255</span>
+        </div>
+        <div class="metric-bar-bg"><div class="metric-bar-fill" id="bar-braking" style="background:linear-gradient(90deg,#ff306088,#ff3060);box-shadow:0 0 8px #ff3060;width:0%"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ORIN COMMANDS -->
+  <div class="section">
+    <div class="section-title">
+      <div class="section-dot" style="background:#b44fff;box-shadow:0 0 6px #b44fff"></div>
+      ORIN COMMANDS
+    </div>
+    <div class="cmd-row">
+      <div class="cmd-pill" style="border:1px solid #39ff1422">
+        <div class="cmd-pill-glow" style="background:radial-gradient(ellipse at 50% 0%,#39ff1410,transparent 70%)"></div>
+        <div class="cmd-pill-label">Throttle</div>
+        <div class="cmd-pill-value" style="color:#39ff14;text-shadow:0 0 20px #39ff14"><span id="cmd-throttle">0</span></div>
+      </div>
+      <div class="cmd-pill" style="border:1px solid #ff306022">
+        <div class="cmd-pill-glow" style="background:radial-gradient(ellipse at 50% 0%,#ff306010,transparent 70%)"></div>
+        <div class="cmd-pill-label">Brake</div>
+        <div class="cmd-pill-value" style="color:#ff3060;text-shadow:0 0 20px #ff3060"><span id="cmd-brake">0</span></div>
+      </div>
+      <div class="cmd-pill" style="border:1px solid #00b4ff22">
+        <div class="cmd-pill-glow" style="background:radial-gradient(ellipse at 50% 0%,#00b4ff10,transparent 70%)"></div>
+        <div class="cmd-pill-label">Steering</div>
+        <div class="cmd-pill-value" style="color:#00b4ff;text-shadow:0 0 20px #00b4ff"><span id="cmd-steering">0.000</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MISSION -->
+  <div class="section">
+    <div class="section-title">
+      <div class="section-dot" style="background:#ff9500;box-shadow:0 0 6px #ff9500"></div>
+      MISSION SELECT
+    </div>
+    <div class="mission-grid">
+      <button class="mission-btn active" onclick="setMission(this)">MANUAL</button>
+      <button class="mission-btn" onclick="setMission(this)">ACCEL</button>
+      <button class="mission-btn" onclick="setMission(this)">SKIDPAD</button>
+      <button class="mission-btn" onclick="setMission(this)">AUTOCROSS</button>
+      <button class="mission-btn" onclick="setMission(this)">TRACKDRIVE</button>
+      <button class="mission-btn" onclick="setMission(this)">INSPECT</button>
+    </div>
+    <div class="ctrl-row">
+      <button class="ctrl-btn btn-start" id="btnStart" onclick="handleStart()">START</button>
+      <button class="ctrl-btn btn-stop" id="btnStop" onclick="handleStop()">STOP</button>
+      <button class="ctrl-btn btn-ebs" id="btnEbs" onclick="handleEbs()">EBS</button>
+    </div>
+  </div>
+
+  <div class="footer">UNIVERSIDAD DE MÁLAGA · FSAE AUTONOMOUS · v2.4.1</div>
+</div>
+
+<script>
+  let running = false;
+  let ebsActive = false;
+  let simInterval = null;
+  let hbInterval = null;
+  let hbTick = false;
+
+  // Build heartbeat beats
+  const hbBeats = document.getElementById('hbBeats');
+  const heights = [4,4,4,4,8,14,14,8,4,4,4,4];
+  heights.forEach((h, i) => {
+    const d = document.createElement('div');
+    d.className = 'hb-beat';
+    d.style.height = h + 'px';
+    d.id = 'hb-' + i;
+    hbBeats.appendChild(d);
+  });
+
+  function updateStatus() {
+    const pill = document.getElementById('statusPill');
+    const dot = document.getElementById('statusDot');
+    const text = document.getElementById('statusText');
+    if (ebsActive) {
+      pill.style.background = 'rgba(255,48,96,0.15)';
+      pill.style.border = '1px solid rgba(255,48,96,0.4)';
+      dot.style.background = '#ff3060';
+      dot.style.boxShadow = '0 0 10px #ff3060';
+      dot.classList.remove('pulse');
+      text.style.color = '#ff3060';
+      text.textContent = 'EBS ACTIVE';
+    } else if (running) {
+      pill.style.background = 'rgba(57,255,20,0.12)';
+      pill.style.border = '1px solid rgba(57,255,20,0.4)';
+      dot.style.background = '#39ff14';
+      dot.style.boxShadow = '0 0 10px #39ff14';
+      dot.classList.add('pulse');
+      text.style.color = '#39ff14';
+      text.textContent = 'RUNNING';
+    } else {
+      pill.style.background = 'rgba(255,170,0,0.12)';
+      pill.style.border = '1px solid rgba(255,170,0,0.35)';
+      dot.style.background = '#ffaa00';
+      dot.style.boxShadow = '0 0 10px #ffaa00';
+      dot.classList.remove('pulse');
+      text.style.color = '#ffaa00';
+      text.textContent = 'STANDBY';
+    }
+  }
+
+  function updateHB() {
+    hbTick = !hbTick;
+    const hbStatus = document.getElementById('hbStatus');
+    if (running) {
+      hbStatus.style.color = '#ff3060';
+      hbStatus.textContent = 'OK';
+      for (let i = 0; i < 12; i++) {
+        const el = document.getElementById('hb-' + i);
+        if ((i === 5 || i === 6) && hbTick) {
+          el.style.background = '#ff3060';
+          el.style.boxShadow = '0 0 6px #ff3060';
+        } else {
+          el.style.background = 'rgba(255,48,96,0.3)';
+          el.style.boxShadow = 'none';
+        }
+      }
+    } else {
+      hbStatus.style.color = 'rgba(255,255,255,0.2)';
+      hbStatus.textContent = '--';
+      for (let i = 0; i < 12; i++) {
+        document.getElementById('hb-' + i).style.background = 'rgba(255,255,255,0.06)';
+        document.getElementById('hb-' + i).style.boxShadow = 'none';
+      }
+    }
+  }
+
+  function setVal(id, val) { document.getElementById(id).textContent = val; }
+  function setBar(id, pct) { document.getElementById(id).style.width = Math.min(pct, 100) + '%'; }
+
+  function simulate() {
+    const t = Date.now();
+    const steering = Math.sin(t / 2000) * 0.45;
+    const speed = 18 + Math.sin(t / 1500) * 6;
+    const accel = 3.2 + Math.cos(t / 1200) * 1.8;
+    const braking = Math.max(0, Math.floor(Math.sin(t / 3000) * 40));
+    const throttle = Math.floor(60 + Math.sin(t / 1500) * 30);
+    const brake = Math.max(0, Math.floor(Math.sin(t / 3000) * 30));
+
+    setVal('val-steering', steering.toFixed(3));
+    setVal('val-speed', speed.toFixed(2));
+    setVal('val-accel', accel.toFixed(2));
+    setVal('val-braking', braking);
+    setVal('cmd-throttle', throttle);
+    setVal('cmd-brake', brake);
+    setVal('cmd-steering', steering.toFixed(3));
+
+    setBar('bar-steering', (Math.abs(steering) / 1) * 100);
+    setBar('bar-speed', (speed / 30) * 100);
+    setBar('bar-accel', (accel / 10) * 100);
+    setBar('bar-braking', (braking / 255) * 100);
+  }
+
+  function resetData() {
+    setVal('val-steering', '0.000'); setVal('val-speed', '0.00');
+    setVal('val-accel', '0.00'); setVal('val-braking', '0');
+    setVal('cmd-throttle', '0'); setVal('cmd-brake', '0'); setVal('cmd-steering', '0.000');
+    setBar('bar-steering', 0); setBar('bar-speed', 0); setBar('bar-accel', 0); setBar('bar-braking', 0);
+  }
+
+  function handleStart() {
+    if (running) return;
+    running = true; ebsActive = false;
+    document.getElementById('btnStart').disabled = true;
+    document.getElementById('btnEbs').classList.remove('active');
+    updateStatus();
+    simInterval = setInterval(simulate, 80);
+  }
+
+  function handleStop() {
+    running = false;
+    document.getElementById('btnStart').disabled = false;
+    clearInterval(simInterval);
+    resetData();
+    updateStatus();
+  }
+
+  function handleEbs() {
+    ebsActive = true; running = false;
+    document.getElementById('btnStart').disabled = false;
+    document.getElementById('btnEbs').classList.add('active');
+    clearInterval(simInterval);
+    resetData();
+    updateStatus();
+  }
+
+  function setMode(btn) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    btn.classList.add('active');
+  }
+
+  function setMission(btn) {
+    document.querySelectorAll('.mission-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  }
+
+  // Init
+  hbInterval = setInterval(updateHB, 80);
+  updateStatus();
+</script>
+</body>
+</html>

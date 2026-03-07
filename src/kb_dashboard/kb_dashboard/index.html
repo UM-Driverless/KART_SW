@@ -4,456 +4,837 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Kart Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&family=Rajdhani:wght@400;500;600;700&family=VT323&display=swap" rel="stylesheet">
 <style>
-  :root {
-    --bg: #0a0a0f;
-    --card: #14141f;
-    --border: #2a2a3a;
-    --text: #e0e0e8;
-    --dim: #6a6a7a;
-    --accent: #4a9eff;
-    --green: #2ecc71;
-    --red: #e74c3c;
-    --orange: #f39c12;
-    --yellow: #f1c40f;
-  }
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro', system-ui, sans-serif;
-    background: var(--bg);
-    color: var(--text);
-    min-height: 100vh;
-    -webkit-tap-highlight-color: transparent;
-  }
-  .container { max-width: 480px; margin: 0 auto; padding: 12px; }
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { min-height: 100vh; -webkit-tap-highlight-color: transparent; }
+.container { max-width: 480px; margin: 0 auto; padding: 12px; }
 
-  .header {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 8px 0 12px;
-  }
-  .header h1 { font-size: 18px; font-weight: 600; }
-  .conn-dot {
-    width: 10px; height: 10px; border-radius: 50%;
-    background: var(--red); transition: background 0.3s;
-  }
-  .conn-dot.ok { background: var(--green); }
-
-  .status-bar { display: flex; gap: 8px; margin-bottom: 12px; }
-  .status-pill {
-    flex: 1; text-align: center; padding: 6px 4px;
-    border-radius: 8px; font-size: 11px; font-weight: 600;
-    text-transform: uppercase; letter-spacing: 0.5px;
-    background: var(--card); border: 1px solid var(--border);
-  }
-  .status-pill.active { border-color: var(--accent); color: var(--accent); }
-  .status-pill.heartbeat-ok { border-color: var(--green); color: var(--green); }
-  .status-pill.heartbeat-bad { border-color: var(--red); color: var(--red); }
-
-  .card {
-    background: var(--card); border: 1px solid var(--border);
-    border-radius: 12px; padding: 14px; margin-bottom: 10px;
-  }
-  .card-title {
-    font-size: 11px; font-weight: 600; text-transform: uppercase;
-    letter-spacing: 1px; color: var(--dim); margin-bottom: 10px;
-  }
-
-  .telem-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-  .telem-item { background: var(--bg); border-radius: 8px; padding: 10px; }
-  .telem-label {
-    font-size: 10px; color: var(--dim); text-transform: uppercase;
-    letter-spacing: 0.5px; margin-bottom: 4px;
-  }
-  .telem-value { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
-  .telem-unit { font-size: 12px; color: var(--dim); font-weight: 400; }
-  .telem-alt { font-size: 13px; color: var(--accent); font-weight: 500; margin-left: 4px; }
-
-  /* Steering bar */
-  .steer-bar-bg {
-    width: 100%; height: 24px; background: var(--bg);
-    border-radius: 12px; position: relative; overflow: hidden;
-  }
-  .steer-bar-center {
-    position: absolute; left: 50%; top: 0; bottom: 0;
-    width: 2px; background: var(--dim); transform: translateX(-50%);
-  }
-  .steer-bar-fill {
-    position: absolute; top: 2px; bottom: 2px;
-    background: var(--accent); border-radius: 10px;
-    transition: left 0.1s, width 0.1s;
-  }
-  .steer-bar-cmd {
-    position: absolute; top: 0; bottom: 0; width: 3px;
-    background: var(--orange); border-radius: 2px;
-    transition: left 0.1s;
-  }
-
-  /* G-G diagram */
-  .gg-row {
-    display: flex; gap: 10px; align-items: center; margin-top: 8px;
-  }
-  .gg-container {
-    position: relative; width: 140px; height: 140px; flex-shrink: 0;
-  }
-  .gg-canvas {
-    width: 100%; height: 100%; border-radius: 50%;
-    background: var(--bg); border: 1px solid var(--border);
-  }
-  .gg-labels {
-    flex: 1; display: flex; flex-direction: column; gap: 4px;
-  }
-  .gg-val {
-    font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums;
-  }
-  .gg-val-label { font-size: 10px; color: var(--dim); text-transform: uppercase; }
-
-  /* Pedal bars */
-  .pedal-row { display: flex; gap: 10px; margin-top: 10px; }
-  .pedal-item { flex: 1; }
-  .pedal-label {
-    font-size: 10px; color: var(--dim); text-transform: uppercase;
-    letter-spacing: 0.5px; margin-bottom: 4px;
-    display: flex; justify-content: space-between;
-  }
-  .pedal-label span { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
-  .pedal-track {
-    width: 100%; height: 20px; background: var(--bg);
-    border-radius: 10px; overflow: hidden;
-  }
-  .pedal-fill {
-    height: 100%; border-radius: 10px;
-    transition: width 0.1s;
-  }
-  .pedal-fill.throttle { background: var(--green); }
-  .pedal-fill.brake { background: var(--red); }
-
-  /* Target section */
-  .target-grid {
-    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;
-  }
-  .target-item {
-    background: var(--bg); border-radius: 8px; padding: 8px; text-align: center;
-  }
-  .target-label {
-    font-size: 10px; color: var(--dim); text-transform: uppercase;
-    letter-spacing: 0.5px; margin-bottom: 2px;
-  }
-  .target-value {
-    font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums;
-    color: var(--orange);
-  }
-
-  /* Mission buttons */
-  .mission-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
-  .mission-btn {
-    padding: 12px 4px; border-radius: 8px; border: 2px solid var(--border);
-    background: var(--bg); color: var(--text);
-    font-size: 12px; font-weight: 600; cursor: pointer;
-    transition: all 0.15s; text-align: center;
-    -webkit-user-select: none; user-select: none;
-  }
-  .mission-btn:active { transform: scale(0.95); }
-  .mission-btn.selected {
-    border-color: var(--accent); background: rgba(74,158,255,0.12);
-    color: var(--accent);
-  }
-  .control-row { display: flex; gap: 8px; margin-top: 10px; }
-  .ctrl-btn {
-    flex: 1; padding: 16px 8px; border-radius: 12px; border: none;
-    font-size: 15px; font-weight: 700; cursor: pointer;
-    transition: all 0.15s; text-transform: uppercase;
-    -webkit-user-select: none; user-select: none;
-  }
-  .ctrl-btn:active { transform: scale(0.96); }
-  .ctrl-btn.go { background: var(--green); color: #fff; }
-  .ctrl-btn.stop { background: var(--red); color: #fff; }
-  .ctrl-btn.ebs { background: var(--orange); color: #fff; }
-
-  /* Theme button */
-  .theme-btn {
-    background: none; border: 1px solid var(--border); border-radius: 6px;
-    color: var(--dim); font-size: 11px; padding: 3px 8px; cursor: pointer;
-    margin-right: 8px; transition: all 0.15s;
-  }
-  .theme-btn:active { transform: scale(0.95); }
-
-  /* Themes */
-  .theme-midnight { --bg:#0a0a0f; --card:#14141f; --border:#2a2a3a; --text:#e0e0e8; --dim:#6a6a7a; --accent:#4a9eff; --green:#2ecc71; --red:#e74c3c; --orange:#f39c12; }
-  .theme-racing   { --bg:#0f0a0a; --card:#1f1414; --border:#3a2a2a; --text:#e8e0e0; --dim:#7a6a6a; --accent:#ff4a4a; --green:#2ecc71; --red:#ff3333; --orange:#ff6b1a; }
-  .theme-forest   { --bg:#080f0a; --card:#121f14; --border:#1a3a1a; --text:#d8e8da; --dim:#5a7a5c; --accent:#4aff7a; --green:#2ecc71; --red:#e74c3c; --orange:#e8a735; }
-  .theme-cyber    { --bg:#0a0a12; --card:#12122a; --border:#2a2a5a; --text:#d0d0ff; --dim:#6a6a9a; --accent:#b44aff; --green:#00ff88; --red:#ff2266; --orange:#ffaa00; }
-  .theme-light    { --bg:#f0f0f4; --card:#ffffff; --border:#d8d8e0; --text:#1a1a2e; --dim:#8888a0; --accent:#2563eb; --green:#16a34a; --red:#dc2626; --orange:#ea580c; }
-  .theme-nord     { --bg:#2e3440; --card:#3b4252; --border:#4c566a; --text:#eceff4; --dim:#7b88a1; --accent:#88c0d0; --green:#a3be8c; --red:#bf616a; --orange:#d08770; }
+/* Skin selector (floats top-right, styled per skin via body class) */
+.skin-select { position: relative; display: inline-block; }
+.skin-btn {
+  border: none; cursor: pointer; font-size: 11px; padding: 4px 10px;
+  -webkit-user-select: none; user-select: none;
+}
+.skin-btn:active { transform: scale(0.95); }
+.skin-dropdown {
+  display: none; position: absolute; right: 0; top: 100%; margin-top: 4px;
+  min-width: 140px; z-index: 100; box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+}
+.skin-dropdown.open { display: block; }
+.skin-option {
+  display: block; width: 100%; border: none; text-align: left;
+  padding: 10px 14px; cursor: pointer; font-size: 12px;
+}
+/* Persistent top bar */
+#topbar {
+  max-width: 480px; margin: 0 auto; padding: 10px 12px 6px;
+  display: flex; align-items: center; justify-content: space-between;
+  transition: all 0.3s;
+}
+#topbarTitle { font-size: 18px; font-weight: 600; transition: all 0.3s; }
+.conn-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  transition: background 0.3s, box-shadow 0.3s;
+}
 </style>
+<style id="skinCss"></style>
 </head>
 <body>
-<div class="container">
-  <div class="header">
-    <h1>UM Driverless</h1>
-    <div style="display:flex;align-items:center;gap:6px">
-      <button class="theme-btn" id="themeBtn" onclick="cycleTheme()">Theme</button>
-      <div class="conn-dot" id="connDot"></div>
+<div id="topbar">
+  <div id="topbarTitle">UM Driverless</div>
+  <div style="display:flex;align-items:center;gap:8px">
+    <div class="skin-select">
+      <button class="skin-btn" id="skinBtn" onclick="toggleSkinMenu()"></button>
+      <div class="skin-dropdown" id="skinDropdown"></div>
     </div>
-  </div>
-
-  <div class="status-bar">
-    <div class="status-pill" id="pillState">IDLE</div>
-    <div class="status-pill" id="pillMission">MANUAL</div>
-    <div class="status-pill" id="pillHeartbeat">HB --</div>
-  </div>
-
-  <!-- ACTUAL STATE (sensor readings) -->
-  <div class="card">
-    <div class="card-title">Kart State</div>
-    <div class="telem-grid">
-      <div class="telem-item">
-        <div class="telem-label">Steering</div>
-        <div class="telem-value" id="valSteer">0.000 <span class="telem-unit">rad</span></div>
-      </div>
-      <div class="telem-item">
-        <div class="telem-label">Speed</div>
-        <div class="telem-value" id="valSpeed">0.0 <span class="telem-unit">km/h</span></div>
-      </div>
-    </div>
-    <!-- Steering bar -->
-    <div style="margin-top: 8px;">
-      <div class="steer-bar-bg">
-        <div class="steer-bar-center"></div>
-        <div class="steer-bar-fill" id="steerFill"></div>
-        <div class="steer-bar-cmd" id="steerCmd"></div>
-      </div>
-    </div>
-    <!-- G-G diagram + values -->
-    <div class="gg-row">
-      <div class="gg-container">
-        <canvas class="gg-canvas" id="ggCanvas" width="140" height="140"></canvas>
-      </div>
-      <div class="gg-labels">
-        <div>
-          <div class="gg-val-label">Lateral</div>
-          <div class="gg-val" id="valAccelLat">0.00 g</div>
-        </div>
-        <div>
-          <div class="gg-val-label">Longitudinal</div>
-          <div class="gg-val" id="valAccelLon">0.00 g</div>
-        </div>
-        <div>
-          <div class="gg-val-label">Total</div>
-          <div class="gg-val" id="valAccelTotal">0.00 g</div>
-        </div>
-      </div>
-    </div>
-    <!-- Pedal bars -->
-    <div class="pedal-row">
-      <div class="pedal-item">
-        <div class="pedal-label">Throttle <span id="valThrottle">0%</span></div>
-        <div class="pedal-track"><div class="pedal-fill throttle" id="throttleFill" style="width:0%"></div></div>
-      </div>
-      <div class="pedal-item">
-        <div class="pedal-label">Brake <span id="valBrake">0%</span></div>
-        <div class="pedal-track"><div class="pedal-fill brake" id="brakeFill" style="width:0%"></div></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- TARGET VALUES (what Orin commands) -->
-  <div class="card">
-    <div class="card-title">Targets</div>
-    <div class="target-grid">
-      <div class="target-item">
-        <div class="target-label">Steering</div>
-        <div class="target-value" id="cmdSteer">0.0°</div>
-      </div>
-      <div class="target-item">
-        <div class="target-label">Throttle</div>
-        <div class="target-value" id="cmdThrottle">0%</div>
-      </div>
-      <div class="target-item">
-        <div class="target-label">Brake</div>
-        <div class="target-value" id="cmdBrake">0%</div>
-      </div>
-    </div>
-  </div>
-
-  <!-- MISSION -->
-  <div class="card">
-    <div class="card-title">Mission</div>
-    <div class="mission-grid" id="missionGrid">
-      <button class="mission-btn selected" data-mission="manual">Manual</button>
-      <button class="mission-btn" data-mission="acceleration">Accel</button>
-      <button class="mission-btn" data-mission="skidpad">Skidpad</button>
-      <button class="mission-btn" data-mission="autocross">Autocross</button>
-      <button class="mission-btn" data-mission="trackdrive">Trackdrive</button>
-      <button class="mission-btn" data-mission="inspection">Inspect</button>
-    </div>
-    <div class="control-row">
-      <button class="ctrl-btn go" onclick="sendState('running')">START</button>
-      <button class="ctrl-btn stop" onclick="sendState('idle')">STOP</button>
-      <button class="ctrl-btn ebs" onclick="sendState('ebs')">EBS</button>
-    </div>
+    <div class="conn-dot" id="connDot"></div>
   </div>
 </div>
+<div id="app"></div>
 
 <script>
+// ═══════════════════════════════════════════════════════
+// SHARED INFRASTRUCTURE
+// ═══════════════════════════════════════════════════════
+const $ = id => document.getElementById(id);
+const deg = r => (r * 180 / Math.PI).toFixed(1);
 const WS_URL = `ws://${location.host}/ws`;
-let ws = null;
-let reconnectTimer = null;
-
-// G-G diagram setup
-const ggCanvas = document.getElementById('ggCanvas');
-const ggCtx = ggCanvas.getContext('2d');
-const GG_MAX = 2.0; // max g displayed
-const GG_R = 65; // plot radius in px
-const GG_CX = 70, GG_CY = 70; // center
-
-function drawGG(latG, lonG) {
-  const ctx = ggCtx;
-  ctx.clearRect(0, 0, 140, 140);
-
-  const cs = getComputedStyle(document.documentElement);
-  const borderC = cs.getPropertyValue('--border').trim();
-  const dimC = cs.getPropertyValue('--dim').trim();
-  const accentC = cs.getPropertyValue('--accent').trim();
-
-  // Background circles
-  ctx.strokeStyle = borderC;
-  ctx.lineWidth = 1;
-  for (let r = 1; r <= 2; r++) {
-    ctx.beginPath();
-    ctx.arc(GG_CX, GG_CY, GG_R * r / GG_MAX, 0, Math.PI * 2);
-    ctx.stroke();
-  }
-
-  // Crosshair
-  ctx.strokeStyle = dimC + '40';
-  ctx.beginPath();
-  ctx.moveTo(GG_CX - GG_R, GG_CY);
-  ctx.lineTo(GG_CX + GG_R, GG_CY);
-  ctx.moveTo(GG_CX, GG_CY - GG_R);
-  ctx.lineTo(GG_CX, GG_CY + GG_R);
-  ctx.stroke();
-
-  // Dot
-  const px = GG_CX + (latG / GG_MAX) * GG_R;
-  const py = GG_CY - (lonG / GG_MAX) * GG_R;
-  ctx.fillStyle = accentC;
-  ctx.shadowColor = accentC;
-  ctx.shadowBlur = 8;
-  ctx.beginPath();
-  ctx.arc(px, py, 5, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.shadowBlur = 0;
-
-  // Glow
-  ctx.fillStyle = accentC + '4d';
-  ctx.beginPath();
-  ctx.arc(px, py, 8, 0, Math.PI * 2);
-  ctx.fill();
-}
+let ws = null, reconnectTimer = null, lastData = null, skinCleanup = null;
 
 function connect() {
   ws = new WebSocket(WS_URL);
   ws.onopen = () => {
-    document.getElementById('connDot').classList.add('ok');
+    const d = $('connDot'); if (d) d.classList.add('ok');
     if (reconnectTimer) { clearInterval(reconnectTimer); reconnectTimer = null; }
   };
   ws.onclose = () => {
-    document.getElementById('connDot').classList.remove('ok');
+    const d = $('connDot'); if (d) d.classList.remove('ok');
     if (!reconnectTimer) reconnectTimer = setInterval(connect, 2000);
   };
   ws.onerror = () => ws.close();
-  ws.onmessage = (e) => { try { update(JSON.parse(e.data)); } catch {} };
+  ws.onmessage = e => {
+    try {
+      lastData = JSON.parse(e.data);
+      SKINS[currentSkin].update(lastData);
+    } catch {}
+  };
 }
 
-function update(d) {
-  const deg = (r) => (r * 180 / Math.PI).toFixed(1);
+function wsSend(obj) {
+  if (ws && ws.readyState === 1) ws.send(JSON.stringify(obj));
+}
 
-  // Steering + speed
-  el('valSteer').innerHTML = `${d.esp32_steering_rad.toFixed(3)} <span class="telem-unit">rad</span> <span class="telem-alt">${deg(d.esp32_steering_rad)}°</span>`;
-  el('valSpeed').innerHTML = `${(d.esp32_speed * 3.6).toFixed(1)} <span class="telem-unit">km/h</span> <span class="telem-alt">${d.esp32_speed.toFixed(2)} m/s</span>`;
+// Skin selector HTML (shared across all skins)
+function skinSelectHTML() {
+  return `<div class="skin-select">
+    <button class="skin-btn" id="skinBtn" onclick="toggleSkinMenu()"></button>
+    <div class="skin-dropdown" id="skinDropdown"></div>
+  </div>`;
+}
 
-  // Steering bar
+function buildSkinMenu() {
+  const dd = $('skinDropdown'); if (!dd) return;
+  dd.innerHTML = Object.entries(SKINS).map(([id, s]) =>
+    `<button class="skin-option${id === currentSkin ? ' active' : ''}"
+      onclick="event.stopPropagation();applySkin('${id}')">${s.name}</button>`
+  ).join('');
+  const btn = $('skinBtn'); if (btn) btn.textContent = SKINS[currentSkin].name;
+}
+
+function toggleSkinMenu() { const dd = $('skinDropdown'); if (dd) dd.classList.toggle('open'); }
+document.addEventListener('click', e => { if (!e.target.closest('.skin-select')) { const dd = $('skinDropdown'); if (dd) dd.classList.remove('open'); }});
+
+// ═══════════════════════════════════════════════════════
+// SKIN: DEFAULT — Clean modern dark
+// ═══════════════════════════════════════════════════════
+const skinDefault = {
+  name: 'Default',
+  css: `
+body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro', system-ui, sans-serif; background: #0a0a0f; color: #e0e0e8; }
+#topbarTitle { color: #e0e0e8; }
+.conn-dot { background:#e74c3c; }
+.conn-dot.ok { background:#2ecc71; }
+.skin-btn { background:none; border:1px solid #2a2a3a; border-radius:6px; color:#6a6a7a; }
+.skin-dropdown { background:#14141f; border:1px solid #2a2a3a; border-radius:8px; overflow:hidden; }
+.skin-option { background:#14141f; color:#e0e0e8; font-family:inherit; }
+.skin-option:hover { background:#1e1e30; }
+.skin-option.active { color:#4a9eff; }
+
+.sbar { display:flex; gap:8px; margin-bottom:12px; }
+.spill { flex:1; text-align:center; padding:6px 4px; border-radius:8px; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; background:#14141f; border:1px solid #2a2a3a; }
+.spill.act { border-color:#4a9eff; color:#4a9eff; }
+.spill.hb-ok { border-color:#2ecc71; color:#2ecc71; }
+.spill.hb-bad { border-color:#e74c3c; color:#e74c3c; }
+
+.card { background:#14141f; border:1px solid #2a2a3a; border-radius:12px; padding:14px; margin-bottom:10px; }
+.card-t { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:1px; color:#6a6a7a; margin-bottom:10px; }
+.tg { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.ti { background:#0a0a0f; border-radius:8px; padding:10px; }
+.tl { font-size:10px; color:#6a6a7a; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px; }
+.tv { font-size:22px; font-weight:700; font-variant-numeric:tabular-nums; }
+.tu { font-size:12px; color:#6a6a7a; font-weight:400; }
+.ta { font-size:13px; color:#4a9eff; font-weight:500; margin-left:4px; }
+
+.steer-bg { width:100%; height:24px; background:#0a0a0f; border-radius:12px; position:relative; overflow:hidden; margin-top:8px; }
+.steer-ctr { position:absolute; left:50%; top:0; bottom:0; width:2px; background:#6a6a7a; transform:translateX(-50%); }
+.steer-fill { position:absolute; top:2px; bottom:2px; background:#4a9eff; border-radius:10px; transition:left 0.1s, width 0.1s; }
+.steer-cmd { position:absolute; top:0; bottom:0; width:3px; background:#f39c12; border-radius:2px; transition:left 0.1s; }
+
+.gg-row { display:flex; gap:10px; align-items:center; margin-top:8px; }
+.gg-wrap { position:relative; width:140px; height:140px; flex-shrink:0; }
+.gg-canvas { width:100%; height:100%; border-radius:50%; background:#0a0a0f; border:1px solid #2a2a3a; }
+.gg-labels { flex:1; display:flex; flex-direction:column; gap:4px; }
+.gg-vl { font-size:10px; color:#6a6a7a; text-transform:uppercase; }
+.gg-v { font-size:14px; font-weight:600; font-variant-numeric:tabular-nums; }
+
+.ped-row { display:flex; gap:10px; margin-top:10px; }
+.ped-item { flex:1; }
+.ped-lbl { font-size:10px; color:#6a6a7a; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px; display:flex; justify-content:space-between; }
+.ped-lbl span { color:#e0e0e8; font-weight:600; font-variant-numeric:tabular-nums; }
+.ped-track { width:100%; height:20px; background:#0a0a0f; border-radius:10px; overflow:hidden; }
+.ped-fill { height:100%; border-radius:10px; transition:width 0.1s; }
+.ped-fill.thr { background:#2ecc71; }
+.ped-fill.brk { background:#e74c3c; }
+
+.trg-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; }
+.trg-item { background:#0a0a0f; border-radius:8px; padding:8px; text-align:center; }
+.trg-lbl { font-size:10px; color:#6a6a7a; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:2px; }
+.trg-val { font-size:16px; font-weight:600; font-variant-numeric:tabular-nums; color:#f39c12; }
+
+.mis-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; }
+.mis-btn { padding:12px 4px; border-radius:8px; border:2px solid #2a2a3a; background:#0a0a0f; color:#e0e0e8; font-size:12px; font-weight:600; cursor:pointer; text-align:center; -webkit-user-select:none; user-select:none; font-family:inherit; }
+.mis-btn:active { transform:scale(0.95); }
+.mis-btn.sel { border-color:#4a9eff; background:rgba(74,158,255,0.12); color:#4a9eff; }
+.ctrl-row { display:flex; gap:8px; margin-top:10px; }
+.ctrl-btn { flex:1; padding:16px 8px; border-radius:12px; border:none; font-size:15px; font-weight:700; cursor:pointer; text-transform:uppercase; -webkit-user-select:none; user-select:none; font-family:inherit; }
+.ctrl-btn:active { transform:scale(0.96); }
+.ctrl-btn.go { background:#2ecc71; color:#fff; }
+.ctrl-btn.stop { background:#e74c3c; color:#fff; }
+.ctrl-btn.ebs { background:#f39c12; color:#fff; }
+`,
+  render() { return `<div class="container">
+  <div class="sbar"><div class="spill" id="pillState">IDLE</div><div class="spill" id="pillMission">MANUAL</div><div class="spill" id="pillHb">HB --</div></div>
+  <div class="card"><div class="card-t">Kart State</div>
+    <div class="tg"><div class="ti"><div class="tl">Steering</div><div class="tv" id="vSteer">0.000 <span class="tu">rad</span></div></div>
+    <div class="ti"><div class="tl">Speed</div><div class="tv" id="vSpeed">0.0 <span class="tu">km/h</span></div></div></div>
+    <div class="steer-bg"><div class="steer-ctr"></div><div class="steer-fill" id="steerFill"></div><div class="steer-cmd" id="steerCmd"></div></div>
+    <div class="gg-row"><div class="gg-wrap"><canvas class="gg-canvas" id="ggCanvas" width="140" height="140"></canvas></div>
+    <div class="gg-labels"><div><div class="gg-vl">Lateral</div><div class="gg-v" id="vALat">0.00 g</div></div><div><div class="gg-vl">Longitudinal</div><div class="gg-v" id="vALon">0.00 g</div></div><div><div class="gg-vl">Total</div><div class="gg-v" id="vATotal">0.00 g</div></div></div></div>
+    <div class="ped-row"><div class="ped-item"><div class="ped-lbl">Throttle <span id="vThr">0%</span></div><div class="ped-track"><div class="ped-fill thr" id="thrFill" style="width:0%"></div></div></div>
+    <div class="ped-item"><div class="ped-lbl">Brake <span id="vBrk">0%</span></div><div class="ped-track"><div class="ped-fill brk" id="brkFill" style="width:0%"></div></div></div></div>
+  </div>
+  <div class="card"><div class="card-t">Targets</div><div class="trg-grid">
+    <div class="trg-item"><div class="trg-lbl">Steering</div><div class="trg-val" id="cSteer">0.0°</div></div>
+    <div class="trg-item"><div class="trg-lbl">Throttle</div><div class="trg-val" id="cThr">0%</div></div>
+    <div class="trg-item"><div class="trg-lbl">Brake</div><div class="trg-val" id="cBrk">0%</div></div></div></div>
+  <div class="card"><div class="card-t">Mission</div>
+    <div class="mis-grid" id="misGrid"><button class="mis-btn sel" data-m="manual">Manual</button><button class="mis-btn" data-m="acceleration">Accel</button><button class="mis-btn" data-m="skidpad">Skidpad</button><button class="mis-btn" data-m="autocross">Autocross</button><button class="mis-btn" data-m="trackdrive">Trackdrive</button><button class="mis-btn" data-m="inspection">Inspect</button></div>
+    <div class="ctrl-row"><button class="ctrl-btn go" onclick="wsSend({action:'set_state',state:'running'})">START</button><button class="ctrl-btn stop" onclick="wsSend({action:'set_state',state:'idle'})">STOP</button><button class="ctrl-btn ebs" onclick="wsSend({action:'set_state',state:'ebs'})">EBS</button></div>
+  </div></div>`; },
+
+  init() {
+    $('misGrid').addEventListener('click', missionClick);
+    drawGG(0, 0, '#2a2a3a', '#6a6a7a40', '#4a9eff', 8);
+    return () => {};
+  },
+
+  update(d) {
+    $('vSteer').innerHTML = `${d.esp32_steering_rad.toFixed(3)} <span class="tu">rad</span> <span class="ta">${deg(d.esp32_steering_rad)}°</span>`;
+    $('vSpeed').innerHTML = `${(d.esp32_speed*3.6).toFixed(1)} <span class="tu">km/h</span> <span class="ta">${d.esp32_speed.toFixed(2)} m/s</span>`;
+    updateSteerBar(d, 'steerFill', 'steerCmd');
+    const latG = d.esp32_accel_lat/9.81, lonG = d.esp32_accel_lon/9.81;
+    drawGG(latG, lonG, '#2a2a3a', '#6a6a7a40', '#4a9eff', 8);
+    $('vALat').textContent = latG.toFixed(2)+' g';
+    $('vALon').textContent = lonG.toFixed(2)+' g';
+    $('vATotal').textContent = Math.sqrt(latG*latG+lonG*lonG).toFixed(2)+' g';
+    updatePedals(d); updateTargets(d); updatePills(d); updateMissions(d);
+  }
+};
+
+// ═══════════════════════════════════════════════════════
+// SKIN: KITT — Retro 80s Knight Rider
+// ═══════════════════════════════════════════════════════
+const skinKitt = {
+  name: 'KITT',
+  css: `
+body { font-family:'Share Tech Mono',monospace; background:#000; color:#ff8800; }
+body::before { content:''; position:fixed; inset:0; background:repeating-linear-gradient(to bottom,transparent 0px,transparent 2px,rgba(255,34,0,0.03) 2px,rgba(255,34,0,0.03) 4px); pointer-events:none; z-index:9000; }
+#topbarTitle { font-family:'Share Tech Mono',monospace; color:#ff2200; text-shadow:0 0 8px #ff2200, 0 0 20px #ff220066; letter-spacing:3px; font-size:16px; }
+.conn-dot { background:#330700; border:1px solid #ff2200; }
+.conn-dot.ok { background:#ff2200; box-shadow:0 0 8px #ff2200; }
+.skin-btn { background:#040000; border:1px solid #1a0500; border-radius:1px; color:#440800; font-family:'Share Tech Mono',monospace; letter-spacing:2px; font-size:9px; }
+.skin-dropdown { background:#040000; border:1px solid #1a0500; border-radius:2px; overflow:hidden; }
+.skin-option { background:#040000; color:#ff8800; font-family:'Share Tech Mono',monospace; font-size:10px; letter-spacing:2px; border-bottom:1px solid #1a0500; }
+.skin-option:hover { background:#0d0200; }
+.skin-option.active { color:#ff2200; text-shadow:0 0 8px #ff2200; }
+
+.kitt-shell { width:100%; max-width:480px; margin:0 auto; background:#000; border:1px solid #330800; border-radius:4px; position:relative; overflow:hidden; box-shadow:0 0 40px #ff220022, 0 0 80px #ff220011, inset 0 0 40px #0a0000; }
+.kitt-shell::before { content:''; position:absolute; top:0; left:0; right:0; height:1px; background:linear-gradient(90deg,transparent,#ff2200 30%,#ff5533 50%,#ff2200 70%,transparent); box-shadow:0 0 12px #ff2200; z-index:10; }
+
+.scan-wrap { background:#060000; border-bottom:1px solid #220500; padding:12px 20px 10px; }
+.scan-track { height:28px; background:#0a0000; border:1px solid #1a0500; border-radius:2px; overflow:hidden; display:flex; gap:2px; padding:3px; align-items:center; }
+.seg { flex:1; height:100%; border-radius:1px; background:#1a0300; transition:background 0.05s, box-shadow 0.05s; }
+.seg.on { background:#ff2200; box-shadow:0 0 6px #ff2200, 0 0 12px #ff5533; }
+.seg.mid { background:#ff4400; box-shadow:0 0 4px #ff4400; }
+
+.k-hdr { display:flex; align-items:center; justify-content:space-between; padding:14px 20px 10px; border-bottom:1px solid #1a0500; }
+.k-logo-sup { font-size:8px; letter-spacing:5px; color:#550f00; }
+.k-logo { font-size:20px; color:#ff2200; letter-spacing:4px; text-shadow:0 0 8px #ff2200, 0 0 20px #ff220066; line-height:1; }
+.k-logo-sub { font-size:9px; letter-spacing:3px; color:#440800; margin-top:3px; }
+.k-status-lbl { font-size:8px; letter-spacing:3px; color:#440800; margin-bottom:4px; text-align:right; }
+.k-status-val { font-family:'VT323',monospace; font-size:22px; letter-spacing:2px; color:#ff2200; text-shadow:0 0 8px #ff2200, 0 0 20px #ff220066; transition:color 0.3s; }
+
+.k-body { padding:16px 20px; display:flex; flex-direction:column; gap:12px; }
+.k-sec { border:1px solid #1a0500; border-radius:2px; background:#040000; overflow:hidden; }
+.k-sec-hd { display:flex; align-items:center; justify-content:space-between; padding:6px 12px; background:#080000; border-bottom:1px solid #1a0500; }
+.k-sec-t { font-size:8px; letter-spacing:4px; color:#550f00; }
+.k-sec-badge { font-size:8px; letter-spacing:2px; color:#330700; }
+.k-sec-badge.on { color:#ff2200; text-shadow:0 0 8px #ff2200; }
+.k-sec-body { padding:12px; }
+
+.k-sg { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.k-sensor { border:1px solid #1a0500; padding:10px 12px; background:#020000; position:relative; overflow:hidden; }
+.k-sensor::before { content:''; position:absolute; top:0; left:0; right:0; height:1px; background:#ff2200; opacity:0.4; }
+.k-s-lbl { font-size:7px; letter-spacing:3px; color:#440800; margin-bottom:6px; text-transform:uppercase; }
+.k-s-val { font-family:'VT323',monospace; font-size:32px; line-height:1; color:#ff8800; text-shadow:0 0 4px #ff8800, 0 0 14px #ff880066; }
+.k-s-unit { font-size:9px; color:#550f00; letter-spacing:1px; margin-top:2px; }
+.k-s-bar { height:2px; background:#1a0500; margin-top:8px; border-radius:1px; overflow:hidden; }
+.k-s-bar-fill { height:100%; background:#ff2200; box-shadow:0 0 6px #ff2200; border-radius:1px; transition:width 0.2s; }
+
+.k-orin-row { display:flex; gap:8px; }
+.k-orin-cell { flex:1; border:1px solid #1a0500; padding:10px 8px; text-align:center; background:#020000; }
+.k-orin-lbl { font-size:7px; letter-spacing:3px; color:#440800; margin-bottom:6px; text-transform:uppercase; }
+.k-orin-val { font-family:'VT323',monospace; font-size:34px; line-height:1; color:#ff2200; text-shadow:0 0 8px #ff2200, 0 0 20px #ff220066; }
+
+.k-mis-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-bottom:10px; }
+.k-mis-btn { padding:9px 4px; background:#020000; border:1px solid #1a0500; border-radius:1px; color:#330700; font-family:'Share Tech Mono',monospace; font-size:8px; letter-spacing:2px; cursor:pointer; text-transform:uppercase; }
+.k-mis-btn.sel { color:#ff2200; border-color:#ff2200; text-shadow:0 0 8px #ff2200; background:#0d0100; box-shadow:inset 0 0 12px #ff220015, 0 0 8px #ff2200, 0 0 20px #ff220066; }
+.k-ctrl-row { display:flex; gap:8px; }
+.k-ctrl { flex:1; padding:14px 6px; border-radius:2px; font-family:'Share Tech Mono',monospace; font-size:11px; letter-spacing:3px; cursor:pointer; border:2px solid; }
+.k-ctrl:active { transform:scale(0.96); }
+.k-ctrl.go { background:#001a00; border-color:#00cc33; color:#00ff44; text-shadow:0 0 10px #00ff44; box-shadow:0 0 14px #00cc3322; }
+.k-ctrl.stop { background:#110000; border-color:#cc1100; color:#ff2200; text-shadow:0 0 8px #ff2200; }
+.k-ctrl.ebs { background:#110600; border-color:#cc6600; color:#ff8800; text-shadow:0 0 4px #ff8800; }
+
+.k-hb-row { display:flex; align-items:center; gap:10px; padding:8px 12px; border-top:1px solid #1a0500; background:#030000; }
+.k-hb-lbl { font-size:7px; letter-spacing:3px; color:#330700; white-space:nowrap; }
+.k-hb-line { flex:1; display:flex; gap:2px; align-items:center; }
+.k-hb-seg { flex:1; border-radius:1px; background:#1a0500; transition:all 0.08s; }
+.k-hb-ok { font-size:8px; letter-spacing:2px; color:#330700; }
+.k-hb-ok.on { color:#ff2200; text-shadow:0 0 8px #ff2200; }
+
+.k-voice { padding:8px 12px 10px; font-family:'VT323',monospace; font-size:16px; color:#441000; letter-spacing:1px; border-top:1px solid #1a0500; background:#020000; display:flex; align-items:center; gap:8px; }
+.k-voice-icon { color:#ff2200; font-size:14px; opacity:0.6; }
+#voiceText { color:#ff8800; transition:opacity 0.2s; }
+
+.k-footer { display:flex; align-items:center; justify-content:space-between; padding:8px 20px 10px; border-top:1px solid #1a0500; }
+.k-footer-l, .k-footer-r { font-size:7px; letter-spacing:3px; color:#220500; }
+.k-footer-dot { width:5px; height:5px; border-radius:50%; background:#ff2200; box-shadow:0 0 8px #ff2200; animation:blink 1.4s infinite; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.1} }
+`,
+  render() {
+    const hbHeights = [3,3,3,3,7,16,16,7,3,3,3,3];
+    const hbSegs = hbHeights.map((h,i) => `<div class="k-hb-seg" id="hbs${i}" style="height:${h}px"></div>`).join('');
+    return `<div class="container" style="padding:20px 12px"><div class="kitt-shell">
+  <div class="scan-wrap"><div class="scan-track" id="scanTrack"></div></div>
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 20px;border-bottom:1px solid #1a0500">
+    <div><div class="k-status-lbl">SYSTEM STATUS</div><div class="k-status-val" id="kStatus">STANDBY</div></div>
+  </div>
+  <div class="k-body">
+    <div class="k-sec">
+      <div class="k-sec-hd"><div class="k-sec-t">ESP32 · SENSOR ARRAY</div><div class="k-sec-badge" id="kSensorBadge">OFFLINE</div></div>
+      <div class="k-sec-body"><div class="k-sg">
+        <div class="k-sensor"><div class="k-s-lbl">STEERING</div><div class="k-s-val" id="ksSteer">0.000</div><div class="k-s-unit">RAD</div><div class="k-s-bar"><div class="k-s-bar-fill" id="kbSteer" style="width:0%"></div></div></div>
+        <div class="k-sensor"><div class="k-s-lbl">VELOCITY</div><div class="k-s-val" id="ksSpeed">0.00</div><div class="k-s-unit">M/S</div><div class="k-s-bar"><div class="k-s-bar-fill" id="kbSpeed" style="width:0%"></div></div></div>
+        <div class="k-sensor"><div class="k-s-lbl">THROTTLE</div><div class="k-s-val" id="ksThr">000</div><div class="k-s-unit">%</div><div class="k-s-bar"><div class="k-s-bar-fill" id="kbThr" style="width:0%"></div></div></div>
+        <div class="k-sensor"><div class="k-s-lbl">BRAKING</div><div class="k-s-val" id="ksBrk">000</div><div class="k-s-unit">%</div><div class="k-s-bar"><div class="k-s-bar-fill" id="kbBrk" style="width:0%"></div></div></div>
+      </div></div>
+      <div class="k-hb-row"><div class="k-hb-lbl">HEARTBEAT</div><div class="k-hb-line">${hbSegs}</div><div class="k-hb-ok" id="kHbOk">——</div></div>
+    </div>
+    <div class="k-sec">
+      <div class="k-sec-hd"><div class="k-sec-t">ORIN · DRIVE COMMANDS</div><div class="k-sec-badge" id="kOrinBadge">PASSIVE</div></div>
+      <div class="k-sec-body"><div class="k-orin-row">
+        <div class="k-orin-cell"><div class="k-orin-lbl">THROTTLE</div><div class="k-orin-val" id="koCThr">000</div></div>
+        <div class="k-orin-cell"><div class="k-orin-lbl">BRAKE</div><div class="k-orin-val" id="koCBrk">000</div></div>
+        <div class="k-orin-cell"><div class="k-orin-lbl">STEERING</div><div class="k-orin-val" id="koCStr">0.000</div></div>
+      </div></div>
+    </div>
+    <div class="k-sec">
+      <div class="k-sec-hd"><div class="k-sec-t">MISSION SELECT</div><div class="k-sec-badge" id="kMisBadge">MANUAL</div></div>
+      <div class="k-sec-body">
+        <div class="k-mis-grid" id="misGrid"><button class="k-mis-btn sel" data-m="manual">MANUAL</button><button class="k-mis-btn" data-m="acceleration">ACCEL</button><button class="k-mis-btn" data-m="skidpad">SKIDPAD</button><button class="k-mis-btn" data-m="autocross">AUTOCROSS</button><button class="k-mis-btn" data-m="trackdrive">TRACKDRIVE</button><button class="k-mis-btn" data-m="inspection">INSPECT</button></div>
+        <div class="k-ctrl-row"><button class="k-ctrl go" onclick="wsSend({action:'set_state',state:'running'})">START</button><button class="k-ctrl stop" onclick="wsSend({action:'set_state',state:'idle'})">STOP</button><button class="k-ctrl ebs" onclick="wsSend({action:'set_state',state:'ebs'})">EBS</button></div>
+      </div>
+      <div class="k-voice"><span class="k-voice-icon">▶</span><span id="voiceText">SYSTEM INITIALISED. AWAITING COMMAND.</span></div>
+    </div>
+  </div>
+  <div class="k-footer"><div class="k-footer-l">KNIGHT INDUSTRIES TWO THOUSAND</div><div class="k-footer-dot"></div><div class="k-footer-r">UM · FSAE · v2.4.1</div></div>
+</div></div>`; },
+
+  init() {
+    // Scanner segments
+    const N = 32, track = $('scanTrack');
+    for (let i = 0; i < N; i++) { const s = document.createElement('div'); s.className='seg'; s.id='seg'+i; track.appendChild(s); }
+    let pos = 0, dir = 1;
+    const scanId = setInterval(() => {
+      for (let i=0;i<N;i++) {
+        const dist = Math.abs(i-pos);
+        $('seg'+i).className = dist===0?'seg on':dist<=4?'seg mid':'seg';
+      }
+      pos += dir; if (pos>=N-1) dir=-1; if (pos<=0) dir=1;
+    }, 55);
+
+    // Heartbeat animation
+    let hbTick = false;
+    const hbId = setInterval(() => {
+      hbTick = !hbTick;
+      for (let i=0;i<12;i++) {
+        const el = $('hbs'+i);
+        if (lastData && lastData.esp32_heartbeat) {
+          if ((i===5||i===6)&&hbTick) { el.style.background='#ff2200'; el.style.boxShadow='0 0 6px #ff2200'; }
+          else { el.style.background='rgba(255,34,0,0.25)'; el.style.boxShadow='none'; }
+        } else { el.style.background='#1a0500'; el.style.boxShadow='none'; }
+      }
+    }, 90);
+
+    $('misGrid').addEventListener('click', missionClick);
+    return () => { clearInterval(scanId); clearInterval(hbId); };
+  },
+
+  update(d) {
+    $('ksSteer').textContent = d.esp32_steering_rad.toFixed(3);
+    $('ksSpeed').textContent = d.esp32_speed.toFixed(2);
+    $('ksThr').textContent = String(Math.round(d.esp32_throttle*100)).padStart(3,'0');
+    $('ksBrk').textContent = String(Math.round(d.esp32_braking*100)).padStart(3,'0');
+    $('kbSteer').style.width = Math.min(Math.abs(d.esp32_steering_rad)/1*100,100)+'%';
+    $('kbSpeed').style.width = Math.min(d.esp32_speed/30*100,100)+'%';
+    $('kbThr').style.width = (d.esp32_throttle*100)+'%';
+    $('kbBrk').style.width = (d.esp32_braking*100)+'%';
+
+    $('koCThr').textContent = String(Math.round(d.orin_cmd_throttle/255*100)).padStart(3,'0');
+    $('koCBrk').textContent = String(Math.round(d.orin_cmd_brake/255*100)).padStart(3,'0');
+    $('koCStr').textContent = d.orin_cmd_steering_rad.toFixed(3);
+
+    const running = d.state === 'running';
+    const s = $('kStatus');
+    if (d.state === 'ebs') { s.textContent='EBS ACTIVE'; s.style.color='#ff8800'; }
+    else if (running) { s.textContent='RUNNING'; s.style.color='#00ff44'; s.style.textShadow='0 0 10px #00ff44'; }
+    else { s.textContent='STANDBY'; s.style.color='#ff2200'; s.style.textShadow='0 0 8px #ff2200'; }
+
+    $('kSensorBadge').textContent = running?'ONLINE':'OFFLINE';
+    $('kSensorBadge').className = 'k-sec-badge'+(running?' on':'');
+    $('kOrinBadge').textContent = running?'ACTIVE':'PASSIVE';
+    $('kOrinBadge').className = 'k-sec-badge'+(running?' on':'');
+
+    const hb = $('kHbOk');
+    if (d.esp32_heartbeat) { hb.textContent='ONLINE'; hb.className='k-hb-ok on'; }
+    else { hb.textContent='——'; hb.className='k-hb-ok'; }
+
+    $('kMisBadge').textContent = d.mission.toUpperCase();
+
+    const voices = { running:'TURBO BOOST ENGAGED. ALL SYSTEMS NOMINAL.', idle:'FULL STOP. STANDING BY.', ebs:'EMERGENCY BRAKE SYSTEM ACTIVATED.' };
+    const vt = $('voiceText');
+    if (vt._lastState !== d.state) { vt.textContent = voices[d.state]||'AWAITING COMMAND.'; vt._lastState = d.state; }
+
+    document.querySelectorAll('.k-mis-btn').forEach(b => b.classList.toggle('sel', b.dataset.m === d.mission));
+  }
+};
+
+// ═══════════════════════════════════════════════════════
+// SKIN: TESLA — Ultra-minimal
+// ═══════════════════════════════════════════════════════
+const skinTesla = {
+  name: 'Tesla',
+  css: `
+body { font-family:'Inter',sans-serif; background:#0a0a0a; color:#f5f5f5; }
+#topbarTitle { font-family:'Inter',sans-serif; font-weight:500; color:#888; font-size:11px; letter-spacing:4px; text-transform:uppercase; }
+.conn-dot { background:#333; }
+.conn-dot.ok { background:#43a047; box-shadow:0 0 8px #43a047; }
+.skin-btn { background:#111; border:1px solid #222; border-radius:100px; color:#444; font-family:'Inter',sans-serif; font-weight:500; letter-spacing:1px; }
+.skin-dropdown { background:#111; border:1px solid #222; border-radius:14px; overflow:hidden; }
+.skin-option { background:#111; color:#888; font-family:'Inter',sans-serif; font-weight:500; }
+.skin-option:hover { background:#1c1c1c; }
+.skin-option.active { color:#f5f5f5; }
+.t-shell { width:100%; max-width:400px; margin:0 auto; display:flex; flex-direction:column; gap:6px; }
+.t-shell > * { animation:tfade 0.5s ease both; }
+.t-shell > *:nth-child(1){animation-delay:0s} .t-shell > *:nth-child(2){animation-delay:.05s} .t-shell > *:nth-child(3){animation-delay:.08s}
+.t-shell > *:nth-child(4){animation-delay:.11s} .t-shell > *:nth-child(5){animation-delay:.14s} .t-shell > *:nth-child(6){animation-delay:.17s}
+.t-shell > *:nth-child(7){animation-delay:.20s} .t-shell > *:nth-child(8){animation-delay:.23s} .t-shell > *:nth-child(9){animation-delay:.26s}
+@keyframes tfade { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+
+.t-topbar { display:flex; align-items:center; justify-content:flex-end; padding:0 2px; margin-bottom:10px; }
+.t-sys-pill { display:flex; align-items:center; gap:7px; padding:5px 12px; border-radius:100px; border:1px solid #2a2a2a; background:#111; }
+.t-sys-dot { width:6px; height:6px; border-radius:50%; background:#444; transition:all 0.4s; }
+.t-sys-label { font-size:10px; font-weight:500; letter-spacing:1.5px; color:#444; text-transform:uppercase; transition:color 0.4s; }
+
+.t-car { background:#111; border:1px solid #222; border-radius:20px; padding:28px 24px 20px; position:relative; overflow:hidden; }
+.t-car-glow { position:absolute; bottom:0; left:50%; transform:translateX(-50%); width:200px; height:40px; pointer-events:none; transition:opacity 0.6s; opacity:0; }
+.t-car-svg { display:flex; justify-content:center; margin-bottom:20px; }
+.t-car-svg svg { width:260px; opacity:0.9; }
+.t-car-stats { display:flex; justify-content:space-around; padding-top:14px; border-top:1px solid #222; }
+.t-car-stat { text-align:center; }
+.t-big-val { font-size:22px; font-weight:300; color:#f5f5f5; letter-spacing:-0.5px; line-height:1; }
+.t-big-unit { font-size:10px; color:#444; margin-top:3px; letter-spacing:1px; text-transform:uppercase; }
+
+.t-sec-label { font-size:9px; font-weight:600; letter-spacing:2px; color:#444; text-transform:uppercase; padding:0 2px; margin-bottom:2px; margin-top:4px; }
+.t-grid2 { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+.t-grid3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; }
+.t-card { background:#111; border:1px solid #222; border-radius:16px; padding:16px 16px 14px; position:relative; overflow:hidden; }
+.t-card-label { font-size:10px; font-weight:500; letter-spacing:1px; color:#444; text-transform:uppercase; margin-bottom:10px; }
+.t-card-val { font-size:30px; font-weight:300; color:#f5f5f5; letter-spacing:-1px; line-height:1; }
+.t-card-unit { font-size:10px; color:#444; margin-top:4px; letter-spacing:1px; text-transform:uppercase; }
+.t-card-bar { position:absolute; bottom:0; left:0; right:0; height:2px; background:#222; }
+.t-card-bar-fill { height:100%; transition:width 0.4s cubic-bezier(0.4,0,0.2,1); background:#444; }
+
+.t-cmd-card { background:#111; border:1px solid #222; border-radius:14px; padding:14px 12px; text-align:center; }
+.t-cmd-label { font-size:9px; font-weight:500; letter-spacing:1px; color:#444; text-transform:uppercase; margin-bottom:8px; }
+.t-cmd-val { font-size:26px; font-weight:300; color:#f5f5f5; letter-spacing:-0.5px; line-height:1; }
+
+.t-mis-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:5px; }
+.t-mis-btn { padding:10px 4px; background:#111; border:1px solid #222; border-radius:12px; color:#444; font-family:'Inter',sans-serif; font-size:9px; font-weight:500; letter-spacing:1px; text-transform:uppercase; cursor:pointer; }
+.t-mis-btn.sel { background:#1c1c1c; border-color:#333; color:#f5f5f5; }
+.t-ctrl-row { display:flex; gap:6px; }
+.t-ctrl { flex:1; padding:14px; border-radius:14px; font-family:'Inter',sans-serif; font-size:11px; font-weight:600; letter-spacing:1.5px; text-transform:uppercase; cursor:pointer; border:1px solid; }
+.t-ctrl:active { transform:scale(0.96); }
+.t-ctrl.go { background:#43a047; border-color:#43a047; color:#fff; }
+.t-ctrl.stop { background:transparent; border-color:#333; color:#888; }
+.t-ctrl.ebs { background:transparent; border-color:#fb8c0040; color:#fb8c00; }
+@keyframes breathe { 0%,100%{opacity:0.1} 50%{opacity:0.22} }
+`,
+  render() { return `<div class="t-shell">
+  <div class="t-topbar">
+    <div class="t-sys-pill" id="tSysPill"><div class="t-sys-dot" id="tSysDot"></div><span class="t-sys-label" id="tSysLabel">Standby</span></div>
+  </div>
+  <div class="t-car" id="tCarSection">
+    <div class="t-car-glow" id="tCarGlow"></div>
+    <div class="t-car-svg">
+      <svg viewBox="0 0 320 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M30 72 L28 58 Q30 46 50 38 Q70 30 100 26 Q130 22 160 22 Q190 22 210 26 Q238 32 255 46 Q268 56 272 66 L275 72Z" fill="#1e1e1e" stroke="#333" stroke-width="1"/>
+        <path d="M95 38 Q105 24 140 22 Q180 20 210 26 Q230 30 248 44 L95 44Z" fill="#0d1a2a" stroke="#1e88e5" stroke-width="0.5" stroke-opacity="0.4"/>
+        <rect x="30" y="72" width="245" height="6" rx="2" fill="#161616" stroke="#2a2a2a" stroke-width="0.5"/>
+        <circle cx="85" cy="80" r="18" fill="#111" stroke="#333" stroke-width="1"/><circle cx="85" cy="80" r="12" fill="#0a0a0a" stroke="#444" stroke-width="0.8"/><circle cx="85" cy="80" r="4" fill="#222"/>
+        <circle cx="225" cy="80" r="18" fill="#111" stroke="#333" stroke-width="1"/><circle cx="225" cy="80" r="12" fill="#0a0a0a" stroke="#444" stroke-width="0.8"/><circle cx="225" cy="80" r="4" fill="#222"/>
+        <path d="M260 55 Q270 60 272 66 L258 66Z" fill="#1e88e5" opacity="0.7"/>
+        <rect x="28" y="56" width="4" height="10" rx="1" fill="#e53935" opacity="0.8"/>
+        <line x1="155" y1="28" x2="158" y2="72" stroke="#2a2a2a" stroke-width="0.8"/>
+      </svg>
+    </div>
+    <div class="t-car-stats">
+      <div class="t-car-stat"><div class="t-big-val" id="tBigSpeed">0.0</div><div class="t-big-unit">km/h</div></div>
+      <div class="t-car-stat"><div class="t-big-val" id="tBigSteer">0.000</div><div class="t-big-unit">rad</div></div>
+      <div class="t-car-stat"><div class="t-big-val" id="tBigAccel">0.0</div><div class="t-big-unit">m/s²</div></div>
+    </div>
+  </div>
+  <div class="t-sec-label">Sensors</div>
+  <div class="t-grid2">
+    <div class="t-card"><div class="t-card-label">Steering</div><div class="t-card-val" id="tsSteer">0.000</div><div class="t-card-unit">rad</div><div class="t-card-bar"><div class="t-card-bar-fill" id="tbSteer" style="background:#1e88e5"></div></div></div>
+    <div class="t-card"><div class="t-card-label">Speed</div><div class="t-card-val" id="tsSpeed">0.00</div><div class="t-card-unit">m/s</div><div class="t-card-bar"><div class="t-card-bar-fill" id="tbSpeed" style="background:#43a047"></div></div></div>
+    <div class="t-card"><div class="t-card-label">Throttle</div><div class="t-card-val" id="tsThr">0</div><div class="t-card-unit">%</div><div class="t-card-bar"><div class="t-card-bar-fill" id="tbThr" style="background:#fb8c00"></div></div></div>
+    <div class="t-card"><div class="t-card-label">Braking</div><div class="t-card-val" id="tsBrk">0</div><div class="t-card-unit">%</div><div class="t-card-bar"><div class="t-card-bar-fill" id="tbBrk" style="background:#e53935"></div></div></div>
+  </div>
+  <div class="t-sec-label">Commands</div>
+  <div class="t-grid3">
+    <div class="t-cmd-card"><div class="t-cmd-label">Throttle</div><div class="t-cmd-val" id="tcThr">0%</div></div>
+    <div class="t-cmd-card"><div class="t-cmd-label">Brake</div><div class="t-cmd-val" id="tcBrk">0%</div></div>
+    <div class="t-cmd-card"><div class="t-cmd-label">Steer</div><div class="t-cmd-val" id="tcStr">0.00°</div></div>
+  </div>
+  <div class="t-sec-label">Mission</div>
+  <div class="t-mis-grid" id="misGrid">
+    <button class="t-mis-btn sel" data-m="manual">Manual</button><button class="t-mis-btn" data-m="acceleration">Accel</button><button class="t-mis-btn" data-m="skidpad">Skidpad</button>
+    <button class="t-mis-btn" data-m="autocross">Autocross</button><button class="t-mis-btn" data-m="trackdrive">Trackdrive</button><button class="t-mis-btn" data-m="inspection">Inspect</button>
+  </div>
+  <div class="t-ctrl-row">
+    <button class="t-ctrl go" onclick="wsSend({action:'set_state',state:'running'})">Start</button>
+    <button class="t-ctrl stop" onclick="wsSend({action:'set_state',state:'idle'})">Stop</button>
+    <button class="t-ctrl ebs" onclick="wsSend({action:'set_state',state:'ebs'})">EBS</button>
+  </div>
+</div>`; },
+
+  init() {
+    $('misGrid').addEventListener('click', missionClick);
+    return () => {};
+  },
+
+  update(d) {
+    const spd = d.esp32_speed*3.6;
+    const accelTotal = Math.sqrt(d.esp32_accel_lat**2 + d.esp32_accel_lon**2);
+    $('tBigSpeed').textContent = spd.toFixed(1);
+    $('tBigSteer').textContent = d.esp32_steering_rad.toFixed(3);
+    $('tBigAccel').textContent = accelTotal.toFixed(1);
+
+    $('tsSteer').textContent = d.esp32_steering_rad.toFixed(3);
+    $('tsSpeed').textContent = d.esp32_speed.toFixed(2);
+    $('tsThr').textContent = Math.round(d.esp32_throttle*100);
+    $('tsBrk').textContent = Math.round(d.esp32_braking*100);
+    $('tbSteer').style.width = Math.min(Math.abs(d.esp32_steering_rad)/1*100,100)+'%';
+    $('tbSpeed').style.width = Math.min(d.esp32_speed/30*100,100)+'%';
+    $('tbThr').style.width = (d.esp32_throttle*100)+'%';
+    $('tbBrk').style.width = (d.esp32_braking*100)+'%';
+
+    $('tcThr').textContent = Math.round(d.orin_cmd_throttle/255*100)+'%';
+    $('tcBrk').textContent = Math.round(d.orin_cmd_brake/255*100)+'%';
+    $('tcStr').textContent = deg(d.orin_cmd_steering_rad)+'°';
+
+    // Status pill
+    const dot = $('tSysDot'), lbl = $('tSysLabel'), glow = $('tCarGlow');
+    if (d.state === 'ebs') {
+      dot.style.background='#fb8c00'; dot.style.boxShadow='0 0 6px #fb8c00'; lbl.style.color='#fb8c00'; lbl.textContent='EBS Active'; glow.style.opacity='0';
+    } else if (d.state === 'running') {
+      dot.style.background='#43a047'; dot.style.boxShadow='0 0 8px #43a047'; lbl.style.color='#43a047'; lbl.textContent='Running';
+      glow.style.background='radial-gradient(ellipse,rgba(67,160,71,0.14),transparent 70%)'; glow.style.opacity='1'; glow.style.animation='breathe 2s infinite';
+    } else {
+      dot.style.background='#444'; dot.style.boxShadow='none'; lbl.style.color='#444'; lbl.textContent='Standby'; glow.style.opacity='0'; glow.style.animation='none';
+    }
+
+    document.querySelectorAll('.t-mis-btn').forEach(b => b.classList.toggle('sel', b.dataset.m === d.mission));
+  }
+};
+
+// ═══════════════════════════════════════════════════════
+// SKIN: HUD — Sci-fi neon racing
+// ═══════════════════════════════════════════════════════
+const skinHud = {
+  name: 'HUD',
+  css: `
+body { font-family:'Rajdhani',sans-serif; background:#050508; color:#fff; }
+body::before { content:''; position:fixed; inset:0; pointer-events:none; background:radial-gradient(ellipse at 30% 20%,rgba(0,180,255,0.05) 0%,transparent 50%),radial-gradient(ellipse at 70% 80%,rgba(255,60,0,0.04) 0%,transparent 50%); }
+#topbarTitle { font-family:'Orbitron',sans-serif; font-weight:900; color:#fff; font-size:20px; letter-spacing:3px; text-shadow:0 0 30px rgba(0,180,255,0.5); }
+.conn-dot { background:#ffaa00; border:1px solid #ffaa00; }
+.conn-dot.ok { background:#39ff14; border-color:#39ff14; box-shadow:0 0 10px #39ff14; animation:hpulse 1s infinite; }
+.skin-btn { background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.07); border-radius:8px; color:rgba(255,255,255,0.3); font-family:'Orbitron',sans-serif; font-weight:700; letter-spacing:1px; font-size:9px; }
+.skin-dropdown { background:rgba(10,10,20,0.95); border:1px solid rgba(255,255,255,0.1); border-radius:10px; overflow:hidden; backdrop-filter:blur(10px); }
+.skin-option { background:transparent; color:rgba(255,255,255,0.5); font-family:'Orbitron',sans-serif; font-size:9px; letter-spacing:1px; font-weight:700; }
+.skin-option:hover { background:rgba(255,255,255,0.05); }
+.skin-option.active { color:#00b4ff; text-shadow:0 0 10px #00b4ff; }
+
+.h-wrap { width:100%; max-width:420px; margin:0 auto; padding:0 12px 20px; position:relative; }
+.h-wrap > * { animation:hfade 0.4s ease both; }
+.h-wrap > *:nth-child(1){animation-delay:0s} .h-wrap > *:nth-child(2){animation-delay:.05s} .h-wrap > *:nth-child(3){animation-delay:.1s}
+.h-wrap > *:nth-child(4){animation-delay:.15s} .h-wrap > *:nth-child(5){animation-delay:.2s} .h-wrap > *:nth-child(6){animation-delay:.25s} .h-wrap > *:nth-child(7){animation-delay:.3s}
+@keyframes hfade { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+
+.h-status-pill { display:flex; align-items:center; gap:8px; border-radius:20px; padding:6px 14px; transition:all 0.3s; }
+.h-status-dot { width:7px; height:7px; border-radius:50%; }
+.h-status-dot.pulse { animation:hpulse 1s infinite; }
+@keyframes hpulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.3;transform:scale(0.75)} }
+.h-status-text { font-family:'Orbitron',sans-serif; font-size:9px; letter-spacing:2px; font-weight:700; }
+
+.h-hb-bar { display:flex; align-items:center; gap:10px; background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.06); border-radius:10px; padding:8px 16px; margin-bottom:16px; }
+.h-hb-label { font-family:'Orbitron',sans-serif; font-size:9px; letter-spacing:2px; color:rgba(255,255,255,0.25); white-space:nowrap; }
+.h-hb-beats { flex:1; display:flex; gap:3px; align-items:center; }
+.h-hb-beat { flex:1; border-radius:2px; transition:all 0.08s; background:rgba(255,255,255,0.06); }
+.h-hb-status { font-family:'Orbitron',sans-serif; font-size:9px; letter-spacing:1px; color:rgba(255,255,255,0.2); }
+
+.h-section { background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.07); border-radius:16px; padding:16px; margin-bottom:12px; }
+.h-sec-title { font-family:'Orbitron',sans-serif; font-size:9px; letter-spacing:3px; color:rgba(255,255,255,0.2); margin-bottom:14px; display:flex; align-items:center; gap:8px; }
+.h-sec-dot { width:5px; height:5px; border-radius:50%; flex-shrink:0; }
+.h-sg { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.h-metric { background:linear-gradient(135deg,rgba(255,255,255,0.04),rgba(255,255,255,0.01)); border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:14px 16px; position:relative; overflow:hidden; }
+.h-metric-line { position:absolute; top:0; left:0; right:0; height:2px; opacity:0.8; }
+.h-metric-label { font-size:9px; font-weight:600; letter-spacing:2px; color:rgba(255,255,255,0.35); margin-bottom:8px; text-transform:uppercase; }
+.h-metric-row { display:flex; align-items:baseline; gap:6px; }
+.h-metric-val { font-family:'Orbitron',sans-serif; font-size:26px; font-weight:700; color:#fff; line-height:1; letter-spacing:-1px; }
+.h-metric-unit { font-size:11px; font-weight:600; letter-spacing:1px; }
+.h-metric-bar { height:3px; background:rgba(255,255,255,0.06); border-radius:2px; overflow:hidden; margin-top:10px; }
+.h-metric-bar-fill { height:100%; border-radius:2px; transition:width 0.4s cubic-bezier(0.4,0,0.2,1); }
+
+.h-gg-row { display:flex; gap:12px; align-items:center; margin-top:10px; }
+.h-gg-wrap { width:130px; height:130px; flex-shrink:0; }
+.h-gg-canvas { width:100%; height:100%; border-radius:12px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.07); }
+.h-gg-labels { flex:1; display:flex; flex-direction:column; gap:6px; }
+.h-gg-vl { font-size:9px; font-weight:600; letter-spacing:2px; color:rgba(255,255,255,0.25); }
+.h-gg-v { font-family:'Orbitron',sans-serif; font-size:15px; font-weight:700; color:#fff; }
+
+.h-cmd-row { display:flex; gap:8px; }
+.h-cmd-pill { flex:1; background:rgba(0,0,0,0.4); border-radius:10px; padding:12px 10px; text-align:center; position:relative; overflow:hidden; }
+.h-cmd-glow { position:absolute; inset:0; }
+.h-cmd-label { font-size:8px; font-weight:600; letter-spacing:2px; color:rgba(255,255,255,0.3); margin-bottom:6px; text-transform:uppercase; position:relative; }
+.h-cmd-val { font-family:'Orbitron',sans-serif; font-size:22px; font-weight:800; line-height:1; position:relative; }
+
+.h-mis-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:14px; }
+.h-mis-btn { padding:10px 6px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.07); border-radius:10px; color:rgba(255,255,255,0.45); font-family:'Orbitron',sans-serif; font-size:8px; letter-spacing:1px; font-weight:700; cursor:pointer; }
+.h-mis-btn.sel { background:rgba(255,149,0,0.12); border-color:rgba(255,149,0,0.5); color:#ff9500; text-shadow:0 0 10px #ff9500; }
+.h-ctrl-row { display:flex; gap:8px; }
+.h-ctrl { flex:1; padding:14px; border-radius:12px; font-family:'Orbitron',sans-serif; font-size:11px; font-weight:900; letter-spacing:3px; cursor:pointer; border:2px solid; }
+.h-ctrl:active { transform:scale(0.96); }
+.h-ctrl.go { background:rgba(57,255,20,0.15); border-color:rgba(57,255,20,0.6); color:#39ff14; text-shadow:0 0 15px #39ff14; box-shadow:0 0 20px rgba(57,255,20,0.15); }
+.h-ctrl.stop { background:rgba(255,48,96,0.1); border-color:rgba(255,48,96,0.4); color:#ff3060; text-shadow:0 0 15px #ff3060; }
+.h-ctrl.ebs { background:rgba(255,170,0,0.1); border-color:rgba(255,170,0,0.4); color:#ffaa00; text-shadow:0 0 15px #ffaa00; }
+.h-footer { text-align:center; font-family:'Orbitron',sans-serif; font-size:8px; letter-spacing:3px; color:rgba(255,255,255,0.1); margin-top:4px; }
+`,
+  render() {
+    const hbHeights = [4,4,4,4,8,14,14,8,4,4,4,4];
+    const hbSegs = hbHeights.map((h,i) => `<div class="h-hb-beat" id="hhb${i}" style="height:${h}px"></div>`).join('');
+    return `<div class="h-wrap">
+  <div style="display:flex;justify-content:flex-end;margin-bottom:16px">
+    <div class="h-status-pill" id="hStatusPill"><div class="h-status-dot" id="hStatusDot"></div><span class="h-status-text" id="hStatusText">STANDBY</span></div>
+  </div>
+
+  <div class="h-hb-bar"><div class="h-hb-label">HEARTBEAT</div><div class="h-hb-beats">${hbSegs}</div><div class="h-hb-status" id="hHbStatus">--</div></div>
+
+  <div class="h-section">
+    <div class="h-sec-title"><div class="h-sec-dot" style="background:#00b4ff;box-shadow:0 0 6px #00b4ff"></div>ESP32 SENSORS</div>
+    <div class="h-sg">
+      <div class="h-metric"><div class="h-metric-line" style="background:linear-gradient(90deg,transparent,#00b4ff,transparent)"></div><div class="h-metric-label">STEERING</div><div class="h-metric-row"><span class="h-metric-val" id="hsSteer">0.000</span><span class="h-metric-unit" style="color:#00b4ff">rad</span></div><div class="h-metric-bar"><div class="h-metric-bar-fill" id="hbSteer" style="background:linear-gradient(90deg,#00b4ff88,#00b4ff);box-shadow:0 0 8px #00b4ff;width:0%"></div></div></div>
+      <div class="h-metric"><div class="h-metric-line" style="background:linear-gradient(90deg,transparent,#39ff14,transparent)"></div><div class="h-metric-label">SPEED</div><div class="h-metric-row"><span class="h-metric-val" id="hsSpeed">0.00</span><span class="h-metric-unit" style="color:#39ff14">m/s</span></div><div class="h-metric-bar"><div class="h-metric-bar-fill" id="hbSpeed" style="background:linear-gradient(90deg,#39ff1488,#39ff14);box-shadow:0 0 8px #39ff14;width:0%"></div></div></div>
+      <div class="h-metric"><div class="h-metric-line" style="background:linear-gradient(90deg,transparent,#ff9500,transparent)"></div><div class="h-metric-label">THROTTLE</div><div class="h-metric-row"><span class="h-metric-val" id="hsThr">0</span><span class="h-metric-unit" style="color:#ff9500">%</span></div><div class="h-metric-bar"><div class="h-metric-bar-fill" id="hbThr" style="background:linear-gradient(90deg,#ff950088,#ff9500);box-shadow:0 0 8px #ff9500;width:0%"></div></div></div>
+      <div class="h-metric"><div class="h-metric-line" style="background:linear-gradient(90deg,transparent,#ff3060,transparent)"></div><div class="h-metric-label">BRAKING</div><div class="h-metric-row"><span class="h-metric-val" id="hsBrk">0</span><span class="h-metric-unit" style="color:#ff3060">%</span></div><div class="h-metric-bar"><div class="h-metric-bar-fill" id="hbBrk" style="background:linear-gradient(90deg,#ff306088,#ff3060);box-shadow:0 0 8px #ff3060;width:0%"></div></div></div>
+    </div>
+    <div class="h-gg-row">
+      <div class="h-gg-wrap"><canvas class="h-gg-canvas" id="ggCanvas" width="130" height="130"></canvas></div>
+      <div class="h-gg-labels"><div><div class="h-gg-vl">LATERAL</div><div class="h-gg-v" id="hALat">0.00 g</div></div><div><div class="h-gg-vl">LONGITUDINAL</div><div class="h-gg-v" id="hALon">0.00 g</div></div><div><div class="h-gg-vl">TOTAL</div><div class="h-gg-v" id="hATotal">0.00 g</div></div></div>
+    </div>
+  </div>
+
+  <div class="h-section">
+    <div class="h-sec-title"><div class="h-sec-dot" style="background:#b44fff;box-shadow:0 0 6px #b44fff"></div>ORIN COMMANDS</div>
+    <div class="h-cmd-row">
+      <div class="h-cmd-pill" style="border:1px solid #39ff1422"><div class="h-cmd-glow" style="background:radial-gradient(ellipse at 50% 0%,#39ff1410,transparent 70%)"></div><div class="h-cmd-label">Throttle</div><div class="h-cmd-val" style="color:#39ff14;text-shadow:0 0 20px #39ff14" id="hcThr">0</div></div>
+      <div class="h-cmd-pill" style="border:1px solid #ff306022"><div class="h-cmd-glow" style="background:radial-gradient(ellipse at 50% 0%,#ff306010,transparent 70%)"></div><div class="h-cmd-label">Brake</div><div class="h-cmd-val" style="color:#ff3060;text-shadow:0 0 20px #ff3060" id="hcBrk">0</div></div>
+      <div class="h-cmd-pill" style="border:1px solid #00b4ff22"><div class="h-cmd-glow" style="background:radial-gradient(ellipse at 50% 0%,#00b4ff10,transparent 70%)"></div><div class="h-cmd-label">Steering</div><div class="h-cmd-val" style="color:#00b4ff;text-shadow:0 0 20px #00b4ff" id="hcStr">0.000</div></div>
+    </div>
+  </div>
+
+  <div class="h-section">
+    <div class="h-sec-title"><div class="h-sec-dot" style="background:#ff9500;box-shadow:0 0 6px #ff9500"></div>MISSION SELECT</div>
+    <div class="h-mis-grid" id="misGrid">
+      <button class="h-mis-btn sel" data-m="manual">MANUAL</button><button class="h-mis-btn" data-m="acceleration">ACCEL</button><button class="h-mis-btn" data-m="skidpad">SKIDPAD</button>
+      <button class="h-mis-btn" data-m="autocross">AUTOCROSS</button><button class="h-mis-btn" data-m="trackdrive">TRACKDRIVE</button><button class="h-mis-btn" data-m="inspection">INSPECT</button>
+    </div>
+    <div class="h-ctrl-row">
+      <button class="h-ctrl go" onclick="wsSend({action:'set_state',state:'running'})">START</button>
+      <button class="h-ctrl stop" onclick="wsSend({action:'set_state',state:'idle'})">STOP</button>
+      <button class="h-ctrl ebs" onclick="wsSend({action:'set_state',state:'ebs'})">EBS</button>
+    </div>
+  </div>
+  <div class="h-footer">UNIVERSIDAD DE MALAGA · FSAE AUTONOMOUS · v2.4.1</div>
+</div>`; },
+
+  init() {
+    // Heartbeat animation
+    let hbTick = false;
+    const hbId = setInterval(() => {
+      hbTick = !hbTick;
+      const hbS = $('hHbStatus');
+      const alive = lastData && lastData.esp32_heartbeat;
+      if (alive) {
+        hbS.style.color = '#ff3060'; hbS.textContent = 'OK';
+        for (let i=0;i<12;i++) {
+          const el = $('hhb'+i);
+          if ((i===5||i===6)&&hbTick) { el.style.background='#ff3060'; el.style.boxShadow='0 0 6px #ff3060'; }
+          else { el.style.background='rgba(255,48,96,0.3)'; el.style.boxShadow='none'; }
+        }
+      } else {
+        hbS.style.color='rgba(255,255,255,0.2)'; hbS.textContent='--';
+        for (let i=0;i<12;i++) { $('hhb'+i).style.background='rgba(255,255,255,0.06)'; $('hhb'+i).style.boxShadow='none'; }
+      }
+    }, 90);
+
+    $('misGrid').addEventListener('click', missionClick);
+    drawGGhud(0, 0);
+    return () => clearInterval(hbId);
+  },
+
+  update(d) {
+    $('hsSteer').textContent = d.esp32_steering_rad.toFixed(3);
+    $('hsSpeed').textContent = d.esp32_speed.toFixed(2);
+    $('hsThr').textContent = Math.round(d.esp32_throttle*100);
+    $('hsBrk').textContent = Math.round(d.esp32_braking*100);
+    $('hbSteer').style.width = Math.min(Math.abs(d.esp32_steering_rad)/1*100,100)+'%';
+    $('hbSpeed').style.width = Math.min(d.esp32_speed/30*100,100)+'%';
+    $('hbThr').style.width = (d.esp32_throttle*100)+'%';
+    $('hbBrk').style.width = (d.esp32_braking*100)+'%';
+
+    const latG = d.esp32_accel_lat/9.81, lonG = d.esp32_accel_lon/9.81;
+    drawGGhud(latG, lonG);
+    $('hALat').textContent = latG.toFixed(2)+' g';
+    $('hALon').textContent = lonG.toFixed(2)+' g';
+    $('hATotal').textContent = Math.sqrt(latG*latG+lonG*lonG).toFixed(2)+' g';
+
+    $('hcThr').textContent = Math.round(d.orin_cmd_throttle/255*100)+'%';
+    $('hcBrk').textContent = Math.round(d.orin_cmd_brake/255*100)+'%';
+    $('hcStr').textContent = d.orin_cmd_steering_rad.toFixed(3);
+
+    // Status pill
+    const dot = $('hStatusDot'), txt = $('hStatusText'), pill = $('hStatusPill');
+    if (d.state === 'ebs') {
+      pill.style.background='rgba(255,48,96,0.15)'; pill.style.border='1px solid rgba(255,48,96,0.4)';
+      dot.style.background='#ff3060'; dot.style.boxShadow='0 0 10px #ff3060'; dot.classList.remove('pulse');
+      txt.style.color='#ff3060'; txt.textContent='EBS ACTIVE';
+    } else if (d.state === 'running') {
+      pill.style.background='rgba(57,255,20,0.12)'; pill.style.border='1px solid rgba(57,255,20,0.4)';
+      dot.style.background='#39ff14'; dot.style.boxShadow='0 0 10px #39ff14'; dot.classList.add('pulse');
+      txt.style.color='#39ff14'; txt.textContent='RUNNING';
+    } else {
+      pill.style.background='rgba(255,170,0,0.12)'; pill.style.border='1px solid rgba(255,170,0,0.35)';
+      dot.style.background='#ffaa00'; dot.style.boxShadow='0 0 10px #ffaa00'; dot.classList.remove('pulse');
+      txt.style.color='#ffaa00'; txt.textContent='STANDBY';
+    }
+
+    document.querySelectorAll('.h-mis-btn').forEach(b => b.classList.toggle('sel', b.dataset.m === d.mission));
+  }
+};
+
+// ═══════════════════════════════════════════════════════
+// SHARED HELPERS
+// ═══════════════════════════════════════════════════════
+function missionClick(e) {
+  const btn = e.target.closest('[data-m]');
+  if (btn) wsSend({ action: 'set_mission', mission: btn.dataset.m });
+}
+
+function updateSteerBar(d, fillId, cmdId) {
   const maxRad = 0.5;
   const pct = Math.max(-1, Math.min(1, d.esp32_steering_rad / maxRad));
-  const fill = el('steerFill');
-  if (pct >= 0) { fill.style.left = '50%'; fill.style.width = (pct * 50) + '%'; }
-  else { fill.style.width = (-pct * 50) + '%'; fill.style.left = (50 + pct * 50) + '%'; }
+  const fill = $(fillId);
+  if (pct >= 0) { fill.style.left='50%'; fill.style.width=(pct*50)+'%'; }
+  else { fill.style.width=(-pct*50)+'%'; fill.style.left=(50+pct*50)+'%'; }
   const cmdPct = Math.max(-1, Math.min(1, d.orin_cmd_steering_rad / maxRad));
-  el('steerCmd').style.left = (50 + cmdPct * 50 - 0.5) + '%';
-
-  // G-G diagram
-  const latG = d.esp32_accel_lat / 9.81;
-  const lonG = d.esp32_accel_lon / 9.81;
-  const totalG = Math.sqrt(latG * latG + lonG * lonG);
-  drawGG(latG, lonG);
-  el('valAccelLat').textContent = latG.toFixed(2) + ' g';
-  el('valAccelLon').textContent = lonG.toFixed(2) + ' g';
-  el('valAccelTotal').textContent = totalG.toFixed(2) + ' g';
-
-  // Pedals (0.0-1.0)
-  const tPct = Math.round(d.esp32_throttle * 100);
-  const bPct = Math.round(d.esp32_braking * 100);
-  el('valThrottle').textContent = tPct + '%';
-  el('valBrake').textContent = bPct + '%';
-  el('throttleFill').style.width = tPct + '%';
-  el('brakeFill').style.width = bPct + '%';
-
-  // Targets
-  el('cmdSteer').innerHTML = `${deg(d.orin_cmd_steering_rad)}° <span style="font-size:11px;color:var(--dim)">${d.orin_cmd_steering_rad.toFixed(3)}</span>`;
-  el('cmdThrottle').textContent = Math.round(d.orin_cmd_throttle / 255 * 100) + '%';
-  el('cmdBrake').textContent = Math.round(d.orin_cmd_brake / 255 * 100) + '%';
-
-  // Status pills
-  const pillState = el('pillState');
-  pillState.textContent = d.state.toUpperCase();
-  pillState.className = 'status-pill' + (d.state === 'running' ? ' active' : '');
-
-  el('pillMission').textContent = d.mission.toUpperCase();
-  el('pillMission').className = 'status-pill active';
-
-  const pillHb = el('pillHeartbeat');
-  if (d.esp32_heartbeat_age < 0) {
-    pillHb.textContent = 'HB --';
-    pillHb.className = 'status-pill';
-  } else {
-    pillHb.textContent = d.esp32_heartbeat ? `HB ${d.esp32_heartbeat_age}s` : `HB LOST ${d.esp32_heartbeat_age}s`;
-    pillHb.className = 'status-pill ' + (d.esp32_heartbeat ? 'heartbeat-ok' : 'heartbeat-bad');
-  }
-
-  document.querySelectorAll('.mission-btn').forEach(b => {
-    b.classList.toggle('selected', b.dataset.mission === d.mission);
-  });
+  $(cmdId).style.left = (50+cmdPct*50-0.5)+'%';
 }
 
-document.getElementById('missionGrid').addEventListener('click', (e) => {
-  const btn = e.target.closest('.mission-btn');
-  if (!btn || !ws || ws.readyState !== 1) return;
-  ws.send(JSON.stringify({ action: 'set_mission', mission: btn.dataset.mission }));
-});
-
-function sendState(state) {
-  if (!ws || ws.readyState !== 1) return;
-  ws.send(JSON.stringify({ action: 'set_state', state }));
+function updatePedals(d) {
+  const t=Math.round(d.esp32_throttle*100), b=Math.round(d.esp32_braking*100);
+  $('vThr').textContent=t+'%'; $('vBrk').textContent=b+'%';
+  $('thrFill').style.width=t+'%'; $('brkFill').style.width=b+'%';
 }
 
-function el(id) { return document.getElementById(id); }
-
-// Themes
-const THEMES = ['midnight', 'racing', 'forest', 'cyber', 'light', 'nord'];
-let themeIdx = THEMES.indexOf(localStorage.getItem('theme') || 'midnight');
-if (themeIdx < 0) themeIdx = 0;
-
-function applyTheme() {
-  document.body.className = 'theme-' + THEMES[themeIdx];
-  el('themeBtn').textContent = THEMES[themeIdx];
-  localStorage.setItem('theme', THEMES[themeIdx]);
+function updateTargets(d) {
+  $('cSteer').innerHTML = `${deg(d.orin_cmd_steering_rad)}° <span style="font-size:11px;opacity:0.5">${d.orin_cmd_steering_rad.toFixed(3)}</span>`;
+  $('cThr').textContent = Math.round(d.orin_cmd_throttle/255*100)+'%';
+  $('cBrk').textContent = Math.round(d.orin_cmd_brake/255*100)+'%';
 }
-function cycleTheme() {
-  themeIdx = (themeIdx + 1) % THEMES.length;
-  applyTheme();
+
+function updatePills(d) {
+  const ps = $('pillState');
+  ps.textContent = d.state.toUpperCase();
+  ps.className = 'spill'+(d.state==='running'?' act':'');
+  $('pillMission').textContent = d.mission.toUpperCase();
+  $('pillMission').className = 'spill act';
+  const ph = $('pillHb');
+  if (d.esp32_heartbeat_age < 0) { ph.textContent='HB --'; ph.className='spill'; }
+  else { ph.textContent = d.esp32_heartbeat?`HB ${d.esp32_heartbeat_age}s`:`HB LOST ${d.esp32_heartbeat_age}s`; ph.className='spill '+(d.esp32_heartbeat?'hb-ok':'hb-bad'); }
 }
-applyTheme();
-drawGG(0, 0);
+
+function updateMissions(d) {
+  document.querySelectorAll('.mis-btn').forEach(b => b.classList.toggle('sel', b.dataset.m === d.mission));
+}
+
+// G-G diagram for Default skin
+function drawGG(latG, lonG, borderC, dimC, accentC, blur) {
+  const canvas = $('ggCanvas'); if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const R=65, CX=70, CY=70, MAX=2;
+  ctx.clearRect(0,0,140,140);
+  ctx.strokeStyle=borderC; ctx.lineWidth=1;
+  for (let r=1;r<=2;r++) { ctx.beginPath(); ctx.arc(CX,CY,R*r/MAX,0,Math.PI*2); ctx.stroke(); }
+  ctx.strokeStyle=dimC; ctx.beginPath(); ctx.moveTo(CX-R,CY); ctx.lineTo(CX+R,CY); ctx.moveTo(CX,CY-R); ctx.lineTo(CX,CY+R); ctx.stroke();
+  const px=CX+(latG/MAX)*R, py=CY-(lonG/MAX)*R;
+  ctx.fillStyle=accentC; ctx.shadowColor=accentC; ctx.shadowBlur=blur;
+  ctx.beginPath(); ctx.arc(px,py,5,0,Math.PI*2); ctx.fill(); ctx.shadowBlur=0;
+  ctx.fillStyle=accentC+'4d'; ctx.beginPath(); ctx.arc(px,py,8,0,Math.PI*2); ctx.fill();
+}
+
+// G-G diagram for HUD skin (130x130 canvas, square shape)
+function drawGGhud(latG, lonG) {
+  const canvas = $('ggCanvas'); if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const R=55, CX=65, CY=65, MAX=2;
+  ctx.clearRect(0,0,130,130);
+  ctx.strokeStyle='rgba(255,255,255,0.07)'; ctx.lineWidth=1;
+  for (let r=1;r<=2;r++) { ctx.beginPath(); ctx.arc(CX,CY,R*r/MAX,0,Math.PI*2); ctx.stroke(); }
+  ctx.strokeStyle='rgba(255,255,255,0.04)'; ctx.beginPath(); ctx.moveTo(CX-R,CY); ctx.lineTo(CX+R,CY); ctx.moveTo(CX,CY-R); ctx.lineTo(CX,CY+R); ctx.stroke();
+  const px=CX+(latG/MAX)*R, py=CY-(lonG/MAX)*R;
+  ctx.fillStyle='#00b4ff'; ctx.shadowColor='#00b4ff'; ctx.shadowBlur=12;
+  ctx.beginPath(); ctx.arc(px,py,5,0,Math.PI*2); ctx.fill(); ctx.shadowBlur=0;
+  ctx.fillStyle='#00b4ff4d'; ctx.beginPath(); ctx.arc(px,py,8,0,Math.PI*2); ctx.fill();
+}
+
+// ═══════════════════════════════════════════════════════
+// SKIN SYSTEM
+// ═══════════════════════════════════════════════════════
+const SKINS = { default: skinDefault, kitt: skinKitt, tesla: skinTesla, hud: skinHud };
+let currentSkin = localStorage.getItem('skin') || 'default';
+if (!SKINS[currentSkin]) currentSkin = 'default';
+
+function applySkin(id) {
+  if (skinCleanup) { skinCleanup(); skinCleanup = null; }
+  currentSkin = id;
+  localStorage.setItem('skin', id);
+  const skin = SKINS[id];
+  $('skinCss').textContent = skin.css;
+  $('app').innerHTML = skin.render();
+  // Set title per skin
+  const titles = { default:'UM Driverless', kitt:'K·I·T·T', tesla:'UM Driverless', hud:'UM DRIVERLESS' };
+  $('topbarTitle').textContent = titles[id] || 'UM Driverless';
+  buildSkinMenu();
+  skinCleanup = skin.init();
+  if (lastData) skin.update(lastData);
+}
+
+applySkin(currentSkin);
 connect();
 </script>
 </body>
