@@ -30,7 +30,7 @@
 │   ├── kart_bringup/               (ament_cmake) Hardware launch files
 │   │   ├── launch/
 │   │   │   ├── autonomous.launch.py      Full pipeline (perception→control→comms→dashboard)
-│   │   │   ├── comms_test.launch.py      Safe testing (comms + dashboard only, no commands)
+│   │   │   ├── dashboard.launch.py        Dashboard + comms (no commands sent to kart)
 │   │   │   └── teleop_launch.py          Joystick teleop
 │   │   ├── scripts/
 │   │   │   └── cmd_vel_bridge_node.py    Twist → Frame msgs (100 Hz)

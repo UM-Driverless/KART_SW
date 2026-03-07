@@ -135,6 +135,6 @@ ros2 launch kart_bringup autonomous.launch.py
 # To view YOLO detections with bounding boxes:
 DISPLAY=:1 ros2 run rqt_image_view rqt_image_view /perception/yolo/annotated
 
-# Safe comms-only testing (no commands sent to kart):
-ros2 launch kart_bringup comms_test.launch.py
+# Dashboard + comms (no commands sent to kart):
+ros2 launch kart_bringup dashboard.launch.py
 ```
