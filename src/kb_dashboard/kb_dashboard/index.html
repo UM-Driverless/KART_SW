@@ -177,7 +177,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro', system-ui, sans
   render() { return `<div class="container">
   <div class="sbar"><div class="spill" id="pillState">IDLE</div><div class="spill" id="pillMission">MANUAL</div><div class="spill" id="pillHb">HB --</div></div>
   <div class="card"><div class="card-t">Kart State</div>
-    <div class="tg"><div class="ti"><div class="tl">Steering</div><div class="tv" id="vSteer">0.000 <span class="tu">rad</span></div></div>
+    <div class="tg"><div class="ti"><div class="tl">Steering</div><div class="tv" id="vSteer">0.0 <span class="tu">°</span></div></div>
     <div class="ti"><div class="tl">Speed</div><div class="tv" id="vSpeed">0.0 <span class="tu">km/h</span></div></div></div>
     <div class="steer-bg"><div class="steer-ctr"></div><div class="steer-fill" id="steerFill"></div><div class="steer-cmd" id="steerCmd"></div></div>
     <div class="gg-row"><div class="gg-wrap"><canvas class="gg-canvas" id="ggCanvas" width="140" height="140"></canvas></div>
@@ -201,8 +201,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro', system-ui, sans
   },
 
   update(d) {
-    $('vSteer').innerHTML = `${d.esp32_steering_rad.toFixed(3)} <span class="tu">rad</span> <span class="ta">${deg(d.esp32_steering_rad)}°</span>`;
-    $('vSpeed').innerHTML = `${(d.esp32_speed*3.6).toFixed(1)} <span class="tu">km/h</span> <span class="ta">${d.esp32_speed.toFixed(2)} m/s</span>`;
+    $('vSteer').innerHTML = `${deg(d.esp32_steering_rad)} <span class="tu">°</span>`;
+    $('vSpeed').innerHTML = `${(d.esp32_speed*3.6).toFixed(1)} <span class="tu">km/h</span>`;
     updateSteerBar(d, 'steerFill', 'steerCmd');
     const latG = d.esp32_accel_lat/9.81, lonG = d.esp32_accel_lon/9.81;
     drawGG(latG, lonG, '#2a2a3a', '#6a6a7a40', '#4a9eff', 8);
@@ -314,8 +314,8 @@ body::before { content:''; position:fixed; inset:0; background:repeating-linear-
     <div class="k-sec">
       <div class="k-sec-hd"><div class="k-sec-t">ESP32 · SENSOR ARRAY</div><div class="k-sec-badge" id="kSensorBadge">OFFLINE</div></div>
       <div class="k-sec-body"><div class="k-sg">
-        <div class="k-sensor"><div class="k-s-lbl">STEERING</div><div class="k-s-val" id="ksSteer">0.000</div><div class="k-s-unit">RAD</div><div class="k-s-bar"><div class="k-s-bar-fill" id="kbSteer" style="width:0%"></div></div></div>
-        <div class="k-sensor"><div class="k-s-lbl">VELOCITY</div><div class="k-s-val" id="ksSpeed">0.00</div><div class="k-s-unit">M/S</div><div class="k-s-bar"><div class="k-s-bar-fill" id="kbSpeed" style="width:0%"></div></div></div>
+        <div class="k-sensor"><div class="k-s-lbl">STEERING</div><div class="k-s-val" id="ksSteer">0.0</div><div class="k-s-unit">DEG</div><div class="k-s-bar"><div class="k-s-bar-fill" id="kbSteer" style="width:0%"></div></div></div>
+        <div class="k-sensor"><div class="k-s-lbl">VELOCITY</div><div class="k-s-val" id="ksSpeed">0.0</div><div class="k-s-unit">KM/H</div><div class="k-s-bar"><div class="k-s-bar-fill" id="kbSpeed" style="width:0%"></div></div></div>
         <div class="k-sensor"><div class="k-s-lbl">THROTTLE</div><div class="k-s-val" id="ksThr">000</div><div class="k-s-unit">%</div><div class="k-s-bar"><div class="k-s-bar-fill" id="kbThr" style="width:0%"></div></div></div>
         <div class="k-sensor"><div class="k-s-lbl">BRAKING</div><div class="k-s-val" id="ksBrk">000</div><div class="k-s-unit">%</div><div class="k-s-bar"><div class="k-s-bar-fill" id="kbBrk" style="width:0%"></div></div></div>
       </div></div>
@@ -326,7 +326,7 @@ body::before { content:''; position:fixed; inset:0; background:repeating-linear-
       <div class="k-sec-body"><div class="k-orin-row">
         <div class="k-orin-cell"><div class="k-orin-lbl">THROTTLE</div><div class="k-orin-val" id="koCThr">000</div></div>
         <div class="k-orin-cell"><div class="k-orin-lbl">BRAKE</div><div class="k-orin-val" id="koCBrk">000</div></div>
-        <div class="k-orin-cell"><div class="k-orin-lbl">STEERING</div><div class="k-orin-val" id="koCStr">0.000</div></div>
+        <div class="k-orin-cell"><div class="k-orin-lbl">STEERING</div><div class="k-orin-val" id="koCStr">0.0°</div></div>
       </div></div>
     </div>
     <div class="k-sec">
@@ -372,8 +372,8 @@ body::before { content:''; position:fixed; inset:0; background:repeating-linear-
   },
 
   update(d) {
-    $('ksSteer').textContent = d.esp32_steering_rad.toFixed(3);
-    $('ksSpeed').textContent = d.esp32_speed.toFixed(2);
+    $('ksSteer').textContent = deg(d.esp32_steering_rad);
+    $('ksSpeed').textContent = (d.esp32_speed*3.6).toFixed(1);
     $('ksThr').textContent = String(Math.round(d.esp32_throttle*100)).padStart(3,'0');
     $('ksBrk').textContent = String(Math.round(d.esp32_braking*100)).padStart(3,'0');
     $('kbSteer').style.width = Math.min(Math.abs(d.esp32_steering_rad)/1*100,100)+'%';
@@ -383,7 +383,7 @@ body::before { content:''; position:fixed; inset:0; background:repeating-linear-
 
     $('koCThr').textContent = String(Math.round(d.orin_cmd_throttle/255*100)).padStart(3,'0');
     $('koCBrk').textContent = String(Math.round(d.orin_cmd_brake/255*100)).padStart(3,'0');
-    $('koCStr').textContent = d.orin_cmd_steering_rad.toFixed(3);
+    $('koCStr').textContent = deg(d.orin_cmd_steering_rad)+'°';
 
     const running = d.state === 'running';
     const s = $('kStatus');
@@ -499,14 +499,14 @@ body { font-family:'Inter',sans-serif; background:#0a0a0a; color:#f5f5f5; }
     </div>
     <div class="t-car-stats">
       <div class="t-car-stat"><div class="t-big-val" id="tBigSpeed">0.0</div><div class="t-big-unit">km/h</div></div>
-      <div class="t-car-stat"><div class="t-big-val" id="tBigSteer">0.000</div><div class="t-big-unit">rad</div></div>
+      <div class="t-car-stat"><div class="t-big-val" id="tBigSteer">0.0</div><div class="t-big-unit">°</div></div>
       <div class="t-car-stat"><div class="t-big-val" id="tBigAccel">0.0</div><div class="t-big-unit">m/s²</div></div>
     </div>
   </div>
   <div class="t-sec-label">Sensors</div>
   <div class="t-grid2">
-    <div class="t-card"><div class="t-card-label">Steering</div><div class="t-card-val" id="tsSteer">0.000</div><div class="t-card-unit">rad</div><div class="t-card-bar"><div class="t-card-bar-fill" id="tbSteer" style="background:#1e88e5"></div></div></div>
-    <div class="t-card"><div class="t-card-label">Speed</div><div class="t-card-val" id="tsSpeed">0.00</div><div class="t-card-unit">m/s</div><div class="t-card-bar"><div class="t-card-bar-fill" id="tbSpeed" style="background:#43a047"></div></div></div>
+    <div class="t-card"><div class="t-card-label">Steering</div><div class="t-card-val" id="tsSteer">0.0</div><div class="t-card-unit">°</div><div class="t-card-bar"><div class="t-card-bar-fill" id="tbSteer" style="background:#1e88e5"></div></div></div>
+    <div class="t-card"><div class="t-card-label">Speed</div><div class="t-card-val" id="tsSpeed">0.0</div><div class="t-card-unit">km/h</div><div class="t-card-bar"><div class="t-card-bar-fill" id="tbSpeed" style="background:#43a047"></div></div></div>
     <div class="t-card"><div class="t-card-label">Throttle</div><div class="t-card-val" id="tsThr">0</div><div class="t-card-unit">%</div><div class="t-card-bar"><div class="t-card-bar-fill" id="tbThr" style="background:#fb8c00"></div></div></div>
     <div class="t-card"><div class="t-card-label">Braking</div><div class="t-card-val" id="tsBrk">0</div><div class="t-card-unit">%</div><div class="t-card-bar"><div class="t-card-bar-fill" id="tbBrk" style="background:#e53935"></div></div></div>
   </div>
@@ -537,11 +537,11 @@ body { font-family:'Inter',sans-serif; background:#0a0a0a; color:#f5f5f5; }
     const spd = d.esp32_speed*3.6;
     const accelTotal = Math.sqrt(d.esp32_accel_lat**2 + d.esp32_accel_lon**2);
     $('tBigSpeed').textContent = spd.toFixed(1);
-    $('tBigSteer').textContent = d.esp32_steering_rad.toFixed(3);
+    $('tBigSteer').textContent = deg(d.esp32_steering_rad);
     $('tBigAccel').textContent = accelTotal.toFixed(1);
 
-    $('tsSteer').textContent = d.esp32_steering_rad.toFixed(3);
-    $('tsSpeed').textContent = d.esp32_speed.toFixed(2);
+    $('tsSteer').textContent = deg(d.esp32_steering_rad);
+    $('tsSpeed').textContent = (d.esp32_speed*3.6).toFixed(1);
     $('tsThr').textContent = Math.round(d.esp32_throttle*100);
     $('tsBrk').textContent = Math.round(d.esp32_braking*100);
     $('tbSteer').style.width = Math.min(Math.abs(d.esp32_steering_rad)/1*100,100)+'%';
@@ -665,8 +665,8 @@ body::before { content:''; position:fixed; inset:0; pointer-events:none; backgro
   <div class="h-section">
     <div class="h-sec-title"><div class="h-sec-dot" style="background:#00b4ff;box-shadow:0 0 6px #00b4ff"></div>ESP32 SENSORS</div>
     <div class="h-sg">
-      <div class="h-metric"><div class="h-metric-line" style="background:linear-gradient(90deg,transparent,#00b4ff,transparent)"></div><div class="h-metric-label">STEERING</div><div class="h-metric-row"><span class="h-metric-val" id="hsSteer">0.000</span><span class="h-metric-unit" style="color:#00b4ff">rad</span></div><div class="h-metric-bar"><div class="h-metric-bar-fill" id="hbSteer" style="background:linear-gradient(90deg,#00b4ff88,#00b4ff);box-shadow:0 0 8px #00b4ff;width:0%"></div></div></div>
-      <div class="h-metric"><div class="h-metric-line" style="background:linear-gradient(90deg,transparent,#39ff14,transparent)"></div><div class="h-metric-label">SPEED</div><div class="h-metric-row"><span class="h-metric-val" id="hsSpeed">0.00</span><span class="h-metric-unit" style="color:#39ff14">m/s</span></div><div class="h-metric-bar"><div class="h-metric-bar-fill" id="hbSpeed" style="background:linear-gradient(90deg,#39ff1488,#39ff14);box-shadow:0 0 8px #39ff14;width:0%"></div></div></div>
+      <div class="h-metric"><div class="h-metric-line" style="background:linear-gradient(90deg,transparent,#00b4ff,transparent)"></div><div class="h-metric-label">STEERING</div><div class="h-metric-row"><span class="h-metric-val" id="hsSteer">0.0</span><span class="h-metric-unit" style="color:#00b4ff">°</span></div><div class="h-metric-bar"><div class="h-metric-bar-fill" id="hbSteer" style="background:linear-gradient(90deg,#00b4ff88,#00b4ff);box-shadow:0 0 8px #00b4ff;width:0%"></div></div></div>
+      <div class="h-metric"><div class="h-metric-line" style="background:linear-gradient(90deg,transparent,#39ff14,transparent)"></div><div class="h-metric-label">SPEED</div><div class="h-metric-row"><span class="h-metric-val" id="hsSpeed">0.0</span><span class="h-metric-unit" style="color:#39ff14">km/h</span></div><div class="h-metric-bar"><div class="h-metric-bar-fill" id="hbSpeed" style="background:linear-gradient(90deg,#39ff1488,#39ff14);box-shadow:0 0 8px #39ff14;width:0%"></div></div></div>
       <div class="h-metric"><div class="h-metric-line" style="background:linear-gradient(90deg,transparent,#ff9500,transparent)"></div><div class="h-metric-label">THROTTLE</div><div class="h-metric-row"><span class="h-metric-val" id="hsThr">0</span><span class="h-metric-unit" style="color:#ff9500">%</span></div><div class="h-metric-bar"><div class="h-metric-bar-fill" id="hbThr" style="background:linear-gradient(90deg,#ff950088,#ff9500);box-shadow:0 0 8px #ff9500;width:0%"></div></div></div>
       <div class="h-metric"><div class="h-metric-line" style="background:linear-gradient(90deg,transparent,#ff3060,transparent)"></div><div class="h-metric-label">BRAKING</div><div class="h-metric-row"><span class="h-metric-val" id="hsBrk">0</span><span class="h-metric-unit" style="color:#ff3060">%</span></div><div class="h-metric-bar"><div class="h-metric-bar-fill" id="hbBrk" style="background:linear-gradient(90deg,#ff306088,#ff3060);box-shadow:0 0 8px #ff3060;width:0%"></div></div></div>
     </div>
@@ -681,7 +681,7 @@ body::before { content:''; position:fixed; inset:0; pointer-events:none; backgro
     <div class="h-cmd-row">
       <div class="h-cmd-pill" style="border:1px solid #39ff1422"><div class="h-cmd-glow" style="background:radial-gradient(ellipse at 50% 0%,#39ff1410,transparent 70%)"></div><div class="h-cmd-label">Throttle</div><div class="h-cmd-val" style="color:#39ff14;text-shadow:0 0 20px #39ff14" id="hcThr">0</div></div>
       <div class="h-cmd-pill" style="border:1px solid #ff306022"><div class="h-cmd-glow" style="background:radial-gradient(ellipse at 50% 0%,#ff306010,transparent 70%)"></div><div class="h-cmd-label">Brake</div><div class="h-cmd-val" style="color:#ff3060;text-shadow:0 0 20px #ff3060" id="hcBrk">0</div></div>
-      <div class="h-cmd-pill" style="border:1px solid #00b4ff22"><div class="h-cmd-glow" style="background:radial-gradient(ellipse at 50% 0%,#00b4ff10,transparent 70%)"></div><div class="h-cmd-label">Steering</div><div class="h-cmd-val" style="color:#00b4ff;text-shadow:0 0 20px #00b4ff" id="hcStr">0.000</div></div>
+      <div class="h-cmd-pill" style="border:1px solid #00b4ff22"><div class="h-cmd-glow" style="background:radial-gradient(ellipse at 50% 0%,#00b4ff10,transparent 70%)"></div><div class="h-cmd-label">Steering</div><div class="h-cmd-val" style="color:#00b4ff;text-shadow:0 0 20px #00b4ff" id="hcStr">0.0°</div></div>
     </div>
   </div>
 
@@ -726,8 +726,8 @@ body::before { content:''; position:fixed; inset:0; pointer-events:none; backgro
   },
 
   update(d) {
-    $('hsSteer').textContent = d.esp32_steering_rad.toFixed(3);
-    $('hsSpeed').textContent = d.esp32_speed.toFixed(2);
+    $('hsSteer').textContent = deg(d.esp32_steering_rad);
+    $('hsSpeed').textContent = (d.esp32_speed*3.6).toFixed(1);
     $('hsThr').textContent = Math.round(d.esp32_throttle*100);
     $('hsBrk').textContent = Math.round(d.esp32_braking*100);
     $('hbSteer').style.width = Math.min(Math.abs(d.esp32_steering_rad)/1*100,100)+'%';
@@ -743,7 +743,7 @@ body::before { content:''; position:fixed; inset:0; pointer-events:none; backgro
 
     $('hcThr').textContent = Math.round(d.orin_cmd_throttle/255*100)+'%';
     $('hcBrk').textContent = Math.round(d.orin_cmd_brake/255*100)+'%';
-    $('hcStr').textContent = d.orin_cmd_steering_rad.toFixed(3);
+    $('hcStr').textContent = deg(d.orin_cmd_steering_rad)+'°';
 
     // Status pill
     const dot = $('hStatusDot'), txt = $('hStatusText'), pill = $('hStatusPill');
@@ -792,7 +792,7 @@ function updatePedals(d) {
 }
 
 function updateTargets(d) {
-  $('cSteer').innerHTML = `${deg(d.orin_cmd_steering_rad)}° <span style="font-size:11px;opacity:0.5">${d.orin_cmd_steering_rad.toFixed(3)}</span>`;
+  $('cSteer').textContent = deg(d.orin_cmd_steering_rad)+'°';
   $('cThr').textContent = Math.round(d.orin_cmd_throttle/255*100)+'%';
   $('cBrk').textContent = Math.round(d.orin_cmd_brake/255*100)+'%';
 }
