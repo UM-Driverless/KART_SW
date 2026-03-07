@@ -215,7 +215,7 @@ body { font-family:'Inter',-apple-system,BlinkMacSystemFont,'SF Pro',system-ui,s
   },
 
   update(d) {
-    $('vSteer').innerHTML = `${deg(d.esp32_steering_rad)} <span class="tu">°</span>`;
+    $('vSteer').innerHTML = `${deg(d.esp32_steering_rad)} <span class="tu">° <small style="opacity:.4;font-size:11px">raw ${d.esp32_steering_raw}</small></span>`;
     $('vSpeed').innerHTML = `${(d.esp32_speed*3.6).toFixed(1)} <span class="tu">km/h</span>`;
     const sPct = Math.max(-1, Math.min(1, d.esp32_steering_rad / 0.5));
     const sf = $('steerBarFill');

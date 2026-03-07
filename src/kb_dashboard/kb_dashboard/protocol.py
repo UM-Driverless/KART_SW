@@ -68,6 +68,7 @@ class DashboardState:
             "esp32_braking": 0.0,     # brake pedal 0.0-1.0
             "orin_cmd_throttle": 0,   # target throttle 0-255
             "orin_cmd_brake": 0,      # target brake 0-255
+            "esp32_steering_raw": 0,
             "orin_cmd_steering_rad": 0.0,
             "health_magnet_ok": False,
             "health_i2c_ok": False,
