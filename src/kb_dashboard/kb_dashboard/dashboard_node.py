@@ -29,24 +29,25 @@ class DashboardNode(Node):
         self.declare_parameter("port", 8080)
         self.port = self.get_parameter("port").value
 
-        qos = QoSProfile(depth=10, reliability=ReliabilityPolicy.RELIABLE)
+        qos_reliable = QoSProfile(depth=10, reliability=ReliabilityPolicy.RELIABLE)
+        qos_best_effort = QoSProfile(depth=10, reliability=ReliabilityPolicy.BEST_EFFORT)
 
         # ESP32 → Orin telemetry
-        self.create_subscription(Frame, "/esp32/heartbeat", self._on_heartbeat, qos)
-        self.create_subscription(Frame, "/esp32/steering", self._on_esp_steering, qos)
-        self.create_subscription(Frame, "/esp32/speed", self._on_esp_speed, qos)
-        self.create_subscription(Frame, "/esp32/acceleration", self._on_esp_accel, qos)
-        self.create_subscription(Frame, "/esp32/throttle", self._on_esp_throttle, qos)
-        self.create_subscription(Frame, "/esp32/braking", self._on_esp_braking, qos)
-        self.create_subscription(Frame, "/esp32/health", self._on_esp_health, qos)
+        self.create_subscription(Frame, "/esp32/heartbeat", self._on_heartbeat, qos_reliable)
+        self.create_subscription(Frame, "/esp32/steering", self._on_esp_steering, qos_reliable)
+        self.create_subscription(Frame, "/esp32/speed", self._on_esp_speed, qos_reliable)
+        self.create_subscription(Frame, "/esp32/acceleration", self._on_esp_accel, qos_reliable)
+        self.create_subscription(Frame, "/esp32/throttle", self._on_esp_throttle, qos_reliable)
+        self.create_subscription(Frame, "/esp32/braking", self._on_esp_braking, qos_reliable)
+        self.create_subscription(Frame, "/esp32/health", self._on_esp_health, qos_reliable)
 
-        # ZED2 IMU (direct subscription, no bridge needed)
-        self.create_subscription(Imu, "/zed/zed_node/imu/data", self._on_zed_imu, qos)
+        # ZED2 IMU — uses BEST_EFFORT to match the ZED ROS2 wrapper's default QoS
+        self.create_subscription(Imu, "/zed/zed_node/imu/data", self._on_zed_imu, qos_best_effort)
 
         # Orin → ESP32 commands (to show what we're sending)
-        self.create_subscription(Frame, "/orin/throttle", self._on_orin_throttle, qos)
-        self.create_subscription(Frame, "/orin/brake", self._on_orin_brake, qos)
-        self.create_subscription(Frame, "/orin/steering", self._on_orin_steering, qos)
+        self.create_subscription(Frame, "/orin/throttle", self._on_orin_throttle, qos_reliable)
+        self.create_subscription(Frame, "/orin/brake", self._on_orin_brake, qos_reliable)
+        self.create_subscription(Frame, "/orin/steering", self._on_orin_steering, qos_reliable)
 
         # Publishers for mission commands
         self.mission_pub = self.create_publisher(String, "/dashboard/mission", 10)
