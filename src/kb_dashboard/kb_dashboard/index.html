@@ -27,7 +27,6 @@
   }
   .container { max-width: 480px; margin: 0 auto; padding: 12px; }
 
-  /* Header */
   .header {
     display: flex; align-items: center; justify-content: space-between;
     padding: 8px 0 12px;
@@ -35,15 +34,11 @@
   .header h1 { font-size: 18px; font-weight: 600; }
   .conn-dot {
     width: 10px; height: 10px; border-radius: 50%;
-    background: var(--red);
-    transition: background 0.3s;
+    background: var(--red); transition: background 0.3s;
   }
   .conn-dot.ok { background: var(--green); }
 
-  /* Status bar */
-  .status-bar {
-    display: flex; gap: 8px; margin-bottom: 12px;
-  }
+  .status-bar { display: flex; gap: 8px; margin-bottom: 12px; }
   .status-pill {
     flex: 1; text-align: center; padding: 6px 4px;
     border-radius: 8px; font-size: 11px; font-weight: 600;
@@ -54,7 +49,6 @@
   .status-pill.heartbeat-ok { border-color: var(--green); color: var(--green); }
   .status-pill.heartbeat-bad { border-color: var(--red); color: var(--red); }
 
-  /* Cards */
   .card {
     background: var(--card); border: 1px solid var(--border);
     border-radius: 12px; padding: 14px; margin-bottom: 10px;
@@ -64,29 +58,17 @@
     letter-spacing: 1px; color: var(--dim); margin-bottom: 10px;
   }
 
-  /* Telemetry grid */
-  .telem-grid {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
-  }
-  .telem-item {
-    background: var(--bg); border-radius: 8px; padding: 10px;
-  }
+  .telem-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .telem-item { background: var(--bg); border-radius: 8px; padding: 10px; }
   .telem-label {
     font-size: 10px; color: var(--dim); text-transform: uppercase;
     letter-spacing: 0.5px; margin-bottom: 4px;
   }
-  .telem-value {
-    font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums;
-  }
+  .telem-value { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
   .telem-unit { font-size: 12px; color: var(--dim); font-weight: 400; }
   .telem-alt { font-size: 13px; color: var(--accent); font-weight: 500; margin-left: 4px; }
-  .telem-item.wide { grid-column: 1 / -1; }
 
-  /* Steering visual */
-  .steering-viz {
-    display: flex; align-items: center; justify-content: center;
-    gap: 12px; padding: 8px 0;
-  }
+  /* Steering bar */
   .steer-bar-bg {
     width: 100%; height: 24px; background: var(--bg);
     border-radius: 12px; position: relative; overflow: hidden;
@@ -106,10 +88,63 @@
     transition: left 0.1s;
   }
 
-  /* Mission buttons */
-  .mission-grid {
-    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px;
+  /* G-G diagram */
+  .gg-row {
+    display: flex; gap: 10px; align-items: center; margin-top: 8px;
   }
+  .gg-container {
+    position: relative; width: 140px; height: 140px; flex-shrink: 0;
+  }
+  .gg-canvas {
+    width: 100%; height: 100%; border-radius: 50%;
+    background: var(--bg); border: 1px solid var(--border);
+  }
+  .gg-labels {
+    flex: 1; display: flex; flex-direction: column; gap: 4px;
+  }
+  .gg-val {
+    font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums;
+  }
+  .gg-val-label { font-size: 10px; color: var(--dim); text-transform: uppercase; }
+
+  /* Pedal bars */
+  .pedal-row { display: flex; gap: 10px; margin-top: 10px; }
+  .pedal-item { flex: 1; }
+  .pedal-label {
+    font-size: 10px; color: var(--dim); text-transform: uppercase;
+    letter-spacing: 0.5px; margin-bottom: 4px;
+    display: flex; justify-content: space-between;
+  }
+  .pedal-label span { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .pedal-track {
+    width: 100%; height: 20px; background: var(--bg);
+    border-radius: 10px; overflow: hidden;
+  }
+  .pedal-fill {
+    height: 100%; border-radius: 10px;
+    transition: width 0.1s;
+  }
+  .pedal-fill.throttle { background: var(--green); }
+  .pedal-fill.brake { background: var(--red); }
+
+  /* Target section */
+  .target-grid {
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;
+  }
+  .target-item {
+    background: var(--bg); border-radius: 8px; padding: 8px; text-align: center;
+  }
+  .target-label {
+    font-size: 10px; color: var(--dim); text-transform: uppercase;
+    letter-spacing: 0.5px; margin-bottom: 2px;
+  }
+  .target-value {
+    font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums;
+    color: var(--orange);
+  }
+
+  /* Mission buttons */
+  .mission-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
   .mission-btn {
     padding: 12px 4px; border-radius: 8px; border: 2px solid var(--border);
     background: var(--bg); color: var(--text);
@@ -122,11 +157,7 @@
     border-color: var(--accent); background: rgba(74,158,255,0.12);
     color: var(--accent);
   }
-
-  /* Control buttons */
-  .control-row {
-    display: flex; gap: 8px; margin-top: 10px;
-  }
+  .control-row { display: flex; gap: 8px; margin-top: 10px; }
   .ctrl-btn {
     flex: 1; padding: 16px 8px; border-radius: 12px; border: none;
     font-size: 15px; font-weight: 700; cursor: pointer;
@@ -134,52 +165,27 @@
     -webkit-user-select: none; user-select: none;
   }
   .ctrl-btn:active { transform: scale(0.96); }
-  .ctrl-btn.go {
-    background: var(--green); color: #fff;
-  }
-  .ctrl-btn.stop {
-    background: var(--red); color: #fff;
-  }
-  .ctrl-btn.ebs {
-    background: var(--orange); color: #fff;
-  }
-  .ctrl-btn:disabled {
-    opacity: 0.4; transform: none;
-  }
-
-  /* Command bar */
-  .cmd-bar {
-    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;
-  }
-  .cmd-item {
-    background: var(--bg); border-radius: 8px; padding: 8px; text-align: center;
-  }
-  .cmd-label {
-    font-size: 10px; color: var(--dim); text-transform: uppercase;
-    letter-spacing: 0.5px; margin-bottom: 2px;
-  }
-  .cmd-value {
-    font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums;
-  }
+  .ctrl-btn.go { background: var(--green); color: #fff; }
+  .ctrl-btn.stop { background: var(--red); color: #fff; }
+  .ctrl-btn.ebs { background: var(--orange); color: #fff; }
 </style>
 </head>
 <body>
 <div class="container">
   <div class="header">
     <h1>UM Driverless</h1>
-    <div class="conn-dot" id="connDot" title="WebSocket connection"></div>
+    <div class="conn-dot" id="connDot"></div>
   </div>
 
-  <!-- Status pills -->
   <div class="status-bar">
     <div class="status-pill" id="pillState">IDLE</div>
     <div class="status-pill" id="pillMission">MANUAL</div>
     <div class="status-pill" id="pillHeartbeat">HB --</div>
   </div>
 
-  <!-- ESP32 Sensor Values -->
+  <!-- ACTUAL STATE (sensor readings) -->
   <div class="card">
-    <div class="card-title">ESP32 Sensors</div>
+    <div class="card-title">Kart State</div>
     <div class="telem-grid">
       <div class="telem-item">
         <div class="telem-label">Steering</div>
@@ -187,47 +193,70 @@
       </div>
       <div class="telem-item">
         <div class="telem-label">Speed</div>
-        <div class="telem-value" id="valSpeed">0.00 <span class="telem-unit">m/s</span></div>
-      </div>
-      <div class="telem-item">
-        <div class="telem-label">Accel</div>
-        <div class="telem-value" id="valAccel">0.00 <span class="telem-unit">m/s²</span></div>
-      </div>
-      <div class="telem-item">
-        <div class="telem-label">Braking</div>
-        <div class="telem-value" id="valBrake">0 <span class="telem-unit">/255</span></div>
+        <div class="telem-value" id="valSpeed">0.0 <span class="telem-unit">km/h</span></div>
       </div>
     </div>
     <!-- Steering bar -->
-    <div style="margin-top: 10px;">
+    <div style="margin-top: 8px;">
       <div class="steer-bar-bg">
         <div class="steer-bar-center"></div>
         <div class="steer-bar-fill" id="steerFill"></div>
         <div class="steer-bar-cmd" id="steerCmd"></div>
       </div>
     </div>
-  </div>
-
-  <!-- Orin Commands (what Orin is sending to ESP32) -->
-  <div class="card">
-    <div class="card-title">Orin Commands</div>
-    <div class="cmd-bar">
-      <div class="cmd-item">
-        <div class="cmd-label">Throttle</div>
-        <div class="cmd-value" id="cmdThrottle">0</div>
+    <!-- G-G diagram + values -->
+    <div class="gg-row">
+      <div class="gg-container">
+        <canvas class="gg-canvas" id="ggCanvas" width="140" height="140"></canvas>
       </div>
-      <div class="cmd-item">
-        <div class="cmd-label">Brake</div>
-        <div class="cmd-value" id="cmdBrake">0</div>
+      <div class="gg-labels">
+        <div>
+          <div class="gg-val-label">Lateral</div>
+          <div class="gg-val" id="valAccelLat">0.00 g</div>
+        </div>
+        <div>
+          <div class="gg-val-label">Longitudinal</div>
+          <div class="gg-val" id="valAccelLon">0.00 g</div>
+        </div>
+        <div>
+          <div class="gg-val-label">Total</div>
+          <div class="gg-val" id="valAccelTotal">0.00 g</div>
+        </div>
       </div>
-      <div class="cmd-item">
-        <div class="cmd-label">Steering</div>
-        <div class="cmd-value" id="cmdSteer">0.000</div>
+    </div>
+    <!-- Pedal bars -->
+    <div class="pedal-row">
+      <div class="pedal-item">
+        <div class="pedal-label">Throttle <span id="valThrottle">0%</span></div>
+        <div class="pedal-track"><div class="pedal-fill throttle" id="throttleFill" style="width:0%"></div></div>
+      </div>
+      <div class="pedal-item">
+        <div class="pedal-label">Brake <span id="valBrake">0%</span></div>
+        <div class="pedal-track"><div class="pedal-fill brake" id="brakeFill" style="width:0%"></div></div>
       </div>
     </div>
   </div>
 
-  <!-- Mission Select -->
+  <!-- TARGET VALUES (what Orin commands) -->
+  <div class="card">
+    <div class="card-title">Targets</div>
+    <div class="target-grid">
+      <div class="target-item">
+        <div class="target-label">Steering</div>
+        <div class="target-value" id="cmdSteer">0.0°</div>
+      </div>
+      <div class="target-item">
+        <div class="target-label">Throttle</div>
+        <div class="target-value" id="cmdThrottle">0%</div>
+      </div>
+      <div class="target-item">
+        <div class="target-label">Brake</div>
+        <div class="target-value" id="cmdBrake">0%</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MISSION -->
   <div class="card">
     <div class="card-title">Mission</div>
     <div class="mission-grid" id="missionGrid">
@@ -239,9 +268,9 @@
       <button class="mission-btn" data-mission="inspection">Inspect</button>
     </div>
     <div class="control-row">
-      <button class="ctrl-btn go" id="btnGo" onclick="sendState('running')">START</button>
-      <button class="ctrl-btn stop" id="btnStop" onclick="sendState('idle')">STOP</button>
-      <button class="ctrl-btn ebs" id="btnEbs" onclick="sendState('ebs')">EBS</button>
+      <button class="ctrl-btn go" onclick="sendState('running')">START</button>
+      <button class="ctrl-btn stop" onclick="sendState('idle')">STOP</button>
+      <button class="ctrl-btn ebs" onclick="sendState('ebs')">EBS</button>
     </div>
   </div>
 </div>
@@ -250,6 +279,53 @@
 const WS_URL = `ws://${location.host}/ws`;
 let ws = null;
 let reconnectTimer = null;
+
+// G-G diagram setup
+const ggCanvas = document.getElementById('ggCanvas');
+const ggCtx = ggCanvas.getContext('2d');
+const GG_MAX = 2.0; // max g displayed
+const GG_R = 65; // plot radius in px
+const GG_CX = 70, GG_CY = 70; // center
+
+function drawGG(latG, lonG) {
+  const ctx = ggCtx;
+  ctx.clearRect(0, 0, 140, 140);
+
+  // Background circles
+  ctx.strokeStyle = '#2a2a3a';
+  ctx.lineWidth = 1;
+  for (let r = 1; r <= 2; r++) {
+    ctx.beginPath();
+    ctx.arc(GG_CX, GG_CY, GG_R * r / GG_MAX, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  // Crosshair
+  ctx.strokeStyle = '#1a1a2a';
+  ctx.beginPath();
+  ctx.moveTo(GG_CX - GG_R, GG_CY);
+  ctx.lineTo(GG_CX + GG_R, GG_CY);
+  ctx.moveTo(GG_CX, GG_CY - GG_R);
+  ctx.lineTo(GG_CX, GG_CY + GG_R);
+  ctx.stroke();
+
+  // Dot
+  const px = GG_CX + (latG / GG_MAX) * GG_R;
+  const py = GG_CY - (lonG / GG_MAX) * GG_R; // up = positive lon
+  ctx.fillStyle = '#4a9eff';
+  ctx.shadowColor = '#4a9eff';
+  ctx.shadowBlur = 8;
+  ctx.beginPath();
+  ctx.arc(px, py, 5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+
+  // Trail dot (dimmer, smaller)
+  ctx.fillStyle = 'rgba(74,158,255,0.3)';
+  ctx.beginPath();
+  ctx.arc(px, py, 8, 0, Math.PI * 2);
+  ctx.fill();
+}
 
 function connect() {
   ws = new WebSocket(WS_URL);
@@ -262,47 +338,54 @@ function connect() {
     if (!reconnectTimer) reconnectTimer = setInterval(connect, 2000);
   };
   ws.onerror = () => ws.close();
-  ws.onmessage = (e) => {
-    try { update(JSON.parse(e.data)); } catch {}
-  };
+  ws.onmessage = (e) => { try { update(JSON.parse(e.data)); } catch {} };
 }
 
 function update(d) {
-  // Sensor values
-  el('valSteer').innerHTML = `${d.esp32_steering_rad.toFixed(3)} <span class="telem-unit">rad</span> <span class="telem-alt">${(d.esp32_steering_rad * 180 / Math.PI).toFixed(1)}°</span>`;
-  el('valSpeed').innerHTML = `${d.esp32_speed.toFixed(2)} <span class="telem-unit">m/s</span> <span class="telem-alt">${(d.esp32_speed * 3.6).toFixed(1)} km/h</span>`;
-  el('valAccel').innerHTML = `${d.esp32_acceleration.toFixed(2)} <span class="telem-unit">m/s²</span> <span class="telem-alt">${(d.esp32_acceleration / 9.81).toFixed(2)} g</span>`;
-  el('valBrake').innerHTML = `${d.esp32_braking} <span class="telem-unit">/255</span>`;
+  const deg = (r) => (r * 180 / Math.PI).toFixed(1);
 
-  // Steering bar: -0.5 to +0.5 rad range
+  // Steering + speed
+  el('valSteer').innerHTML = `${d.esp32_steering_rad.toFixed(3)} <span class="telem-unit">rad</span> <span class="telem-alt">${deg(d.esp32_steering_rad)}°</span>`;
+  el('valSpeed').innerHTML = `${(d.esp32_speed * 3.6).toFixed(1)} <span class="telem-unit">km/h</span> <span class="telem-alt">${d.esp32_speed.toFixed(2)} m/s</span>`;
+
+  // Steering bar
   const maxRad = 0.5;
   const pct = Math.max(-1, Math.min(1, d.esp32_steering_rad / maxRad));
   const fill = el('steerFill');
-  if (pct >= 0) {
-    fill.style.left = '50%';
-    fill.style.width = (pct * 50) + '%';
-  } else {
-    fill.style.width = (-pct * 50) + '%';
-    fill.style.left = (50 + pct * 50) + '%';
-  }
-
-  // Command steering indicator
+  if (pct >= 0) { fill.style.left = '50%'; fill.style.width = (pct * 50) + '%'; }
+  else { fill.style.width = (-pct * 50) + '%'; fill.style.left = (50 + pct * 50) + '%'; }
   const cmdPct = Math.max(-1, Math.min(1, d.orin_cmd_steering_rad / maxRad));
   el('steerCmd').style.left = (50 + cmdPct * 50 - 0.5) + '%';
 
-  // Orin commands
-  el('cmdThrottle').textContent = d.orin_cmd_throttle;
-  el('cmdBrake').textContent = d.orin_cmd_brake;
-  el('cmdSteer').innerHTML = `${d.orin_cmd_steering_rad.toFixed(3)} <span class="telem-alt" style="font-size:11px">${(d.orin_cmd_steering_rad * 180 / Math.PI).toFixed(1)}°</span>`;
+  // G-G diagram
+  const latG = d.esp32_accel_lat / 9.81;
+  const lonG = d.esp32_accel_lon / 9.81;
+  const totalG = Math.sqrt(latG * latG + lonG * lonG);
+  drawGG(latG, lonG);
+  el('valAccelLat').textContent = latG.toFixed(2) + ' g';
+  el('valAccelLon').textContent = lonG.toFixed(2) + ' g';
+  el('valAccelTotal').textContent = totalG.toFixed(2) + ' g';
+
+  // Pedals (0.0-1.0)
+  const tPct = Math.round(d.esp32_throttle * 100);
+  const bPct = Math.round(d.esp32_braking * 100);
+  el('valThrottle').textContent = tPct + '%';
+  el('valBrake').textContent = bPct + '%';
+  el('throttleFill').style.width = tPct + '%';
+  el('brakeFill').style.width = bPct + '%';
+
+  // Targets
+  el('cmdSteer').innerHTML = `${deg(d.orin_cmd_steering_rad)}° <span style="font-size:11px;color:var(--dim)">${d.orin_cmd_steering_rad.toFixed(3)}</span>`;
+  el('cmdThrottle').textContent = Math.round(d.orin_cmd_throttle / 255 * 100) + '%';
+  el('cmdBrake').textContent = Math.round(d.orin_cmd_brake / 255 * 100) + '%';
 
   // Status pills
   const pillState = el('pillState');
   pillState.textContent = d.state.toUpperCase();
   pillState.className = 'status-pill' + (d.state === 'running' ? ' active' : '');
 
-  const pillMission = el('pillMission');
-  pillMission.textContent = d.mission.toUpperCase();
-  pillMission.className = 'status-pill active';
+  el('pillMission').textContent = d.mission.toUpperCase();
+  el('pillMission').className = 'status-pill active';
 
   const pillHb = el('pillHeartbeat');
   if (d.esp32_heartbeat_age < 0) {
@@ -313,13 +396,11 @@ function update(d) {
     pillHb.className = 'status-pill ' + (d.esp32_heartbeat ? 'heartbeat-ok' : 'heartbeat-bad');
   }
 
-  // Highlight selected mission
   document.querySelectorAll('.mission-btn').forEach(b => {
     b.classList.toggle('selected', b.dataset.mission === d.mission);
   });
 }
 
-// Mission select
 document.getElementById('missionGrid').addEventListener('click', (e) => {
   const btn = e.target.closest('.mission-btn');
   if (!btn || !ws || ws.readyState !== 1) return;
@@ -333,6 +414,7 @@ function sendState(state) {
 
 function el(id) { return document.getElementById(id); }
 
+drawGG(0, 0);
 connect();
 </script>
 </body>

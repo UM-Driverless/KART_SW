@@ -46,10 +46,12 @@ class DashboardState:
             "esp32_heartbeat_age": -1.0,
             "esp32_steering_rad": 0.0,
             "esp32_speed": 0.0,
-            "esp32_acceleration": 0.0,
-            "esp32_braking": 0,
-            "orin_cmd_throttle": 0,
-            "orin_cmd_brake": 0,
+            "esp32_accel_lat": 0.0,   # lateral acceleration (m/s²), positive = right
+            "esp32_accel_lon": 0.0,   # longitudinal acceleration (m/s²), positive = forward
+            "esp32_throttle": 0.0,    # throttle pedal 0.0-1.0
+            "esp32_braking": 0.0,     # brake pedal 0.0-1.0
+            "orin_cmd_throttle": 0,   # target throttle 0-255
+            "orin_cmd_brake": 0,      # target brake 0-255
             "orin_cmd_steering_rad": 0.0,
             "mission": "manual",
             "state": "idle",  # idle | running | ebs

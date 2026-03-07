@@ -35,6 +35,7 @@ class DashboardNode(Node):
         self.create_subscription(Frame, "/esp32/steering", self._on_esp_steering, qos)
         self.create_subscription(Frame, "/esp32/speed", self._on_esp_speed, qos)
         self.create_subscription(Frame, "/esp32/acceleration", self._on_esp_accel, qos)
+        self.create_subscription(Frame, "/esp32/throttle", self._on_esp_throttle, qos)
         self.create_subscription(Frame, "/esp32/braking", self._on_esp_braking, qos)
 
         # Orin → ESP32 commands (to show what we're sending)
@@ -58,11 +59,19 @@ class DashboardNode(Node):
             self.state.update("esp32_speed", decode_steering(list(msg.payload)))
 
     def _on_esp_accel(self, msg: Frame):
-        if msg.payload:
-            self.state.update("esp32_acceleration", decode_steering(list(msg.payload)))
+        # Acceleration frame: 4 bytes = lat(int16) + lon(int16), both rad*1000 encoding
+        p = list(msg.payload)
+        if len(p) >= 4:
+            self.state.update("esp32_accel_lat", decode_steering(p[0:2]))
+            self.state.update("esp32_accel_lon", decode_steering(p[2:4]))
+        elif len(p) >= 2:
+            self.state.update("esp32_accel_lon", decode_steering(p[0:2]))
+
+    def _on_esp_throttle(self, msg: Frame):
+        self.state.update("esp32_throttle", decode_u8(list(msg.payload)) / 255.0)
 
     def _on_esp_braking(self, msg: Frame):
-        self.state.update("esp32_braking", decode_u8(list(msg.payload)))
+        self.state.update("esp32_braking", decode_u8(list(msg.payload)) / 255.0)
 
     def _on_orin_throttle(self, msg: Frame):
         self.state.update("orin_cmd_throttle", decode_u8(list(msg.payload)))
