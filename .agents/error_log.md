@@ -163,6 +163,23 @@ echo "0" | sudo -S bash -c "echo 0 > /sys/bus/usb/devices/2-3.2/authorized && sl
 - Rule: **The ZED is at USB path `2-3.2` (SuperSpeed 5 Gbps).** If it moves to a different port, find the new path with `lsusb -t`.
 - Rule: **Always do a software USB reset before launching ZED nodes** — it's harmless if the camera is already working and fixes the post-reboot issue.
 
+## 2026-03-07 - Claimed dashboard fix was working without visual verification
+**What happened:** Made multiple changes to the dashboard (raw steering value, WebSocket port, QoS fix) and repeatedly claimed they were "done" and "verified" based on checking source files, WebSocket JSON via Python scripts, and grep output. But the user could not see any data — the dashboard showed all zeros. Root causes found one by one: (1) old dashboard process still running on the port, (2) stale .pyc cache, (3) WebSocket URL pointed to port 8081 but server uses 8080, (4) server.py on Orin was a different hand-rolled version than expected. Each "verification" checked a different layer but never the actual browser view.
+**Prevention added:**
+- Rule: **A dashboard change is NOT verified until the browser shows the correct values.** Checking source files, grep output, or WebSocket JSON via scripts is insufficient — the user sees the browser, not your terminal.
+- Rule: **When restarting a node, verify no old process still holds the port.** Use `ss -tlnp | grep <port>` and `ps aux | grep <name>` before and after restart.
+- Rule: **After any Python change with symlink-install, delete `__pycache__` dirs AND restart the node.** Symlinks avoid `colcon build` but Python still caches bytecode.
+- Rule: **Check which server.py variant is deployed** — the hand-rolled version uses a single port (HTTP+WS on 8080), the `websockets` library version uses two ports (HTTP 8080, WS 8081). The HTML WS_URL must match.
+
+## 2026-03-07 - Dashboard port 8080 "address already in use" on every relaunch
+**What happened:** Every time the dashboard is relaunched, it crashes with `OSError: [Errno 98] address already in use` on port 8080. The old dashboard process (or a zombie from a previous launch) keeps the port bound even after Ctrl+C or `pkill`. This blocks all dashboard development and debugging — every relaunch requires manually hunting and force-killing old processes with `fuser -k 8080/tcp` before the new one can start. The nohup background launches make it worse since they detach from the terminal and are easy to forget.
+**Root cause:** The server.py binds port 8080 but does not set `SO_REUSEADDR`. When the process is killed, the OS keeps the port in TIME_WAIT state. Also, background dashboard processes launched via `nohup` survive terminal sessions and hold the port indefinitely.
+**Prevention needed:**
+- Set `SO_REUSEADDR` on the server socket so restarts don't fail
+- Before launching dashboard, always run `fuser -k 8080/tcp` to kill anything holding the port
+- Avoid launching dashboard via `nohup` — use foreground launch so Ctrl+C cleanly stops it
+- Rule: **Always check `ss -tlnp | grep 8080` before relaunching the dashboard**
+
 ## 2026-02-22 - AnyDesk black screen without ConnectedMonitor Xorg option
 **What happened:** AnyDesk showed a black framebuffer. The NVIDIA driver saw DFP-0 and DFP-1 as "disconnected" because the dummy HDMI plug (via DP-to-HDMI adapter) didn't provide proper EDID. Without a connected monitor, Xorg had no screen.
 **Prevention added:**
