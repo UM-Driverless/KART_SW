@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Kart Dashboard</title>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --card: #14141f;
+    --border: #2a2a3a;
+    --text: #e0e0e8;
+    --dim: #6a6a7a;
+    --accent: #4a9eff;
+    --green: #2ecc71;
+    --red: #e74c3c;
+    --orange: #f39c12;
+    --yellow: #f1c40f;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .container { max-width: 480px; margin: 0 auto; padding: 12px; }
+
+  /* Header */
+  .header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 0 12px;
+  }
+  .header h1 { font-size: 18px; font-weight: 600; }
+  .conn-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--red);
+    transition: background 0.3s;
+  }
+  .conn-dot.ok { background: var(--green); }
+
+  /* Status bar */
+  .status-bar {
+    display: flex; gap: 8px; margin-bottom: 12px;
+  }
+  .status-pill {
+    flex: 1; text-align: center; padding: 6px 4px;
+    border-radius: 8px; font-size: 11px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.5px;
+    background: var(--card); border: 1px solid var(--border);
+  }
+  .status-pill.active { border-color: var(--accent); color: var(--accent); }
+  .status-pill.heartbeat-ok { border-color: var(--green); color: var(--green); }
+  .status-pill.heartbeat-bad { border-color: var(--red); color: var(--red); }
+
+  /* Cards */
+  .card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px; margin-bottom: 10px;
+  }
+  .card-title {
+    font-size: 11px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 1px; color: var(--dim); margin-bottom: 10px;
+  }
+
+  /* Telemetry grid */
+  .telem-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+  }
+  .telem-item {
+    background: var(--bg); border-radius: 8px; padding: 10px;
+  }
+  .telem-label {
+    font-size: 10px; color: var(--dim); text-transform: uppercase;
+    letter-spacing: 0.5px; margin-bottom: 4px;
+  }
+  .telem-value {
+    font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums;
+  }
+  .telem-unit { font-size: 12px; color: var(--dim); font-weight: 400; }
+  .telem-item.wide { grid-column: 1 / -1; }
+
+  /* Steering visual */
+  .steering-viz {
+    display: flex; align-items: center; justify-content: center;
+    gap: 12px; padding: 8px 0;
+  }
+  .steer-bar-bg {
+    width: 100%; height: 24px; background: var(--bg);
+    border-radius: 12px; position: relative; overflow: hidden;
+  }
+  .steer-bar-center {
+    position: absolute; left: 50%; top: 0; bottom: 0;
+    width: 2px; background: var(--dim); transform: translateX(-50%);
+  }
+  .steer-bar-fill {
+    position: absolute; top: 2px; bottom: 2px;
+    background: var(--accent); border-radius: 10px;
+    transition: left 0.1s, width 0.1s;
+  }
+  .steer-bar-cmd {
+    position: absolute; top: 0; bottom: 0; width: 3px;
+    background: var(--orange); border-radius: 2px;
+    transition: left 0.1s;
+  }
+
+  /* Mission buttons */
+  .mission-grid {
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px;
+  }
+  .mission-btn {
+    padding: 12px 4px; border-radius: 8px; border: 2px solid var(--border);
+    background: var(--bg); color: var(--text);
+    font-size: 12px; font-weight: 600; cursor: pointer;
+    transition: all 0.15s; text-align: center;
+    -webkit-user-select: none; user-select: none;
+  }
+  .mission-btn:active { transform: scale(0.95); }
+  .mission-btn.selected {
+    border-color: var(--accent); background: rgba(74,158,255,0.12);
+    color: var(--accent);
+  }
+
+  /* Control buttons */
+  .control-row {
+    display: flex; gap: 8px; margin-top: 10px;
+  }
+  .ctrl-btn {
+    flex: 1; padding: 16px 8px; border-radius: 12px; border: none;
+    font-size: 15px; font-weight: 700; cursor: pointer;
+    transition: all 0.15s; text-transform: uppercase;
+    -webkit-user-select: none; user-select: none;
+  }
+  .ctrl-btn:active { transform: scale(0.96); }
+  .ctrl-btn.go {
+    background: var(--green); color: #fff;
+  }
+  .ctrl-btn.stop {
+    background: var(--red); color: #fff;
+  }
+  .ctrl-btn.ebs {
+    background: var(--orange); color: #fff;
+  }
+  .ctrl-btn:disabled {
+    opacity: 0.4; transform: none;
+  }
+
+  /* Command bar */
+  .cmd-bar {
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;
+  }
+  .cmd-item {
+    background: var(--bg); border-radius: 8px; padding: 8px; text-align: center;
+  }
+  .cmd-label {
+    font-size: 10px; color: var(--dim); text-transform: uppercase;
+    letter-spacing: 0.5px; margin-bottom: 2px;
+  }
+  .cmd-value {
+    font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <h1>UM Driverless</h1>
+    <div class="conn-dot" id="connDot" title="WebSocket connection"></div>
+  </div>
+
+  <!-- Status pills -->
+  <div class="status-bar">
+    <div class="status-pill" id="pillState">IDLE</div>
+    <div class="status-pill" id="pillMission">MANUAL</div>
+    <div class="status-pill" id="pillHeartbeat">HB --</div>
+  </div>
+
+  <!-- ESP32 Sensor Values -->
+  <div class="card">
+    <div class="card-title">ESP32 Sensors</div>
+    <div class="telem-grid">
+      <div class="telem-item">
+        <div class="telem-label">Steering</div>
+        <div class="telem-value" id="valSteer">0.000 <span class="telem-unit">rad</span></div>
+      </div>
+      <div class="telem-item">
+        <div class="telem-label">Speed</div>
+        <div class="telem-value" id="valSpeed">0.00 <span class="telem-unit">m/s</span></div>
+      </div>
+      <div class="telem-item">
+        <div class="telem-label">Accel</div>
+        <div class="telem-value" id="valAccel">0.00 <span class="telem-unit">m/s²</span></div>
+      </div>
+      <div class="telem-item">
+        <div class="telem-label">Braking</div>
+        <div class="telem-value" id="valBrake">0 <span class="telem-unit">/255</span></div>
+      </div>
+    </div>
+    <!-- Steering bar -->
+    <div style="margin-top: 10px;">
+      <div class="steer-bar-bg">
+        <div class="steer-bar-center"></div>
+        <div class="steer-bar-fill" id="steerFill"></div>
+        <div class="steer-bar-cmd" id="steerCmd"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Orin Commands (what Orin is sending to ESP32) -->
+  <div class="card">
+    <div class="card-title">Orin Commands</div>
+    <div class="cmd-bar">
+      <div class="cmd-item">
+        <div class="cmd-label">Throttle</div>
+        <div class="cmd-value" id="cmdThrottle">0</div>
+      </div>
+      <div class="cmd-item">
+        <div class="cmd-label">Brake</div>
+        <div class="cmd-value" id="cmdBrake">0</div>
+      </div>
+      <div class="cmd-item">
+        <div class="cmd-label">Steering</div>
+        <div class="cmd-value" id="cmdSteer">0.000</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mission Select -->
+  <div class="card">
+    <div class="card-title">Mission</div>
+    <div class="mission-grid" id="missionGrid">
+      <button class="mission-btn selected" data-mission="manual">Manual</button>
+      <button class="mission-btn" data-mission="acceleration">Accel</button>
+      <button class="mission-btn" data-mission="skidpad">Skidpad</button>
+      <button class="mission-btn" data-mission="autocross">Autocross</button>
+      <button class="mission-btn" data-mission="trackdrive">Trackdrive</button>
+      <button class="mission-btn" data-mission="inspection">Inspect</button>
+    </div>
+    <div class="control-row">
+      <button class="ctrl-btn go" id="btnGo" onclick="sendState('running')">START</button>
+      <button class="ctrl-btn stop" id="btnStop" onclick="sendState('idle')">STOP</button>
+      <button class="ctrl-btn ebs" id="btnEbs" onclick="sendState('ebs')">EBS</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const WS_URL = `ws://${location.host}/ws`;
+let ws = null;
+let reconnectTimer = null;
+
+function connect() {
+  ws = new WebSocket(WS_URL);
+  ws.onopen = () => {
+    document.getElementById('connDot').classList.add('ok');
+    if (reconnectTimer) { clearInterval(reconnectTimer); reconnectTimer = null; }
+  };
+  ws.onclose = () => {
+    document.getElementById('connDot').classList.remove('ok');
+    if (!reconnectTimer) reconnectTimer = setInterval(connect, 2000);
+  };
+  ws.onerror = () => ws.close();
+  ws.onmessage = (e) => {
+    try { update(JSON.parse(e.data)); } catch {}
+  };
+}
+
+function update(d) {
+  // Sensor values
+  el('valSteer').innerHTML = `${d.esp32_steering_rad.toFixed(3)} <span class="telem-unit">rad</span>`;
+  el('valSpeed').innerHTML = `${d.esp32_speed.toFixed(2)} <span class="telem-unit">m/s</span>`;
+  el('valAccel').innerHTML = `${d.esp32_acceleration.toFixed(2)} <span class="telem-unit">m/s²</span>`;
+  el('valBrake').innerHTML = `${d.esp32_braking} <span class="telem-unit">/255</span>`;
+
+  // Steering bar: -0.5 to +0.5 rad range
+  const maxRad = 0.5;
+  const pct = Math.max(-1, Math.min(1, d.esp32_steering_rad / maxRad));
+  const fill = el('steerFill');
+  if (pct >= 0) {
+    fill.style.left = '50%';
+    fill.style.width = (pct * 50) + '%';
+  } else {
+    fill.style.width = (-pct * 50) + '%';
+    fill.style.left = (50 + pct * 50) + '%';
+  }
+
+  // Command steering indicator
+  const cmdPct = Math.max(-1, Math.min(1, d.orin_cmd_steering_rad / maxRad));
+  el('steerCmd').style.left = (50 + cmdPct * 50 - 0.5) + '%';
+
+  // Orin commands
+  el('cmdThrottle').textContent = d.orin_cmd_throttle;
+  el('cmdBrake').textContent = d.orin_cmd_brake;
+  el('cmdSteer').textContent = d.orin_cmd_steering_rad.toFixed(3);
+
+  // Status pills
+  const pillState = el('pillState');
+  pillState.textContent = d.state.toUpperCase();
+  pillState.className = 'status-pill' + (d.state === 'running' ? ' active' : '');
+
+  const pillMission = el('pillMission');
+  pillMission.textContent = d.mission.toUpperCase();
+  pillMission.className = 'status-pill active';
+
+  const pillHb = el('pillHeartbeat');
+  if (d.esp32_heartbeat_age < 0) {
+    pillHb.textContent = 'HB --';
+    pillHb.className = 'status-pill';
+  } else {
+    pillHb.textContent = d.esp32_heartbeat ? `HB ${d.esp32_heartbeat_age}s` : `HB LOST ${d.esp32_heartbeat_age}s`;
+    pillHb.className = 'status-pill ' + (d.esp32_heartbeat ? 'heartbeat-ok' : 'heartbeat-bad');
+  }
+
+  // Highlight selected mission
+  document.querySelectorAll('.mission-btn').forEach(b => {
+    b.classList.toggle('selected', b.dataset.mission === d.mission);
+  });
+}
+
+// Mission select
+document.getElementById('missionGrid').addEventListener('click', (e) => {
+  const btn = e.target.closest('.mission-btn');
+  if (!btn || !ws || ws.readyState !== 1) return;
+  ws.send(JSON.stringify({ action: 'set_mission', mission: btn.dataset.mission }));
+});
+
+function sendState(state) {
+  if (!ws || ws.readyState !== 1) return;
+  ws.send(JSON.stringify({ action: 'set_state', state }));
+}
+
+function el(id) { return document.getElementById(id); }
+
+connect();
+</script>
+</body>
+</html>
