@@ -11,6 +11,7 @@ setup(
         ("share/" + package_name, ["package.xml"]),
         ("share/" + package_name + "/launch", ["launch/dashboard.launch.py"]),
     ],
+    package_data={package_name: ["index.html"]},
     install_requires=["setuptools"],
     zip_safe=True,
     entry_points={
