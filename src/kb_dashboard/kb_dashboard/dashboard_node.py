@@ -67,7 +67,7 @@ class DashboardNode(Node):
             now = self.get_clock().now().nanoseconds
             if not hasattr(self, '_last_steer_log') or now - self._last_steer_log > 500_000_000:
                 self._last_steer_log = now
-                print(f"STEER deg={rad*180/3.14159:.1f}  raw={raw}", flush=True)
+                self.get_logger().warn(f"STEER deg={rad*180/3.14159:.1f}  raw={raw}")
 
     def _on_esp_speed(self, msg: Frame):
         if msg.payload:
