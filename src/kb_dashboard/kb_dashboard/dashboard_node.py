@@ -64,7 +64,10 @@ class DashboardNode(Node):
         if len(p) >= 4:
             raw = (p[2] << 8) | p[3]
             self.state.update("esp32_steering_raw", raw)
-            print(f"STEER deg={rad*180/3.14159:.1f}  raw={raw}", flush=True)
+            now = self.get_clock().now().nanoseconds
+            if not hasattr(self, '_last_steer_log') or now - self._last_steer_log > 500_000_000:
+                self._last_steer_log = now
+                print(f"STEER deg={rad*180/3.14159:.1f}  raw={raw}", flush=True)
 
     def _on_esp_speed(self, msg: Frame):
         if msg.payload:
