@@ -59,9 +59,12 @@ class DashboardNode(Node):
 
     def _on_esp_steering(self, msg: Frame):
         p = list(msg.payload)
-        self.state.update("esp32_steering_rad", decode_steering(p))
+        rad = decode_steering(p)
+        self.state.update("esp32_steering_rad", rad)
         if len(p) >= 4:
-            self.state.update("esp32_steering_raw", (p[2] << 8) | p[3])
+            raw = (p[2] << 8) | p[3]
+            self.state.update("esp32_steering_raw", raw)
+            print(f"STEER deg={rad*180/3.14159:.1f}  raw={raw}", flush=True)
 
     def _on_esp_speed(self, msg: Frame):
         if msg.payload:
