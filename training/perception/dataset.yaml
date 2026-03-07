@@ -2,7 +2,7 @@
 # Used by: python training/perception/train.py
 # Data populated by: python training/perception/prepare_dataset.py
 
-path: data  # relative to this file's directory
+path: data
 train: images/train
 val: images/val
 

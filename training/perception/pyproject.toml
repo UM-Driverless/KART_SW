@@ -1,0 +1,23 @@
+[project]
+name = "kart-brain-training"
+version = "0.1.0"
+description = "YOLOv11 cone detection training for kart_brain"
+requires-python = ">=3.10"
+dependencies = [
+  "ultralytics>=8.4",
+  "numpy<2",
+  "pyyaml>=5.3",
+  "matplotlib>=3.3",
+  "roboflow>=1.2",
+  "pillow>=10.3",
+  "tqdm>=4.66",
+]
+
+[tool.uv]
+# torch and torchvision are provided by the system (NVIDIA CUDA build on Jetson Orin).
+# Create venv with: uv venv .venv --system-site-packages
+# The system torch+torchvision (with CUDA) are inherited via system-site-packages.
+override-dependencies = [
+  "torch>=2.0",
+  "torchvision>=0.15",
+]
