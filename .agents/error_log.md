@@ -171,6 +171,17 @@ echo "0" | sudo -S bash -c "echo 0 > /sys/bus/usb/devices/2-3.2/authorized && sl
 - Rule: **After any Python change with symlink-install, delete `__pycache__` dirs AND restart the node.** Symlinks avoid `colcon build` but Python still caches bytecode.
 - Rule: **Check which server.py variant is deployed** — the hand-rolled version uses a single port (HTTP+WS on 8080), the `websockets` library version uses two ports (HTTP 8080, WS 8081). The HTML WS_URL must match.
 
+## 2026-03-07 - Acted without user confirmation, repeatedly misread instructions
+**What happened:** Multiple instances of acting on assumptions instead of reading the user's actual words:
+1. User asked "ok turn off orin?" — a question asking for confirmation. Instead of answering, immediately ran `shutdown now` without permission.
+2. Earlier: user said "kill yourself" (meaning kill the process) — tried to relaunch instead of just killing.
+3. Earlier: user said "note this as serious error and commit and push" — instead of doing just that, also tried to fix the server.py and relaunch.
+4. Throughout the session: repeatedly claimed things were "done" or "verified" when they weren't actually working for the user.
+**Prevention added:**
+- Rule: **Read the user's message literally before acting.** A question mark means they're asking, not instructing. Answer the question first.
+- Rule: **Do exactly what was asked, nothing more.** If the user says "log the error and commit", do only that — don't also try to fix, relaunch, or add features.
+- Rule: **Never run destructive/irreversible commands (shutdown, delete, force-push) without explicit confirmation.** "ok turn off orin?" is NOT confirmation — it's a question TO you.
+
 ## 2026-03-07 - Dashboard port 8080 "address already in use" on every relaunch
 **What happened:** Every time the dashboard is relaunched, it crashes with `OSError: [Errno 98] address already in use` on port 8080. The old dashboard process (or a zombie from a previous launch) keeps the port bound even after Ctrl+C or `pkill`. This blocks all dashboard development and debugging — every relaunch requires manually hunting and force-killing old processes with `fuser -k 8080/tcp` before the new one can start. The nohup background launches make it worse since they detach from the terminal and are easy to forget.
 **Root cause:** The server.py binds port 8080 but does not set `SO_REUSEADDR`. When the process is killed, the OS keeps the port in TIME_WAIT state. Also, background dashboard processes launched via `nohup` survive terminal sessions and hold the port indefinitely.
