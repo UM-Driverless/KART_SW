@@ -15,6 +15,7 @@ install(PROGRAMS
   scripts/camera_info_fix_node.py
   scripts/ign_cmd_relay.py
   scripts/ackermann_to_vel.py
+  scripts/esp32_sim_node.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
