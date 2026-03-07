@@ -66,7 +66,7 @@ body { min-height: 100vh; -webkit-tap-highlight-color: transparent; }
 // ═══════════════════════════════════════════════════════
 const $ = id => document.getElementById(id);
 const deg = r => (r * 180 / Math.PI).toFixed(1);
-const WS_URL = `ws://${location.hostname}:${parseInt(location.port||80)+1}/`;
+const WS_URL = `ws://${location.hostname}:${location.port||80}/`;
 let ws = null, reconnectTimer = null, lastData = null, skinCleanup = null;
 
 function connect() {
