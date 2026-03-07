@@ -29,6 +29,13 @@ Before making any changes to the kart_brain workspace, consult:
 - **Use background tasks for long-running ops.** Builds (~30s–100s), flashing, serial reads, SSH commands — run these in the background and check results later.
 - **Don't block on things you can parallelize.** If you need to edit 3 files and deploy, edit them all, then deploy. If you need info from 2 different places, query both at once.
 
+## Definition of Done
+A change is NOT done until it's **validated on the target machine**:
+- Code pushed? → **Pull on Orin/VM too.**
+- ESP32 firmware? → **Flash it.**
+- Python/launch change? → **Restart the affected nodes.**
+- Never claim something is fixed if you only pushed — deploy and verify.
+
 ## Critical Rules
 - **Environment is in `.bashrc`** — ROS, workspace, and `IGN_GAZEBO_RESOURCE_PATH` are all sourced in `.bashrc` on every machine. **Never tell the user to source or export these manually.**
 - **After creating/modifying files under `src/`, scp them to the VM and rebuild via SSH — don't just tell the user.** Use: `scp <files> utm:~/kart_brain/...` then `ssh utm "source /opt/ros/humble/setup.bash && cd ~/kart_brain && colcon build --packages-select <pkg>"`. Note: `.bashrc` is NOT sourced in non-interactive SSH — always source ROS explicitly.
