@@ -79,6 +79,7 @@
     font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums;
   }
   .telem-unit { font-size: 12px; color: var(--dim); font-weight: 400; }
+  .telem-alt { font-size: 13px; color: var(--accent); font-weight: 500; margin-left: 4px; }
   .telem-item.wide { grid-column: 1 / -1; }
 
   /* Steering visual */
@@ -268,9 +269,9 @@ function connect() {
 
 function update(d) {
   // Sensor values
-  el('valSteer').innerHTML = `${d.esp32_steering_rad.toFixed(3)} <span class="telem-unit">rad</span>`;
-  el('valSpeed').innerHTML = `${d.esp32_speed.toFixed(2)} <span class="telem-unit">m/s</span>`;
-  el('valAccel').innerHTML = `${d.esp32_acceleration.toFixed(2)} <span class="telem-unit">m/s²</span>`;
+  el('valSteer').innerHTML = `${d.esp32_steering_rad.toFixed(3)} <span class="telem-unit">rad</span> <span class="telem-alt">${(d.esp32_steering_rad * 180 / Math.PI).toFixed(1)}°</span>`;
+  el('valSpeed').innerHTML = `${d.esp32_speed.toFixed(2)} <span class="telem-unit">m/s</span> <span class="telem-alt">${(d.esp32_speed * 3.6).toFixed(1)} km/h</span>`;
+  el('valAccel').innerHTML = `${d.esp32_acceleration.toFixed(2)} <span class="telem-unit">m/s²</span> <span class="telem-alt">${(d.esp32_acceleration / 9.81).toFixed(2)} g</span>`;
   el('valBrake').innerHTML = `${d.esp32_braking} <span class="telem-unit">/255</span>`;
 
   // Steering bar: -0.5 to +0.5 rad range
@@ -292,7 +293,7 @@ function update(d) {
   // Orin commands
   el('cmdThrottle').textContent = d.orin_cmd_throttle;
   el('cmdBrake').textContent = d.orin_cmd_brake;
-  el('cmdSteer').textContent = d.orin_cmd_steering_rad.toFixed(3);
+  el('cmdSteer').innerHTML = `${d.orin_cmd_steering_rad.toFixed(3)} <span class="telem-alt" style="font-size:11px">${(d.orin_cmd_steering_rad * 180 / Math.PI).toFixed(1)}°</span>`;
 
   // Status pills
   const pillState = el('pillState');
