@@ -150,7 +150,7 @@ body { font-family:'Inter',-apple-system,BlinkMacSystemFont,'SF Pro',system-ui,s
 .tu { font-size:10px; color:#6a6a7a; font-weight:400; letter-spacing:1px; }
 .ta { font-size:13px; color:#4a9eff; font-weight:500; margin-left:4px; }
 .ti-bar { position:absolute; bottom:0; left:0; right:0; height:2px; background:#2a2a3a; }
-.ti-bar-fill { height:100%; transition:width 0.4s cubic-bezier(0.4,0,0.2,1); border-radius:0 1px 1px 0; }
+.ti-bar-fill { position:absolute; height:100%; transition:width 0.4s cubic-bezier(0.4,0,0.2,1), left 0.4s cubic-bezier(0.4,0,0.2,1); border-radius:1px; }
 
 .steer-bg { width:100%; height:20px; background:#0a0a0f; border-radius:10px; position:relative; overflow:hidden; margin-top:10px; }
 .steer-ctr { position:absolute; left:50%; top:0; bottom:0; width:2px; background:#6a6a7a; transform:translateX(-50%); }
@@ -194,7 +194,6 @@ body { font-family:'Inter',-apple-system,BlinkMacSystemFont,'SF Pro',system-ui,s
   <div class="card"><div class="card-t">Kart State</div>
     <div class="tg"><div class="ti"><div class="tl">Steering</div><div class="tv" id="vSteer">0.0 <span class="tu">°</span></div><div class="ti-bar"><div class="ti-bar-fill" id="steerBarFill" style="width:0%;background:#4a9eff"></div></div></div>
     <div class="ti"><div class="tl">Speed</div><div class="tv" id="vSpeed">0.0 <span class="tu">km/h</span></div><div class="ti-bar"><div class="ti-bar-fill" id="speedBarFill" style="width:0%;background:#2ecc71"></div></div></div></div>
-    <div class="steer-bg"><div class="steer-ctr"></div><div class="steer-fill" id="steerFill"></div><div class="steer-cmd" id="steerCmd"></div></div>
     <div class="gg-row"><div class="gg-wrap"><canvas class="gg-canvas" id="ggCanvas" width="140" height="140"></canvas></div>
     <div class="gg-labels"><div><div class="gg-vl">Lateral</div><div class="gg-v" id="vALat">0.00 g</div></div><div><div class="gg-vl">Longitudinal</div><div class="gg-v" id="vALon">0.00 g</div></div><div><div class="gg-vl">Total</div><div class="gg-v" id="vATotal">0.00 g</div></div></div></div>
     <div class="ped-row"><div class="ped-item"><div class="ped-lbl">Throttle <span id="vThr">0%</span></div><div class="ped-track"><div class="ped-fill thr" id="thrFill" style="width:0%"></div></div></div>
@@ -218,9 +217,11 @@ body { font-family:'Inter',-apple-system,BlinkMacSystemFont,'SF Pro',system-ui,s
   update(d) {
     $('vSteer').innerHTML = `${deg(d.esp32_steering_rad)} <span class="tu">°</span>`;
     $('vSpeed').innerHTML = `${(d.esp32_speed*3.6).toFixed(1)} <span class="tu">km/h</span>`;
-    $('steerBarFill').style.width = Math.min(Math.abs(d.esp32_steering_rad)/1*100,100)+'%';
+    const sPct = Math.max(-1, Math.min(1, d.esp32_steering_rad / 0.5));
+    const sf = $('steerBarFill');
+    if (sPct >= 0) { sf.style.left='50%'; sf.style.width=(sPct*50)+'%'; }
+    else { sf.style.width=(-sPct*50)+'%'; sf.style.left=(50+sPct*50)+'%'; }
     $('speedBarFill').style.width = Math.min(d.esp32_speed/30*100,100)+'%';
-    updateSteerBar(d, 'steerFill', 'steerCmd');
     const latG = d.esp32_accel_lat/9.81, lonG = d.esp32_accel_lon/9.81;
     drawGG(latG, lonG, '#2a2a3a', '#6a6a7a40', '#4a9eff', 8);
     $('vALat').textContent = latG.toFixed(2)+' g';
