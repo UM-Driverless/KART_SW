@@ -140,6 +140,34 @@ cd ~/kart_brain && colcon build
 
 **Reference:** Consolidate info already scattered across this TODO, `.agents/` docs, and `kart_docs/`.
 
+## Phone Dashboard (HMI for Mission Control)
+
+**Status:** Not started — idea phase.
+
+**Goal:** Use a phone (our own for now, cheap second-hand later) as a wireless touchscreen dashboard to control the kart — replaces the Nextion screen idea.
+
+**How it works:**
+- A ROS2 node on the Orin runs a web server (FastAPI + WebSocket)
+- Any phone on the same WiFi opens the URL in a browser → instant dashboard
+- No wiring, no serial protocol, no custom firmware on the display side
+
+**What to build:**
+1. **`kb_dashboard` ROS2 package** — a Python node that:
+   - Runs a FastAPI/uvicorn web server (e.g. port 8080)
+   - Subscribes to ROS2 topics for telemetry (`/esp32/steering`, `/esp32/heartbeat`, EBS status, etc.)
+   - Pushes updates to the browser via WebSocket
+   - Exposes REST endpoints for commands (start mission, stop, switch mode)
+   - Commands trigger ROS2 service calls or topic publishes internally
+2. **Frontend** — simple HTML/JS page with:
+   - Big touch-friendly buttons: start/stop, mission select (manual/autonomous), EBS arm/reset
+   - Live telemetry: steering angle, speed, system status, node health
+   - Works on any phone browser, no app install needed
+3. **Kiosk mode (for dedicated phone)** — use [FreeKiosk](https://github.com/RushB-fr/freekiosk) to lock a cheap phone to the dashboard
+
+**Also consider:** [ROSboard](https://github.com/dheera/rosboard) (`pip install rosboard`) as a quick win for topic visualization alongside the custom dashboard.
+
+**Network:** For now, Orin and phones on the same WiFi. For race day, Orin runs its own hotspot (can coexist with WiFi via second interface or `nmcli`).
+
 ## Long-Term
 
 - Explore YOLO acceleration via ONNX/TensorRT on Jetson
