@@ -168,13 +168,32 @@
   .ctrl-btn.go { background: var(--green); color: #fff; }
   .ctrl-btn.stop { background: var(--red); color: #fff; }
   .ctrl-btn.ebs { background: var(--orange); color: #fff; }
+
+  /* Theme button */
+  .theme-btn {
+    background: none; border: 1px solid var(--border); border-radius: 6px;
+    color: var(--dim); font-size: 11px; padding: 3px 8px; cursor: pointer;
+    margin-right: 8px; transition: all 0.15s;
+  }
+  .theme-btn:active { transform: scale(0.95); }
+
+  /* Themes */
+  .theme-midnight { --bg:#0a0a0f; --card:#14141f; --border:#2a2a3a; --text:#e0e0e8; --dim:#6a6a7a; --accent:#4a9eff; --green:#2ecc71; --red:#e74c3c; --orange:#f39c12; }
+  .theme-racing   { --bg:#0f0a0a; --card:#1f1414; --border:#3a2a2a; --text:#e8e0e0; --dim:#7a6a6a; --accent:#ff4a4a; --green:#2ecc71; --red:#ff3333; --orange:#ff6b1a; }
+  .theme-forest   { --bg:#080f0a; --card:#121f14; --border:#1a3a1a; --text:#d8e8da; --dim:#5a7a5c; --accent:#4aff7a; --green:#2ecc71; --red:#e74c3c; --orange:#e8a735; }
+  .theme-cyber    { --bg:#0a0a12; --card:#12122a; --border:#2a2a5a; --text:#d0d0ff; --dim:#6a6a9a; --accent:#b44aff; --green:#00ff88; --red:#ff2266; --orange:#ffaa00; }
+  .theme-light    { --bg:#f0f0f4; --card:#ffffff; --border:#d8d8e0; --text:#1a1a2e; --dim:#8888a0; --accent:#2563eb; --green:#16a34a; --red:#dc2626; --orange:#ea580c; }
+  .theme-nord     { --bg:#2e3440; --card:#3b4252; --border:#4c566a; --text:#eceff4; --dim:#7b88a1; --accent:#88c0d0; --green:#a3be8c; --red:#bf616a; --orange:#d08770; }
 </style>
 </head>
 <body>
 <div class="container">
   <div class="header">
     <h1>UM Driverless</h1>
-    <div class="conn-dot" id="connDot"></div>
+    <div style="display:flex;align-items:center;gap:6px">
+      <button class="theme-btn" id="themeBtn" onclick="cycleTheme()">Theme</button>
+      <div class="conn-dot" id="connDot"></div>
+    </div>
   </div>
 
   <div class="status-bar">
@@ -291,8 +310,13 @@ function drawGG(latG, lonG) {
   const ctx = ggCtx;
   ctx.clearRect(0, 0, 140, 140);
 
+  const cs = getComputedStyle(document.documentElement);
+  const borderC = cs.getPropertyValue('--border').trim();
+  const dimC = cs.getPropertyValue('--dim').trim();
+  const accentC = cs.getPropertyValue('--accent').trim();
+
   // Background circles
-  ctx.strokeStyle = '#2a2a3a';
+  ctx.strokeStyle = borderC;
   ctx.lineWidth = 1;
   for (let r = 1; r <= 2; r++) {
     ctx.beginPath();
@@ -301,7 +325,7 @@ function drawGG(latG, lonG) {
   }
 
   // Crosshair
-  ctx.strokeStyle = '#1a1a2a';
+  ctx.strokeStyle = dimC + '40';
   ctx.beginPath();
   ctx.moveTo(GG_CX - GG_R, GG_CY);
   ctx.lineTo(GG_CX + GG_R, GG_CY);
@@ -311,17 +335,17 @@ function drawGG(latG, lonG) {
 
   // Dot
   const px = GG_CX + (latG / GG_MAX) * GG_R;
-  const py = GG_CY - (lonG / GG_MAX) * GG_R; // up = positive lon
-  ctx.fillStyle = '#4a9eff';
-  ctx.shadowColor = '#4a9eff';
+  const py = GG_CY - (lonG / GG_MAX) * GG_R;
+  ctx.fillStyle = accentC;
+  ctx.shadowColor = accentC;
   ctx.shadowBlur = 8;
   ctx.beginPath();
   ctx.arc(px, py, 5, 0, Math.PI * 2);
   ctx.fill();
   ctx.shadowBlur = 0;
 
-  // Trail dot (dimmer, smaller)
-  ctx.fillStyle = 'rgba(74,158,255,0.3)';
+  // Glow
+  ctx.fillStyle = accentC + '4d';
   ctx.beginPath();
   ctx.arc(px, py, 8, 0, Math.PI * 2);
   ctx.fill();
@@ -414,6 +438,21 @@ function sendState(state) {
 
 function el(id) { return document.getElementById(id); }
 
+// Themes
+const THEMES = ['midnight', 'racing', 'forest', 'cyber', 'light', 'nord'];
+let themeIdx = THEMES.indexOf(localStorage.getItem('theme') || 'midnight');
+if (themeIdx < 0) themeIdx = 0;
+
+function applyTheme() {
+  document.body.className = 'theme-' + THEMES[themeIdx];
+  el('themeBtn').textContent = THEMES[themeIdx];
+  localStorage.setItem('theme', THEMES[themeIdx]);
+}
+function cycleTheme() {
+  themeIdx = (themeIdx + 1) % THEMES.length;
+  applyTheme();
+}
+applyTheme();
 drawGG(0, 0);
 connect();
 </script>
