@@ -293,15 +293,23 @@ body::before { content:''; position:fixed; inset:0; background:repeating-linear-
 .k-footer-l, .k-footer-r { font-size:7px; letter-spacing:3px; color:#220500; }
 .k-footer-dot { width:5px; height:5px; border-radius:50%; background:#ff2200; box-shadow:0 0 8px #ff2200; animation:blink 1.4s infinite; }
 @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.1} }
+
+.k-mode-strip { display:flex; border-bottom:1px solid #1a0500; }
+.k-mode { flex:1; padding:8px 4px; background:transparent; border:none; border-right:1px solid #1a0500; color:#330700; font-family:'Share Tech Mono',monospace; font-size:9px; letter-spacing:2px; cursor:pointer; text-transform:uppercase; transition:all 0.15s; }
+.k-mode:last-child { border-right:none; }
+.k-mode:hover { color:#ff5533; background:#0d0200; }
+.k-mode.active { color:#ff2200; background:#0d0100; text-shadow:0 0 8px #ff2200, 0 0 20px #ff220066; box-shadow:inset 0 -2px 0 #ff2200; }
 `,
   render() {
     const hbHeights = [3,3,3,3,7,16,16,7,3,3,3,3];
     const hbSegs = hbHeights.map((h,i) => `<div class="k-hb-seg" id="hbs${i}" style="height:${h}px"></div>`).join('');
     return `<div class="container" style="padding:20px 12px"><div class="kitt-shell">
   <div class="scan-wrap"><div class="scan-track" id="scanTrack"></div></div>
-  <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 20px;border-bottom:1px solid #1a0500">
+  <div class="k-hdr">
+    <div><div class="k-logo-sup">KNIGHT INDUSTRIES</div><div class="k-logo">K·I·T·T</div><div class="k-logo-sub">UM DRIVERLESS · AUTONOMOUS SYS</div></div>
     <div><div class="k-status-lbl">SYSTEM STATUS</div><div class="k-status-val" id="kStatus">STANDBY</div></div>
   </div>
+  <div class="k-mode-strip" id="kModeStrip"><button class="k-mode active" data-st="idle">IDLE</button><button class="k-mode" data-st="manual">MANUAL</button><button class="k-mode" data-st="auto">AUTONOMOUS</button></div>
   <div class="k-body">
     <div class="k-sec">
       <div class="k-sec-hd"><div class="k-sec-t">ESP32 · SENSOR ARRAY</div><div class="k-sec-badge" id="kSensorBadge">OFFLINE</div></div>
@@ -399,6 +407,8 @@ body::before { content:''; position:fixed; inset:0; background:repeating-linear-
     if (vt._lastState !== d.state) { vt.textContent = voices[d.state]||'AWAITING COMMAND.'; vt._lastState = d.state; }
 
     document.querySelectorAll('.k-mis-btn').forEach(b => b.classList.toggle('sel', b.dataset.m === d.mission));
+    const stMap = {idle:'idle',running:'auto',ebs:'idle'};
+    document.querySelectorAll('.k-mode').forEach(b => b.classList.toggle('active', b.dataset.st === (stMap[d.state]||'idle')));
   }
 };
 
@@ -462,11 +472,17 @@ body { font-family:'Inter',sans-serif; background:#0a0a0a; color:#f5f5f5; }
 .t-ctrl.stop { background:transparent; border-color:#333; color:#888; }
 .t-ctrl.ebs { background:transparent; border-color:#fb8c0040; color:#fb8c00; }
 @keyframes breathe { 0%,100%{opacity:0.1} 50%{opacity:0.22} }
+
+.t-tabs { display:flex; background:#111; border:1px solid #222; border-radius:14px; padding:4px; gap:2px; }
+.t-tab { flex:1; padding:8px; background:transparent; border:none; border-radius:10px; color:#444; font-family:'Inter',sans-serif; font-size:10px; font-weight:500; letter-spacing:1px; text-transform:uppercase; cursor:pointer; transition:all 0.2s; }
+.t-tab.active { background:#1c1c1c; color:#f5f5f5; border:1px solid #333; }
+.t-tab:hover:not(.active) { color:#888; }
 `,
   render() { return `<div class="t-shell">
   <div class="t-topbar">
     <div class="t-sys-pill" id="tSysPill"><div class="t-sys-dot" id="tSysDot"></div><span class="t-sys-label" id="tSysLabel">Standby</span></div>
   </div>
+  <div class="t-tabs" id="tTabs"><button class="t-tab active" data-st="idle">Idle</button><button class="t-tab" data-st="manual">Manual</button><button class="t-tab" data-st="auto">Auto</button></div>
   <div class="t-car" id="tCarSection">
     <div class="t-car-glow" id="tCarGlow"></div>
     <div class="t-car-svg">
@@ -549,6 +565,8 @@ body { font-family:'Inter',sans-serif; background:#0a0a0a; color:#f5f5f5; }
     }
 
     document.querySelectorAll('.t-mis-btn').forEach(b => b.classList.toggle('sel', b.dataset.m === d.mission));
+    const stMap = {idle:'idle',running:'auto',ebs:'idle'};
+    document.querySelectorAll('.t-tab').forEach(b => b.classList.toggle('active', b.dataset.st === (stMap[d.state]||'idle')));
   }
 };
 
@@ -623,14 +641,24 @@ body::before { content:''; position:fixed; inset:0; pointer-events:none; backgro
 .h-ctrl.stop { background:rgba(255,48,96,0.1); border-color:rgba(255,48,96,0.4); color:#ff3060; text-shadow:0 0 15px #ff3060; }
 .h-ctrl.ebs { background:rgba(255,170,0,0.1); border-color:rgba(255,170,0,0.4); color:#ffaa00; text-shadow:0 0 15px #ffaa00; }
 .h-footer { text-align:center; font-family:'Orbitron',sans-serif; font-size:8px; letter-spacing:3px; color:rgba(255,255,255,0.1); margin-top:4px; }
+
+.h-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; }
+.h-subtitle { font-family:'Orbitron',sans-serif; font-size:10px; letter-spacing:5px; color:rgba(255,255,255,0.25); margin-bottom:4px; }
+.h-title { font-family:'Orbitron',sans-serif; font-size:22px; font-weight:900; letter-spacing:3px; color:#fff; text-shadow:0 0 30px rgba(0,180,255,0.5); line-height:1; }
+.h-tabs { display:flex; gap:6px; margin-bottom:16px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.07); border-radius:12px; padding:6px; }
+.h-tab { flex:1; padding:8px 4px; background:transparent; border:1px solid transparent; border-radius:8px; color:rgba(255,255,255,0.3); font-family:'Orbitron',sans-serif; font-size:9px; letter-spacing:1.5px; font-weight:700; cursor:pointer; transition:all 0.2s; }
+.h-tab.active { background:rgba(0,180,255,0.15); border-color:rgba(0,180,255,0.4); color:#00b4ff; text-shadow:0 0 15px #00b4ff; }
 `,
   render() {
     const hbHeights = [4,4,4,4,8,14,14,8,4,4,4,4];
     const hbSegs = hbHeights.map((h,i) => `<div class="h-hb-beat" id="hhb${i}" style="height:${h}px"></div>`).join('');
     return `<div class="h-wrap">
-  <div style="display:flex;justify-content:flex-end;margin-bottom:16px">
+  <div class="h-header">
+    <div><div class="h-subtitle">FORMULA STUDENT</div><div class="h-title">UM DRIVERLESS</div></div>
     <div class="h-status-pill" id="hStatusPill"><div class="h-status-dot" id="hStatusDot"></div><span class="h-status-text" id="hStatusText">STANDBY</span></div>
   </div>
+
+  <div class="h-tabs" id="hTabs"><button class="h-tab active" data-st="idle">IDLE</button><button class="h-tab" data-st="manual">MANUAL</button><button class="h-tab" data-st="auto">AUTONOMOUS</button></div>
 
   <div class="h-hb-bar"><div class="h-hb-label">HEARTBEAT</div><div class="h-hb-beats">${hbSegs}</div><div class="h-hb-status" id="hHbStatus">--</div></div>
 
@@ -734,6 +762,8 @@ body::before { content:''; position:fixed; inset:0; pointer-events:none; backgro
     }
 
     document.querySelectorAll('.h-mis-btn').forEach(b => b.classList.toggle('sel', b.dataset.m === d.mission));
+    const stMap = {idle:'idle',running:'auto',ebs:'idle'};
+    document.querySelectorAll('.h-tab').forEach(b => b.classList.toggle('active', b.dataset.st === (stMap[d.state]||'idle')));
   }
 };
 
@@ -827,8 +857,8 @@ function applySkin(id) {
   $('skinCss').textContent = skin.css;
   $('app').innerHTML = skin.render();
   // Set title per skin
-  const titles = { default:'UM Driverless', kitt:'K·I·T·T', tesla:'UM Driverless', hud:'UM DRIVERLESS' };
-  $('topbarTitle').textContent = titles[id] || 'UM Driverless';
+  const titles = { default:'UM Driverless', kitt:'K·I·T·T', tesla:'UM Driverless', hud:'' };
+  $('topbarTitle').textContent = titles[id] ?? 'UM Driverless';
   buildSkinMenu();
   skinCleanup = skin.init();
   if (lastData) skin.update(lastData);
