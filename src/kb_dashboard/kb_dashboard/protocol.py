@@ -52,6 +52,23 @@ def decode_health(payload) -> dict:
     }
 
 
+def encode_int16_be(value: float, scale: float = 1000.0) -> list:
+    """Encode float to int16 big-endian bytes (matching ESP32 protocol)."""
+    clamped = max(-32.768, min(32.767, value))
+    return list(struct.pack(">h", int(clamped * scale)))
+
+
+def encode_u8(value: float) -> list:
+    """Encode 0.0-1.0 float to uint8 0-255."""
+    return [max(0, min(255, int(value * 255)))]
+
+
+def encode_health(magnet_ok, i2c_ok, heap_ok, agc, heap_kb, i2c_errors) -> list:
+    """Encode health status payload matching decode_health format."""
+    flags = int(magnet_ok) | (int(i2c_ok) << 1) | (int(heap_ok) << 2)
+    return [flags, agc, (heap_kb >> 8) & 0xFF, heap_kb & 0xFF, i2c_errors]
+
+
 class DashboardState:
     """Thread-safe telemetry state."""
 

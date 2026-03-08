@@ -12,18 +12,7 @@ from rclpy.node import Node
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Twist
 from kb_interfaces.msg import Frame
-
-
-def encode_int16_be(value: float, scale: float = 1000.0) -> list:
-    """Encode float to int16 big-endian bytes (matching ESP32 protocol)."""
-    clamped = max(-32.768, min(32.767, value))
-    raw = int(clamped * scale)
-    return list(struct.pack(">h", raw))
-
-
-def encode_u8(value: float) -> list:
-    """Encode 0.0-1.0 float to uint8 0-255."""
-    return [max(0, min(255, int(value * 255)))]
+from kb_dashboard.protocol import encode_int16_be, encode_u8
 
 
 class Esp32SimNode(Node):
@@ -120,7 +109,7 @@ class Esp32SimNode(Node):
 
         # Throttle: uint8
         throttle_msg = Frame()
-        throttle_msg.type = Frame.ORIN_TARG_THROTTLE
+        throttle_msg.type = 0x00  # sim-only: no real ESP throttle type, dashboard routes by topic
         throttle_msg.payload = encode_u8(self._throttle)
         self.pub_throttle.publish(throttle_msg)
 
