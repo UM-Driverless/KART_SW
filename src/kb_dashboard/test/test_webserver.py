@@ -117,7 +117,7 @@ def _blocking_ws_connect(port):
     assert b"101 Switching Protocols" in resp, f"Bad handshake: {resp}"
 
     expected_accept = base64.b64encode(
-        hashlib.sha1((key + "258EAFA5-E914-47DA-95CA-5AB5A4085B64").encode()).digest()
+        hashlib.sha1((key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").encode()).digest()
     ).decode()
     assert expected_accept.encode() in resp
     return s

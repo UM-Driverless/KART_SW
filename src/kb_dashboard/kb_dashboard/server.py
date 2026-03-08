@@ -39,15 +39,15 @@ async def run_websocket_server(state: DashboardState, node, port: int, ready_cal
         for line_str in request_str.split("\r\n")[1:]:
             if ": " in line_str:
                 k, v = line_str.split(": ", 1)
-                headers[k.lower()] = v
+                headers[k.lower()] = v.strip()
 
         # WebSocket upgrade
         conn_header = headers.get("connection", "").lower()
         upgrade_header = headers.get("upgrade", "").lower()
         if "upgrade" in conn_header and "websocket" in upgrade_header:
-            key = headers.get("sec-websocket-key", "")
+            key = headers.get("sec-websocket-key", "").strip()
             accept = base64.b64encode(
-                hashlib.sha1((key + "258EAFA5-E914-47DA-95CA-5AB5A4085B64").encode()).digest()
+                hashlib.sha1((key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").encode()).digest()
             ).decode()
             writer.write(
                 f"HTTP/1.1 101 Switching Protocols\r\n"
@@ -163,7 +163,16 @@ async def run_websocket_server(state: DashboardState, node, port: int, ready_cal
                     dead.add(w)
             clients -= dead
 
-    server = await asyncio.start_server(ws_accept, "0.0.0.0", port)
+    import socket
+    server = await asyncio.start_server(
+        ws_accept, "0.0.0.0", port,
+        reuse_address=True,
+        start_serving=False,
+    )
+    # SO_REUSEADDR is set by reuse_address, but ensure SO_REUSEPORT too
+    for s in server.sockets:
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    await server.start_serving()
     node.get_logger().info(f"Web server listening on 0.0.0.0:{port}")
     if ready_callback:
         ready_callback()

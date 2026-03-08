@@ -218,3 +218,18 @@ Oval track centered at (0, 0) in world coordinates:
 - **Kart spawn:** (20, 0) facing +Y (yaw = π/2), drives counterclockwise
 
 Track width: 3m. Cone spacing: ~5m on straights, ~8m on curves.
+
+## Debugging the Dashboard
+
+The `kb_dashboard` package serves a web UI on port 8080 with a custom WebSocket server (no dependencies beyond stdlib). To verify it works end-to-end:
+
+1. **Use Playwright MCP** (`claude mcp add playwright --scope user -- npx @playwright/mcp@latest`). This is the only reliable way to visually verify the dashboard — headless Firefox `--screenshot` exits before WebSocket data arrives.
+2. Navigate to `http://192.168.64.3:8080/`, wait 3s, then take a screenshot or read the snapshot. Values should be non-zero when the sim is running.
+3. Check `browser_console_messages` for WebSocket errors — this is how the GUID bug was found.
+
+**Common issues:**
+- Port 8080 already in use: `fuser -k 8080/tcp` on VM. The server uses `reuse_address=True` but stale processes from previous launches can still hold the port.
+- WebSocket handshake fails: check the `Sec-WebSocket-Accept` hash in `server.py`. The RFC 6455 magic GUID is `258EAFA5-E914-47DA-95CA-C5AB0DC85B11`.
+- Dashboard shows zeros: WebSocket not connecting. Check browser console for errors.
+
+**Test locally (no ROS):** `cd src/kb_dashboard && python -m pytest test/ -v`
