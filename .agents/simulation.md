@@ -2,7 +2,7 @@
 
 ## Overview
 
-The simulation uses **Gazebo Fortress** (ign-gazebo 6.16.0, the Ignition-era naming) with `ros-humble-ros-gz` as the ROS 2 bridge. It runs headless (no GUI window) because the VM has no GPU.
+The simulation uses **Gazebo Fortress** (ign-gazebo 6.16.0, the Ignition-era naming) with `ros-humble-ros-gz` as the ROS 2 bridge. It can run headless or with GUI (GUI is slow — CPU rendering via llvmpipe, no GPU in the VM).
 
 ## Quick Start
 
@@ -126,7 +126,12 @@ Gazebo Fortress (SDF 1.6) does not support `<cone>` geometry — it shows as inv
 **Problem:** The simple midpoint-follower works well on straights but can lose sight of cones on curves (both sides not simultaneously visible).
 **Status:** Known limitation. Needs either wider FOV (currently 120deg), more cone density on curves, or a smarter lookahead algorithm.
 
-### 6. YOLO won't detect Gazebo cylinders
+### 6. Neural controller oscillates and drives off-track
+**Problem:** The `neural_v2` controller (trained in 2D sim) oscillates wildly in Gazebo — steering flips between -0.4 and +0.4 rad every 100ms. Within seconds the kart leaves the track, sees 0 cones, and defaults to constant steer=0.168 rad (9.6°).
+**Root cause:** The 2D sim has different physics/timing than Gazebo. The neural network was never validated in Gazebo.
+**Status:** Known. The control algorithm needs work — either retrain in Gazebo or use a different controller.
+
+### 7. YOLO won't detect Gazebo cylinders
 **Problem:** The YOLO model was trained on real cones. Gazebo renders solid-color cylinders which look nothing like real textured cones.
 **Workaround:** Use `perfect_perception_node.py` (default). To use YOLO, either fine-tune on simulated images or add realistic cone textures/meshes to the models.
 
@@ -159,8 +164,73 @@ ign service -s /world/fs_track/control \
   --reptype ignition.msgs.Boolean \
   --timeout 5000 --req 'pause: true'
 
-# Kill everything
-pkill -9 ign; pkill -f parameter_bridge; pkill -f perfect_perception; pkill -f cone_follower
+# Kill everything (see "Clean Restart" section below)
+```
+
+## Clean Restart Procedure
+
+**CRITICAL**: Always kill ALL processes before relaunching. Duplicate instances cause silent failures — odom stops reaching perception, ports stay occupied, the kart spawns at a stale position.
+
+### Why this matters
+
+Gazebo + ROS 2 launch files spawn ~10 processes (ign server, ign gui, parameter_bridge, perfect_perception, cone_follower, esp32_sim, dashboard, cone_marker_viz_3d, ackermann_to_vel, camera_info_fix). If any survive from a previous run:
+- **Duplicate nodes** subscribe/publish on the same topics → messages get split between instances, data goes missing (e.g. odom never reaches perception → `got_odom=False`)
+- **Port 8080 stays occupied** → dashboard crashes with `OSError: address already in use`
+- **Stale Gazebo state** → kart inherits the old position (off-track) instead of respawning at (20,0)
+- **`cone_marker_viz_3d` is especially sticky** — it survives `killall python3` because the process name in `ps` is `/usr/bin/python3 /path/to/cone_marker_viz_3d`
+
+### Kill procedure (run ALL of these)
+
+```bash
+# Each pkill must be a separate command — chaining with ; causes SSH exit code issues
+ssh utm "pkill -9 -f cone_marker_viz"
+ssh utm "pkill -9 -f 'ros2 launch'"
+ssh utm "pkill -9 -f 'ign gazebo'"
+ssh utm "pkill -9 -f parameter_bridge"
+ssh utm "pkill -9 -f perfect_perception"
+ssh utm "pkill -9 -f cone_follower"
+ssh utm "pkill -9 -f esp32_sim"
+ssh utm "pkill -9 -f ackermann_to_vel"
+ssh utm "pkill -9 -f camera_info_fix"
+ssh utm "pkill -9 -f dashboard"
+ssh utm "fuser -k 8080/tcp 2>/dev/null"
+```
+
+Wait 2-3 seconds, then verify:
+```bash
+ssh utm 'ps aux | grep -E "ign|kart" | grep -v grep | grep -v unattended | wc -l'
+# Must return 0
+```
+
+### Launch (single instance)
+
+```bash
+# Headless (no GUI) — most reliable for automated testing
+ssh utm 'nohup bash -c "source /opt/ros/humble/setup.bash && source ~/kart_brain/install/setup.bash && ros2 launch kart_bringup sim.launch.py" > /tmp/sim.log 2>&1 &'
+
+# With GUI (visible in UTM window) — slow, CPU rendering
+ssh utm 'DISPLAY=:0 nohup bash -c "source /opt/ros/humble/setup.bash && source ~/kart_brain/install/setup.bash && DISPLAY=:0 ros2 launch kart_bringup sim.launch.py gui:=true" > /tmp/sim_gui.log 2>&1 &'
+```
+
+### Launch files
+
+| Launch file | Package | What it runs |
+|---|---|---|
+| `simulation.launch.py` | `kart_sim` | Gazebo + bridge + perception + controller only |
+| `sim.launch.py` | `kart_bringup` | Above + esp32_sim + dashboard + cone_marker_viz |
+
+Use `sim.launch.py` for full stack (dashboard at port 8080). Use `simulation.launch.py` for Gazebo + control only.
+
+### Verifying it works
+
+```bash
+# Check kart position and cone visibility
+ssh utm 'grep "Published.*cones" /tmp/sim_gui.log | tail -3'
+# Should show "Published N cones  kart=(20.0,Y.Y)" with N > 0
+
+# Check dashboard is up
+curl -s http://192.168.64.3:8080/ | head -1
+# Should return HTML
 ```
 
 ## Kart Model Parameters
