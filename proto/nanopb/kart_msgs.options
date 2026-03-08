@@ -1,0 +1,3 @@
+# nanopb options — all messages are fixed-size (no dynamic allocation on ESP32)
+# No string or bytes fields, so no options needed currently.
+# This file exists for future extensibility.

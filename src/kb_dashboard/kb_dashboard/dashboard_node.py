@@ -18,7 +18,16 @@ from kb_interfaces.msg import Frame
 from sensor_msgs.msg import Imu
 from std_msgs.msg import String
 
-from kb_dashboard.protocol import DashboardState, decode_steering, decode_u8, decode_health
+from kb_dashboard.protocol import (
+    DashboardState,
+    decode_steering,
+    decode_steering_raw,
+    decode_speed,
+    decode_accel,
+    decode_braking,
+    decode_throttle,
+    decode_health,
+)
 from kb_dashboard.server import run_websocket_server
 
 
@@ -59,34 +68,31 @@ class DashboardNode(Node):
 
     def _on_esp_steering(self, msg: Frame):
         p = list(msg.payload)
-        rad = decode_steering(p)
-        self.state.update("esp32_steering_rad", rad)
-        if len(p) >= 4:
-            raw = (p[2] << 8) | p[3]
-            self.state.update("esp32_steering_raw", raw)
+        angle_rad, raw_encoder = decode_steering_raw(p)
+        self.state.update("esp32_steering_rad", angle_rad)
+        if raw_encoder:
+            self.state.update("esp32_steering_raw", raw_encoder)
             now = self.get_clock().now().nanoseconds
             if not hasattr(self, '_last_steer_log') or now - self._last_steer_log > 500_000_000:
                 self._last_steer_log = now
-                self.get_logger().warn(f"STEER deg={rad*180/3.14159:.1f}  raw={raw}")
+                self.get_logger().warn(f"STEER deg={angle_rad*180/3.14159:.1f}  raw={raw_encoder}")
 
     def _on_esp_speed(self, msg: Frame):
         if msg.payload:
-            self.state.update("esp32_speed", decode_steering(list(msg.payload)))
+            self.state.update("esp32_speed", decode_speed(list(msg.payload)))
 
     def _on_esp_accel(self, msg: Frame):
-        # Acceleration frame: 4 bytes = lat(int16) + lon(int16), both rad*1000 encoding
         p = list(msg.payload)
-        if len(p) >= 4:
-            self.state.update("esp32_accel_lat", decode_steering(p[0:2]))
-            self.state.update("esp32_accel_lon", decode_steering(p[2:4]))
-        elif len(p) >= 2:
-            self.state.update("esp32_accel_lon", decode_steering(p[0:2]))
+        if p:
+            lat, lon = decode_accel(p)
+            self.state.update("esp32_accel_lat", lat)
+            self.state.update("esp32_accel_lon", lon)
 
     def _on_esp_throttle(self, msg: Frame):
-        self.state.update("esp32_throttle", decode_u8(list(msg.payload)) / 255.0)
+        self.state.update("esp32_throttle", decode_throttle(list(msg.payload)))
 
     def _on_esp_braking(self, msg: Frame):
-        self.state.update("esp32_braking", decode_u8(list(msg.payload)) / 255.0)
+        self.state.update("esp32_braking", decode_braking(list(msg.payload)))
 
     def _on_zed_imu(self, msg: Imu):
         # ZED2 ROS2 wrapper uses REP-103: x=forward, y=left, z=up
@@ -99,10 +105,10 @@ class DashboardNode(Node):
             self.state.update(k, v)
 
     def _on_orin_throttle(self, msg: Frame):
-        self.state.update("orin_cmd_throttle", decode_u8(list(msg.payload)))
+        self.state.update("orin_cmd_throttle", decode_throttle(list(msg.payload)))
 
     def _on_orin_brake(self, msg: Frame):
-        self.state.update("orin_cmd_brake", decode_u8(list(msg.payload)))
+        self.state.update("orin_cmd_brake", decode_throttle(list(msg.payload)))
 
     def _on_orin_steering(self, msg: Frame):
         self.state.update("orin_cmd_steering_rad", decode_steering(list(msg.payload)))

@@ -1,12 +1,23 @@
-"""Round-trip tests for encode/decode protocol functions."""
-import struct
+"""Round-trip tests for protobuf-based encode/decode protocol functions."""
 
 from kb_dashboard.protocol import (
     decode_steering,
-    decode_u8,
+    decode_steering_raw,
+    decode_speed,
+    decode_accel,
+    decode_braking,
+    decode_throttle,
     decode_health,
-    encode_int16_be,
-    encode_u8,
+    decode_heartbeat,
+    encode_steering,
+    encode_throttle,
+    encode_braking,
+    encode_act_steering,
+    encode_act_speed,
+    encode_act_accel,
+    encode_act_braking,
+    encode_act_throttle,
+    encode_heartbeat,
     encode_health,
     ESP_ACT_SPEED,
     ESP_ACT_ACCELERATION,
@@ -20,132 +31,139 @@ from kb_dashboard.protocol import (
 )
 
 
-# ── encode_int16_be ──────────────────────────────────────────────────
+# ── Steering round-trip (Orin → ESP32: TargSteering) ────────────────
 
-class TestEncodeInt16Be:
-    def test_zero(self):
-        assert encode_int16_be(0.0) == [0, 0]
-
-    def test_positive(self):
-        result = encode_int16_be(0.25)
-        assert result == list(struct.pack(">h", 250))
-
-    def test_negative(self):
-        result = encode_int16_be(-0.5)
-        assert result == list(struct.pack(">h", -500))
-
-    def test_clamp_high(self):
-        result = encode_int16_be(100.0)
-        assert result == list(struct.pack(">h", 32767))
-
-    def test_clamp_low(self):
-        result = encode_int16_be(-100.0)
-        assert result == list(struct.pack(">h", -32768))
-
-    def test_two_bytes(self):
-        assert len(encode_int16_be(1.0)) == 2
-
-
-# ── encode_u8 ────────────────────────────────────────────────────────
-
-class TestEncodeU8:
-    def test_zero(self):
-        assert encode_u8(0.0) == [0]
-
-    def test_one(self):
-        assert encode_u8(1.0) == [255]
-
-    def test_mid(self):
-        assert encode_u8(0.5) == [127]
-
-    def test_clamp_high(self):
-        assert encode_u8(2.0) == [255]
-
-    def test_clamp_low(self):
-        assert encode_u8(-1.0) == [0]
-
-
-# ── Steering round-trip ──────────────────────────────────────────────
-
-class TestSteeringRoundTrip:
+class TestSteeringCommandRoundTrip:
     def _roundtrip(self, value):
-        encoded = encode_int16_be(value)
+        encoded = encode_steering(value)
         return decode_steering(encoded)
 
     def test_zero(self):
+        # Proto omits zero-valued fields, decode returns 0.0 default
         assert self._roundtrip(0.0) == 0.0
 
     def test_positive(self):
-        assert abs(self._roundtrip(0.25) - 0.25) < 0.001
+        assert abs(self._roundtrip(0.25) - 0.25) < 1e-6
 
     def test_negative(self):
-        assert abs(self._roundtrip(-0.5) - (-0.5)) < 0.001
+        assert abs(self._roundtrip(-0.5) - (-0.5)) < 1e-6
 
     def test_small(self):
-        assert abs(self._roundtrip(0.001) - 0.001) < 0.001
+        assert abs(self._roundtrip(0.001) - 0.001) < 1e-6
 
     def test_large(self):
-        assert abs(self._roundtrip(1.5) - 1.5) < 0.001
+        assert abs(self._roundtrip(1.5) - 1.5) < 1e-6
+
+
+# ── Steering feedback (ESP32 → Orin: ActSteering) ──────────────────
+
+class TestSteeringFeedbackRoundTrip:
+    def test_angle_only(self):
+        payload = encode_act_steering(0.3)
+        angle, raw = decode_steering_raw(payload)
+        assert abs(angle - 0.3) < 1e-6
+        assert raw == 0
 
     def test_with_raw_encoder(self):
-        """Full 4-byte steering payload: int16 angle + uint16 raw encoder."""
         angle = 0.3
         raw_encoder = 2048 + int(angle * 650)
-        payload = encode_int16_be(angle) + [(raw_encoder >> 8) & 0xFF, raw_encoder & 0xFF]
-        assert len(payload) == 4
-        decoded_angle = decode_steering(payload)
-        assert abs(decoded_angle - angle) < 0.001
+        payload = encode_act_steering(angle, raw_encoder)
+        decoded_angle, decoded_raw = decode_steering_raw(payload)
+        assert abs(decoded_angle - angle) < 1e-6
+        assert decoded_raw == raw_encoder
+
+    def test_negative_angle(self):
+        payload = encode_act_steering(-0.15, 1900)
+        angle, raw = decode_steering_raw(payload)
+        assert abs(angle - (-0.15)) < 1e-6
+        assert raw == 1900
+
+    def test_decode_steering_returns_angle(self):
+        """decode_steering (single return) still works."""
+        payload = encode_act_steering(0.42, 2500)
+        assert abs(decode_steering(payload) - 0.42) < 1e-6
 
 
 # ── Speed round-trip ─────────────────────────────────────────────────
 
 class TestSpeedRoundTrip:
     def test_zero(self):
-        assert decode_steering(encode_int16_be(0.0)) == 0.0
+        assert decode_speed(encode_act_speed(0.0)) == 0.0
 
     def test_positive(self):
-        assert abs(decode_steering(encode_int16_be(5.0)) - 5.0) < 0.001
+        assert abs(decode_speed(encode_act_speed(5.0)) - 5.0) < 1e-6
 
     def test_negative(self):
-        assert abs(decode_steering(encode_int16_be(-2.5)) - (-2.5)) < 0.001
+        assert abs(decode_speed(encode_act_speed(-2.5)) - (-2.5)) < 1e-6
 
 
 # ── Acceleration round-trip ──────────────────────────────────────────
 
 class TestAccelerationRoundTrip:
-    def test_lat_lon_payload(self):
+    def test_lat_lon(self):
         lat, lon = 1.5, -0.8
-        payload = encode_int16_be(lat) + encode_int16_be(lon)
-        assert len(payload) == 4
-        decoded_lat = decode_steering(payload[:2])
-        decoded_lon = decode_steering(payload[2:4])
-        assert abs(decoded_lat - lat) < 0.001
-        assert abs(decoded_lon - lon) < 0.001
+        payload = encode_act_accel(lat, lon)
+        d_lat, d_lon = decode_accel(payload)
+        assert abs(d_lat - lat) < 1e-6
+        assert abs(d_lon - lon) < 1e-6
 
     def test_zero_accel(self):
-        payload = encode_int16_be(0.0) + encode_int16_be(0.0)
-        assert decode_steering(payload[:2]) == 0.0
-        assert decode_steering(payload[2:4]) == 0.0
+        d_lat, d_lon = decode_accel(encode_act_accel(0.0, 0.0))
+        assert d_lat == 0.0
+        assert d_lon == 0.0
 
 
 # ── Throttle/Braking round-trip ──────────────────────────────────────
 
-class TestThrottleBrakingRoundTrip:
+class TestThrottleRoundTrip:
     def _roundtrip(self, value):
-        encoded = encode_u8(value)
-        return decode_u8(encoded) / 255.0
+        return decode_throttle(encode_throttle(value))
 
     def test_zero(self):
         assert self._roundtrip(0.0) == 0.0
 
     def test_full(self):
-        assert self._roundtrip(1.0) == 1.0
+        assert abs(self._roundtrip(1.0) - 1.0) < 1e-6
 
     def test_mid(self):
-        assert abs(self._roundtrip(0.5) - 0.5) < 0.005
+        assert abs(self._roundtrip(0.5) - 0.5) < 1e-6
 
     def test_quarter(self):
-        assert abs(self._roundtrip(0.25) - 0.25) < 0.005
+        assert abs(self._roundtrip(0.25) - 0.25) < 1e-6
+
+
+class TestBrakingRoundTrip:
+    def _roundtrip(self, value):
+        return decode_braking(encode_braking(value))
+
+    def test_zero(self):
+        assert self._roundtrip(0.0) == 0.0
+
+    def test_full(self):
+        assert abs(self._roundtrip(1.0) - 1.0) < 1e-6
+
+    def test_mid(self):
+        assert abs(self._roundtrip(0.5) - 0.5) < 1e-6
+
+
+class TestActThrottleBrakingRoundTrip:
+    """ESP32 → Orin feedback for throttle/braking."""
+
+    def test_throttle_feedback(self):
+        assert abs(decode_throttle(encode_act_throttle(0.75)) - 0.75) < 1e-6
+
+    def test_braking_feedback(self):
+        assert abs(decode_braking(encode_act_braking(0.3)) - 0.3) < 1e-6
+
+
+# ── Heartbeat round-trip ─────────────────────────────────────────────
+
+class TestHeartbeatRoundTrip:
+    def test_zero(self):
+        assert decode_heartbeat(encode_heartbeat(0)) == 0
+
+    def test_nonzero(self):
+        assert decode_heartbeat(encode_heartbeat(12345)) == 12345
 
 
 # ── Health round-trip ────────────────────────────────────────────────
@@ -185,6 +203,25 @@ class TestHealthRoundTrip:
         payload = encode_health(True, True, True, 50, 65535, 0)
         result = decode_health(payload)
         assert result["health_heap_kb"] == 65535
+
+
+# ── Float precision ──────────────────────────────────────────────────
+
+class TestFloatPrecision:
+    """Protobuf uses IEEE 754 float32, which is lossless for these ranges
+    (unlike the old int16×1000 encoding that had ±0.001 quantization)."""
+
+    def test_steering_exact(self):
+        """Proto float is exact for values representable in float32."""
+        val = 0.123456789
+        decoded = decode_steering(encode_steering(val))
+        # float32 precision: ~7 decimal digits
+        assert abs(decoded - val) < 1e-6
+
+    def test_no_clamping_needed(self):
+        """Proto float handles the full float32 range, no clamping needed."""
+        for val in [0.001, 0.5, 1.0, 10.0, -10.0, 32.0]:
+            assert abs(decode_steering(encode_steering(val)) - val) < 1e-5
 
 
 # ── Frame type constants ─────────────────────────────────────────────

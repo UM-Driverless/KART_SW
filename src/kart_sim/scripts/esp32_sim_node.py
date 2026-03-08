@@ -4,15 +4,20 @@
 Replaces kb_coms_micro in simulation: reads Gazebo odom and publishes
 the same /esp32/* Frame topics that the real ESP32 would produce.
 """
-import struct
-import math
-
 import rclpy
 from rclpy.node import Node
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Twist
 from kb_interfaces.msg import Frame
-from kb_dashboard.protocol import encode_int16_be, encode_u8
+from kb_dashboard.protocol import (
+    encode_act_steering,
+    encode_act_speed,
+    encode_act_accel,
+    encode_act_braking,
+    encode_act_throttle,
+    encode_heartbeat,
+    encode_health,
+)
 
 
 class Esp32SimNode(Node):
@@ -77,7 +82,7 @@ class Esp32SimNode(Node):
     def _publish_heartbeat(self):
         msg = Frame()
         msg.type = Frame.ESP_HEARTBEAT
-        msg.payload = []
+        msg.payload = encode_heartbeat()
         self.pub_heartbeat.publish(msg)
 
     def _publish_telemetry(self):
@@ -85,46 +90,44 @@ class Esp32SimNode(Node):
         accel_lat = getattr(self, "_accel_lat", 0.0)
         accel_lon = getattr(self, "_accel_lon", 0.0)
 
-        # Steering: int16 BE rad*1000 + raw encoder value (fake 2048 = center)
+        # Steering: protobuf ActSteering with angle + fake raw encoder
         steer_msg = Frame()
         steer_msg.type = Frame.ESP_ACT_STEERING
         raw_encoder = 2048 + int(self._steer_angle * 650)  # fake AS5600-like value
-        steer_msg.payload = encode_int16_be(self._steer_angle) + [
-            (raw_encoder >> 8) & 0xFF,
-            raw_encoder & 0xFF,
-        ]
+        steer_msg.payload = encode_act_steering(self._steer_angle, raw_encoder)
         self.pub_steering.publish(steer_msg)
 
-        # Speed: int16 BE rad*1000 (reuses same encoding)
+        # Speed: protobuf ActSpeed
         speed_msg = Frame()
         speed_msg.type = Frame.ESP_ACT_SPEED
-        speed_msg.payload = encode_int16_be(speed)
+        speed_msg.payload = encode_act_speed(speed)
         self.pub_speed.publish(speed_msg)
 
-        # Acceleration: lat(int16) + lon(int16)
+        # Acceleration: protobuf ActAcceleration
         accel_msg = Frame()
         accel_msg.type = Frame.ESP_ACT_ACCELERATION
-        accel_msg.payload = encode_int16_be(accel_lat) + encode_int16_be(accel_lon)
+        accel_msg.payload = encode_act_accel(accel_lat, accel_lon)
         self.pub_accel.publish(accel_msg)
 
-        # Throttle: uint8
+        # Throttle: protobuf TargThrottle (reused for sim feedback)
         throttle_msg = Frame()
-        throttle_msg.type = 0x00  # sim-only: no real ESP throttle type, dashboard routes by topic
-        throttle_msg.payload = encode_u8(self._throttle)
+        throttle_msg.type = 0x00  # sim-only: dashboard routes by topic
+        throttle_msg.payload = encode_act_throttle(self._throttle)
         self.pub_throttle.publish(throttle_msg)
 
-        # Braking: uint8
+        # Braking: protobuf ActBraking
         brake_msg = Frame()
         brake_msg.type = Frame.ESP_ACT_BRAKING
-        brake_msg.payload = encode_u8(self._brake)
+        brake_msg.payload = encode_act_braking(self._brake)
         self.pub_braking.publish(brake_msg)
 
     def _publish_health(self):
         msg = Frame()
-        msg.type = 0x0B  # ESP_HEALTH_STATUS (may not be in older kb_interfaces builds)
-        # flags: magnet_ok | i2c_ok | heap_ok = 0x07
-        # agc=50, heap=200KB, errors=0
-        msg.payload = [0x07, 50, 0x00, 200, 0]
+        msg.type = 0x0B  # ESP_HEALTH_STATUS
+        msg.payload = encode_health(
+            magnet_ok=True, i2c_ok=True, heap_ok=True,
+            agc=50, heap_kb=200, i2c_errors=0,
+        )
         self.pub_health.publish(msg)
 
 

@@ -1,4 +1,11 @@
 # TODO
+## Protobuf Migration (`refactor/nanopb-protocol`)
+
+**Python side done** — `protocol.py`, `cmd_vel_bridge_node.py`, `esp32_sim_node.py`, `dashboard_node.py` all use protobuf. 64 tests pass.
+
+- [ ] **Validate with hardware**: flash ESP32 (old firmware still uses manual encoding — won't work until C side is updated), run sim pipeline to verify dashboard end-to-end
+- [ ] **Merge branch** once validated
+- [ ] **kart_medulla C side** (see ESP32 Firmware section below)
 
 ## Immediate — Steering Debug (2026-03-07)
 
@@ -24,6 +31,14 @@
 
 ## ESP32 Firmware
 
+- [ ] **nanopb migration** — update kart_medulla to use protobuf payloads:
+  - [ ] Add nanopb as ESP-IDF component (`components/nanopb/`)
+  - [ ] Create `components/km_proto/` with generated `kart_msgs.pb.{c,h}` + wrapper functions
+  - [ ] `km_coms.c`: replace manual byte extraction in `KM_COMS_ProccessPayload()` with `pb_decode`
+  - [ ] `main.c`: replace manual byte packing in `control_task()`/`heartbeat_task()` with `pb_encode`
+  - [ ] `km_objects.h/.c`: change value type from `int64_t` to `float` (eliminates ×1000 scaling)
+  - [ ] Update `test_main.c` with proto round-trip tests
+  - [ ] Verify nanopb flash/RAM usage is acceptable
 - [ ] **outputLimit fix deployed** — verify clamp works by sending a target beyond limit
 - [ ] **Recalibrate steering more precisely** — current offset gives ~-5° when straight
 - [ ] **Steering gears are broken** — teeth stripped, limited range. Needs physical replacement.

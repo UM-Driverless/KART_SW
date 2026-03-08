@@ -1,11 +1,22 @@
 """Unit tests for payload decoding and DashboardState."""
-import struct
 import time
 import threading
 
 from kb_dashboard.protocol import (
     decode_steering,
-    decode_u8,
+    decode_steering_raw,
+    decode_speed,
+    decode_accel,
+    decode_throttle,
+    decode_braking,
+    decode_health,
+    encode_steering,
+    encode_act_steering,
+    encode_act_speed,
+    encode_act_accel,
+    encode_throttle,
+    encode_braking,
+    encode_health,
     DashboardState,
     MISSIONS,
 )
@@ -15,54 +26,76 @@ from kb_dashboard.protocol import (
 
 class TestDecodeSteering:
     def test_zero(self):
-        assert decode_steering([0, 0]) == 0.0
+        # Empty proto (all defaults) → 0.0
+        assert decode_steering(encode_steering(0.0)) == 0.0
 
     def test_positive(self):
-        # 0.25 rad → 250 → 0x00, 0xFA
-        payload = list(struct.pack(">h", 250))
-        assert abs(decode_steering(payload) - 0.25) < 1e-6
+        assert abs(decode_steering(encode_steering(0.25)) - 0.25) < 1e-6
 
     def test_negative(self):
-        # -0.5 rad → -500
-        payload = list(struct.pack(">h", -500))
-        assert abs(decode_steering(payload) - (-0.5)) < 1e-6
-
-    def test_max_positive(self):
-        payload = list(struct.pack(">h", 32767))
-        assert abs(decode_steering(payload) - 32.767) < 1e-6
-
-    def test_max_negative(self):
-        payload = list(struct.pack(">h", -32768))
-        assert abs(decode_steering(payload) - (-32.768)) < 1e-6
+        assert abs(decode_steering(encode_steering(-0.5)) - (-0.5)) < 1e-6
 
     def test_empty_payload(self):
+        # Empty bytes = all defaults
         assert decode_steering([]) == 0.0
+        assert decode_steering(b"") == 0.0
 
-    def test_single_byte(self):
-        assert decode_steering([0x01]) == 0.0
+    def test_act_steering_angle(self):
+        """decode_steering works on ActSteering payloads too (reads angle_rad field 1)."""
+        payload = encode_act_steering(0.42, 2500)
+        # ActSteering uses field 1 for angle_rad, same as TargSteering
+        # But they're different message types — decode_steering uses ActSteering
+        angle = decode_steering(payload)
+        assert abs(angle - 0.42) < 1e-6
 
-    def test_extra_bytes_ignored(self):
-        payload = list(struct.pack(">h", 1000)) + [0xFF, 0xFF]
-        assert abs(decode_steering(payload) - 1.0) < 1e-6
+
+# ── decode with raw encoder ──────────────────────────────────────────
+
+class TestDecodeSteeringRaw:
+    def test_with_encoder(self):
+        payload = encode_act_steering(0.3, 2243)
+        angle, raw = decode_steering_raw(payload)
+        assert abs(angle - 0.3) < 1e-6
+        assert raw == 2243
+
+    def test_without_encoder(self):
+        payload = encode_act_steering(0.1)
+        angle, raw = decode_steering_raw(payload)
+        assert abs(angle - 0.1) < 1e-6
+        assert raw == 0
 
 
-# ── decode_u8 ─────────────────────────────────────────────────────────
+# ── decode_speed ─────────────────────────────────────────────────────
 
-class TestDecodeU8:
+class TestDecodeSpeed:
+    def test_positive(self):
+        assert abs(decode_speed(encode_act_speed(3.5)) - 3.5) < 1e-6
+
     def test_zero(self):
-        assert decode_u8([0]) == 0
+        assert decode_speed(encode_act_speed(0.0)) == 0.0
 
-    def test_max(self):
-        assert decode_u8([255]) == 255
 
-    def test_mid(self):
-        assert decode_u8([128]) == 128
+# ── decode_accel ─────────────────────────────────────────────────────
 
-    def test_empty(self):
-        assert decode_u8([]) == 0
+class TestDecodeAccel:
+    def test_values(self):
+        lat, lon = decode_accel(encode_act_accel(1.5, -0.8))
+        assert abs(lat - 1.5) < 1e-6
+        assert abs(lon - (-0.8)) < 1e-6
 
-    def test_extra_bytes(self):
-        assert decode_u8([42, 99, 200]) == 42
+
+# ── decode_throttle / decode_braking ─────────────────────────────────
+
+class TestDecodeEffort:
+    def test_throttle(self):
+        assert abs(decode_throttle(encode_throttle(0.75)) - 0.75) < 1e-6
+
+    def test_braking(self):
+        assert abs(decode_braking(encode_braking(0.3)) - 0.3) < 1e-6
+
+    def test_zero(self):
+        assert decode_throttle(encode_throttle(0.0)) == 0.0
+        assert decode_braking(encode_braking(0.0)) == 0.0
 
 
 # ── DashboardState ────────────────────────────────────────────────────

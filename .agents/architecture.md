@@ -163,21 +163,28 @@ Frame format: `| SOF (0xAA) | LEN | TYPE | PAYLOAD | CRC8 |`
 - UART0 @ **115200** baud (CP2102 USB bridge — max reliable flash/runtime baud for CP2102)
 - Comms task: **20 Hz**, Control task: **10 Hz**, Heartbeat: **1 Hz**
 
-**Steering encoding**: int16 big-endian, value = radians × 1000.
-- Example: 0.25 rad → 250 → payload `[0x00, 0xFA]`
-- Range: -32.768 to +32.767 rad (far exceeds physical limits)
-
-**Throttle/brake encoding**: single byte, 0-255 = % of max effort (maps to 8-bit DAC).
+**Payload encoding**: protobuf (nanopb on ESP32, standard protobuf on Orin Python).
+- Proto definitions: `proto/kart_msgs.proto`
+- Python bindings: `src/kb_dashboard/kb_dashboard/generated/kart_msgs_pb2.py`
+- C bindings (for ESP32): `proto/generated_c/kart_msgs.pb.{c,h}`
+- Generate all: `bash proto/generate.sh`
+- All values use native float — no manual scaling (×1000, ×255) needed.
+- Framing (SOF/LEN/TYPE/CRC) and TYPE byte values are unchanged.
 
 Key message types (ESP32 → Orin):
-- `ESP_HEARTBEAT` (0x08): 4-byte payload `[0xDE, 0xAD, 0xBE, 0xEF]`, 1 Hz
-- `ESP_ACT_STEERING` (0x04): 2-byte int16 rad×1000 feedback, 100 Hz
+- `ESP_ACT_SPEED` (0x01): `ActSpeed { float speed_mps }`
+- `ESP_ACT_ACCELERATION` (0x02): `ActAcceleration { float lateral_mps2, longitudinal_mps2 }`
+- `ESP_ACT_BRAKING` (0x03): `ActBraking { float effort }`
+- `ESP_ACT_STEERING` (0x04): `ActSteering { float angle_rad, uint32 raw_encoder }`
+- `ESP_HEARTBEAT` (0x08): `Heartbeat { uint32 uptime_ms }`
+- `ESP_HEALTH_STATUS` (0x0B): `HealthStatus { bool magnet_ok, i2c_ok, heap_ok; uint32 agc, heap_kb, i2c_errors }`
 
 Key message types (Orin → ESP32):
-- `ORIN_TARG_THROTTLE` (0x20): 1-byte effort 0-255
-- `ORIN_TARG_BRAKING` (0x21): 1-byte effort 0-255
-- `ORIN_TARG_STEERING` (0x22): 2-byte int16 rad×1000 target
-- `ORIN_COMPLETE` (0x27): 7 bytes (throttle, brake, steering×2, mission, state, shutdown)
+- `ORIN_TARG_THROTTLE` (0x20): `TargThrottle { float effort }` (0.0-1.0)
+- `ORIN_TARG_BRAKING` (0x21): `TargBraking { float effort }` (0.0-1.0)
+- `ORIN_TARG_STEERING` (0x22): `TargSteering { float angle_rad }`
+- `ORIN_COMPLETE` (0x27): `OrinComplete { float throttle, braking, steering_rad; uint32 mission, machine_state; bool shutdown }`
+- `ORIN_CALIBRATE_STEERING` (0x28): `CalibrateSteering { uint32 center_offset }`
 
 ## Message Types
 
@@ -187,11 +194,11 @@ Key message types (Orin → ESP32):
 | `/perception/cones_3d` | `vision_msgs/Detection3DArray` | 3D position, class_id, score |
 | `/perception/yolo/annotated` | `sensor_msgs/Image` | Camera feed with YOLO bounding boxes (view with rqt_image_view) |
 | `/kart/cmd_vel` | `geometry_msgs/Twist` | linear.x (speed), angular.z (steering rad) |
-| `/orin/steering` | `kb_interfaces/Frame` | Steering target frame (int16 BE, rad×1000) |
-| `/orin/throttle` | `kb_interfaces/Frame` | Throttle target frame (u8, 0-255) |
-| `/orin/brake` | `kb_interfaces/Frame` | Brake target frame (u8, 0-255) |
-| `/esp32/steering` | `kb_interfaces/Frame` | Steering feedback from ESP32 |
-| `/esp32/heartbeat` | `kb_interfaces/Frame` | ESP32 heartbeat |
+| `/orin/steering` | `kb_interfaces/Frame` | Steering target (protobuf TargSteering) |
+| `/orin/throttle` | `kb_interfaces/Frame` | Throttle target (protobuf TargThrottle) |
+| `/orin/brake` | `kb_interfaces/Frame` | Brake target (protobuf TargBraking) |
+| `/esp32/steering` | `kb_interfaces/Frame` | Steering feedback (protobuf ActSteering) |
+| `/esp32/heartbeat` | `kb_interfaces/Frame` | ESP32 heartbeat (protobuf Heartbeat) |
 | `/model/kart/odometry` | `nav_msgs/Odometry` | pose (position + orientation), twist |
 | Camera topics | `sensor_msgs/Image` | RGB 640x360, Depth 32FC1 |
 | `/zed/.../camera_info` | `sensor_msgs/CameraInfo` | Intrinsics (fx, fy, cx, cy) |

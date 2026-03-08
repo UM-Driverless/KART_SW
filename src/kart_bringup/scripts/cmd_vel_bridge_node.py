@@ -5,16 +5,14 @@ Subscribes to /kart/cmd_vel (Twist) and publishes kb_interfaces/Frame
 messages on /orin/throttle, /orin/brake, /orin/steering — the topics
 that kb_coms_micro subscribes to and relays over UART to the ESP32.
 
-Payload encoding (matches ESP32 km_coms.c KM_COMS_ProccessPayload):
-  - ORIN_TARG_THROTTLE (0x20): payload[0] = u8 [0, 255]
-  - ORIN_TARG_BRAKING  (0x21): payload[0] = u8 [0, 255]
-  - ORIN_TARG_STEERING (0x22): int16 big-endian, radians × 1000
+Payload encoding: protobuf (TargThrottle, TargBraking, TargSteering).
 """
 
 import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Twist
 from kb_interfaces.msg import Frame
+from kb_dashboard.protocol import encode_steering, encode_throttle, encode_braking
 
 
 class CmdVelBridgeNode(Node):
@@ -38,9 +36,9 @@ class CmdVelBridgeNode(Node):
 
         self.sub = self.create_subscription(Twist, in_topic, self._on_cmd, 10)
 
-        self._throttle = 0
-        self._brake = 0
-        self._steer_i16 = 0
+        self._throttle_effort = 0.0
+        self._brake_effort = 0.0
+        self._steer_rad = 0.0
 
         self.timer = self.create_timer(1.0 / rate, self._send_frames)
         self.get_logger().info(f"CmdVelBridge: {in_topic} @ {rate} Hz")
@@ -51,32 +49,27 @@ class CmdVelBridgeNode(Node):
 
         # Throttle / brake from speed
         if speed >= 0:
-            self._throttle = int(min(1.0, speed / self.max_speed) * 255.0)
-            self._brake = 0
+            self._throttle_effort = min(1.0, speed / self.max_speed)
+            self._brake_effort = 0.0
         else:
-            self._throttle = 0
-            self._brake = int(min(1.0, -speed / self.max_speed) * 255.0)
+            self._throttle_effort = 0.0
+            self._brake_effort = min(1.0, -speed / self.max_speed)
 
-        # Steering: signed int16, radians × 1000, big-endian
-        steer_clamped = max(-self.max_steer, min(self.max_steer, steer))
-        steer_i16 = int(steer_clamped * 1000.0)
-        self._steer_i16 = max(-32768, min(32767, steer_i16))
+        # Steering: clamp to max_steer
+        self._steer_rad = max(-self.max_steer, min(self.max_steer, steer))
 
     def _send_frames(self):
         throttle_frame = Frame()
         throttle_frame.type = Frame.ORIN_TARG_THROTTLE
-        throttle_frame.payload = [self._throttle]
+        throttle_frame.payload = encode_throttle(self._throttle_effort)
 
         brake_frame = Frame()
         brake_frame.type = Frame.ORIN_TARG_BRAKING
-        brake_frame.payload = [self._brake]
+        brake_frame.payload = encode_braking(self._brake_effort)
 
         steer_frame = Frame()
         steer_frame.type = Frame.ORIN_TARG_STEERING
-        steer_frame.payload = [
-            (self._steer_i16 >> 8) & 0xFF,
-            self._steer_i16 & 0xFF,
-        ]
+        steer_frame.payload = encode_steering(self._steer_rad)
 
         self.throttle_pub.publish(throttle_frame)
         self.brake_pub.publish(brake_frame)
