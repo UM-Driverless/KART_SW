@@ -84,8 +84,8 @@ async def run_websocket_server(state: DashboardState, node, port: int, ready_cal
         """Handle incoming WebSocket frames (commands from browser)."""
         while True:
             try:
-                header = await asyncio.wait_for(reader.readexactly(2), timeout=30.0)
-            except (asyncio.TimeoutError, asyncio.IncompleteReadError, ConnectionError):
+                header = await reader.readexactly(2)
+            except (asyncio.IncompleteReadError, ConnectionError, OSError):
                 break
 
             opcode = header[0] & 0x0F
