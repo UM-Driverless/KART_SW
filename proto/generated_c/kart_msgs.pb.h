@@ -62,10 +62,6 @@ typedef struct _kart_OrinComplete {
     bool shutdown;
 } kart_OrinComplete;
 
-typedef struct _kart_CalibrateSteering {
-    uint32_t center_offset;
-} kart_CalibrateSteering;
-
 
 #ifdef __cplusplus
 extern "C" {
@@ -82,7 +78,6 @@ extern "C" {
 #define kart_TargBraking_init_default            {0}
 #define kart_TargSteering_init_default           {0}
 #define kart_OrinComplete_init_default           {0, 0, 0, 0, 0, 0}
-#define kart_CalibrateSteering_init_default      {0}
 #define kart_ActSpeed_init_zero                  {0}
 #define kart_ActAcceleration_init_zero           {0, 0}
 #define kart_ActBraking_init_zero                {0}
@@ -93,7 +88,6 @@ extern "C" {
 #define kart_TargBraking_init_zero               {0}
 #define kart_TargSteering_init_zero              {0}
 #define kart_OrinComplete_init_zero              {0, 0, 0, 0, 0, 0}
-#define kart_CalibrateSteering_init_zero         {0}
 
 /* Field tags (for use in manual encoding/decoding) */
 #define kart_ActSpeed_speed_mps_tag              1
@@ -118,7 +112,6 @@ extern "C" {
 #define kart_OrinComplete_mission_tag            4
 #define kart_OrinComplete_machine_state_tag      5
 #define kart_OrinComplete_shutdown_tag           6
-#define kart_CalibrateSteering_center_offset_tag 1
 
 /* Struct field encoding specification for nanopb */
 #define kart_ActSpeed_FIELDLIST(X, a) \
@@ -183,11 +176,6 @@ X(a, STATIC,   SINGULAR, BOOL,     shutdown,          6)
 #define kart_OrinComplete_CALLBACK NULL
 #define kart_OrinComplete_DEFAULT NULL
 
-#define kart_CalibrateSteering_FIELDLIST(X, a) \
-X(a, STATIC,   SINGULAR, UINT32,   center_offset,     1)
-#define kart_CalibrateSteering_CALLBACK NULL
-#define kart_CalibrateSteering_DEFAULT NULL
-
 extern const pb_msgdesc_t kart_ActSpeed_msg;
 extern const pb_msgdesc_t kart_ActAcceleration_msg;
 extern const pb_msgdesc_t kart_ActBraking_msg;
@@ -198,7 +186,6 @@ extern const pb_msgdesc_t kart_TargThrottle_msg;
 extern const pb_msgdesc_t kart_TargBraking_msg;
 extern const pb_msgdesc_t kart_TargSteering_msg;
 extern const pb_msgdesc_t kart_OrinComplete_msg;
-extern const pb_msgdesc_t kart_CalibrateSteering_msg;
 
 /* Defines for backwards compatibility with code written before nanopb-0.4.0 */
 #define kart_ActSpeed_fields &kart_ActSpeed_msg
@@ -211,7 +198,6 @@ extern const pb_msgdesc_t kart_CalibrateSteering_msg;
 #define kart_TargBraking_fields &kart_TargBraking_msg
 #define kart_TargSteering_fields &kart_TargSteering_msg
 #define kart_OrinComplete_fields &kart_OrinComplete_msg
-#define kart_CalibrateSteering_fields &kart_CalibrateSteering_msg
 
 /* Maximum encoded size of messages (where known) */
 #define KART_KART_MSGS_PB_H_MAX_SIZE             kart_OrinComplete_size
@@ -219,7 +205,6 @@ extern const pb_msgdesc_t kart_CalibrateSteering_msg;
 #define kart_ActBraking_size                     5
 #define kart_ActSpeed_size                       5
 #define kart_ActSteering_size                    11
-#define kart_CalibrateSteering_size              6
 #define kart_HealthStatus_size                   24
 #define kart_Heartbeat_size                      6
 #define kart_OrinComplete_size                   29

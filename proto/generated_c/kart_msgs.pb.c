@@ -36,7 +36,4 @@ PB_BIND(kart_TargSteering, kart_TargSteering, AUTO)
 PB_BIND(kart_OrinComplete, kart_OrinComplete, AUTO)
 
 
-PB_BIND(kart_CalibrateSteering, kart_CalibrateSteering, AUTO)
-
-
 

@@ -18,4 +18,3 @@ message TargBraking     { float effort = 1; }
 message TargSteering    { float angle_rad = 1; }
 message OrinComplete    { float throttle = 1; float braking = 2; float steering_rad = 3;
                           uint32 mission = 4; uint32 machine_state = 5; bool shutdown = 6; }
-message CalibrateSteering { uint32 center_offset = 1; }
