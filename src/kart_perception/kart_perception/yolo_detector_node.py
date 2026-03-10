@@ -27,6 +27,22 @@ CLASS_COLORS = {
 }
 DEFAULT_COLOR = (200, 200, 200)
 
+# Repo root: two levels up from this file's installed/source location.
+# Handles both `colcon build` installs and direct source execution.
+_REPO_ROOT = pathlib.Path(__file__).resolve().parents[4]  # .../src/kart_perception/kart_perception/file.py
+
+
+def _repo_relative(path_str: str) -> pathlib.Path:
+    """Resolve a path relative to the kart_brain repo root if not absolute."""
+    p = pathlib.Path(path_str)
+    if p.is_absolute():
+        return p
+    candidate = _REPO_ROOT / p
+    if candidate.exists():
+        return candidate
+    # Fallback: ~/kart_brain (works on all our machines)
+    return pathlib.Path.home() / "kart_brain" / p
+
 
 class YoloDetectorNode(Node):
     def __init__(self) -> None:
@@ -45,7 +61,7 @@ class YoloDetectorNode(Node):
         self.image_topic = str(self.get_parameter("image_topic").value)
         self.detections_topic = str(self.get_parameter("detections_topic").value)
         self.debug_image_topic = str(self.get_parameter("debug_image_topic").value)
-        self.weights_path = pathlib.Path(self.get_parameter("weights_path").value)
+        self.weights_path = _repo_relative(self.get_parameter("weights_path").value)
         self.conf_threshold = float(self.get_parameter("conf_threshold").value)
         self.iou_threshold = float(self.get_parameter("iou_threshold").value)
         self.imgsz = int(self.get_parameter("imgsz").value)
