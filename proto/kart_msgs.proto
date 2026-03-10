@@ -9,7 +9,9 @@ message ActBraking      { float effort = 1; }
 message ActSteering     { float angle_rad = 1; uint32 raw_encoder = 2; }
 message Heartbeat       { uint32 uptime_ms = 1; }
 message HealthStatus    { bool magnet_ok = 1; bool i2c_ok = 2; bool heap_ok = 3;
-                          uint32 agc = 4; uint32 heap_kb = 5; uint32 i2c_errors = 6; }
+                          uint32 agc = 4; uint32 heap_kb = 5; uint32 i2c_errors = 6;
+                          uint32 stack_comms = 7; uint32 stack_control = 8;
+                          uint32 stack_heartbeat = 9; uint32 stack_health = 10; }
 
 // ── Orin → ESP32 (commands) ─────────────────────────────────────────
 

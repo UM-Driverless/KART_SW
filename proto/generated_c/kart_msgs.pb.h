@@ -39,6 +39,10 @@ typedef struct _kart_HealthStatus {
     uint32_t agc;
     uint32_t heap_kb;
     uint32_t i2c_errors;
+    uint32_t stack_comms;
+    uint32_t stack_control;
+    uint32_t stack_heartbeat;
+    uint32_t stack_health;
 } kart_HealthStatus;
 
 typedef struct _kart_TargThrottle {
@@ -73,7 +77,7 @@ extern "C" {
 #define kart_ActBraking_init_default             {0}
 #define kart_ActSteering_init_default            {0, 0}
 #define kart_Heartbeat_init_default              {0}
-#define kart_HealthStatus_init_default           {0, 0, 0, 0, 0, 0}
+#define kart_HealthStatus_init_default           {0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
 #define kart_TargThrottle_init_default           {0}
 #define kart_TargBraking_init_default            {0}
 #define kart_TargSteering_init_default           {0}
@@ -83,7 +87,7 @@ extern "C" {
 #define kart_ActBraking_init_zero                {0}
 #define kart_ActSteering_init_zero               {0, 0}
 #define kart_Heartbeat_init_zero                 {0}
-#define kart_HealthStatus_init_zero              {0, 0, 0, 0, 0, 0}
+#define kart_HealthStatus_init_zero              {0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
 #define kart_TargThrottle_init_zero              {0}
 #define kart_TargBraking_init_zero               {0}
 #define kart_TargSteering_init_zero              {0}
@@ -103,6 +107,10 @@ extern "C" {
 #define kart_HealthStatus_agc_tag                4
 #define kart_HealthStatus_heap_kb_tag            5
 #define kart_HealthStatus_i2c_errors_tag         6
+#define kart_HealthStatus_stack_comms_tag        7
+#define kart_HealthStatus_stack_control_tag      8
+#define kart_HealthStatus_stack_heartbeat_tag    9
+#define kart_HealthStatus_stack_health_tag       10
 #define kart_TargThrottle_effort_tag             1
 #define kart_TargBraking_effort_tag              1
 #define kart_TargSteering_angle_rad_tag          1
@@ -147,7 +155,11 @@ X(a, STATIC,   SINGULAR, BOOL,     i2c_ok,            2) \
 X(a, STATIC,   SINGULAR, BOOL,     heap_ok,           3) \
 X(a, STATIC,   SINGULAR, UINT32,   agc,               4) \
 X(a, STATIC,   SINGULAR, UINT32,   heap_kb,           5) \
-X(a, STATIC,   SINGULAR, UINT32,   i2c_errors,        6)
+X(a, STATIC,   SINGULAR, UINT32,   i2c_errors,        6) \
+X(a, STATIC,   SINGULAR, UINT32,   stack_comms,       7) \
+X(a, STATIC,   SINGULAR, UINT32,   stack_control,     8) \
+X(a, STATIC,   SINGULAR, UINT32,   stack_heartbeat,   9) \
+X(a, STATIC,   SINGULAR, UINT32,   stack_health,     10)
 #define kart_HealthStatus_CALLBACK NULL
 #define kart_HealthStatus_DEFAULT NULL
 
@@ -200,12 +212,12 @@ extern const pb_msgdesc_t kart_OrinComplete_msg;
 #define kart_OrinComplete_fields &kart_OrinComplete_msg
 
 /* Maximum encoded size of messages (where known) */
-#define KART_KART_MSGS_PB_H_MAX_SIZE             kart_OrinComplete_size
+#define KART_KART_MSGS_PB_H_MAX_SIZE             kart_HealthStatus_size
 #define kart_ActAcceleration_size                10
 #define kart_ActBraking_size                     5
 #define kart_ActSpeed_size                       5
 #define kart_ActSteering_size                    11
-#define kart_HealthStatus_size                   24
+#define kart_HealthStatus_size                   48
 #define kart_Heartbeat_size                      6
 #define kart_OrinComplete_size                   29
 #define kart_TargBraking_size                    5

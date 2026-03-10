@@ -57,6 +57,7 @@ body { min-height: 100vh; -webkit-tap-highlight-color: transparent; }
   <span id="hI2c" title="I2C bus">I2C --</span>
   <span id="hHeap" title="Free heap">HEAP --</span>
   <span id="hAgc" title="AGC gain">AGC --</span>
+  <span id="hStk" title="Stack free bytes (min ever): comms/control/heartbeat/health">STK --</span>
 </div>
 <div id="app"></div>
 
@@ -832,7 +833,7 @@ function updateMissions(d) {
 
 function updateHealth(d) {
   const ok='#2ecc71', bad='#e74c3c', dim='#888';
-  const hm=$('hMag'), hi=$('hI2c'), hh=$('hHeap'), ha=$('hAgc');
+  const hm=$('hMag'), hi=$('hI2c'), hh=$('hHeap'), ha=$('hAgc'), hs=$('hStk');
   if (!hm) return;
   if (d.health_agc === undefined) return; // no health data yet
   hm.textContent = d.health_magnet_ok ? 'MAG OK' : 'MAG BAD';
@@ -843,6 +844,11 @@ function updateHealth(d) {
   hh.style.color = d.health_heap_ok ? dim : bad;
   ha.textContent = 'AGC '+d.health_agc;
   ha.style.color = (d.health_agc >= 20 && d.health_agc <= 235) ? dim : bad;
+  if (hs && d.stack_comms !== undefined) {
+    const vals = [d.stack_comms, d.stack_control, d.stack_heartbeat, d.stack_health];
+    hs.textContent = 'STK '+vals.join('/');
+    hs.style.color = vals.some(v => v < 200) ? bad : dim;
+  }
 }
 
 // G-G diagram for Default skin

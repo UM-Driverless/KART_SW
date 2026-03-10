@@ -95,6 +95,10 @@ def decode_health(payload) -> dict:
         "health_agc": msg.agc,
         "health_heap_kb": msg.heap_kb,
         "health_i2c_errors": msg.i2c_errors,
+        "stack_comms": msg.stack_comms,
+        "stack_control": msg.stack_control,
+        "stack_heartbeat": msg.stack_heartbeat,
+        "stack_health": msg.stack_health,
     }
 
 

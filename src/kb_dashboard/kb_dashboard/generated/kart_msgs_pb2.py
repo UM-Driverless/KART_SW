@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0fkart_msgs.proto\x12\x04kart\"\x1d\n\x08\x41\x63tSpeed\x12\x11\n\tspeed_mps\x18\x01 \x01(\x02\"B\n\x0f\x41\x63tAcceleration\x12\x14\n\x0clateral_mps2\x18\x01 \x01(\x02\x12\x19\n\x11longitudinal_mps2\x18\x02 \x01(\x02\"\x1c\n\nActBraking\x12\x0e\n\x06\x65\x66\x66ort\x18\x01 \x01(\x02\"5\n\x0b\x41\x63tSteering\x12\x11\n\tangle_rad\x18\x01 \x01(\x02\x12\x13\n\x0braw_encoder\x18\x02 \x01(\r\"\x1e\n\tHeartbeat\x12\x11\n\tuptime_ms\x18\x01 \x01(\r\"t\n\x0cHealthStatus\x12\x11\n\tmagnet_ok\x18\x01 \x01(\x08\x12\x0e\n\x06i2c_ok\x18\x02 \x01(\x08\x12\x0f\n\x07heap_ok\x18\x03 \x01(\x08\x12\x0b\n\x03\x61gc\x18\x04 \x01(\r\x12\x0f\n\x07heap_kb\x18\x05 \x01(\r\x12\x12\n\ni2c_errors\x18\x06 \x01(\r\"\x1e\n\x0cTargThrottle\x12\x0e\n\x06\x65\x66\x66ort\x18\x01 \x01(\x02\"\x1d\n\x0bTargBraking\x12\x0e\n\x06\x65\x66\x66ort\x18\x01 \x01(\x02\"!\n\x0cTargSteering\x12\x11\n\tangle_rad\x18\x01 \x01(\x02\"\x81\x01\n\x0cOrinComplete\x12\x10\n\x08throttle\x18\x01 \x01(\x02\x12\x0f\n\x07\x62raking\x18\x02 \x01(\x02\x12\x14\n\x0csteering_rad\x18\x03 \x01(\x02\x12\x0f\n\x07mission\x18\x04 \x01(\r\x12\x15\n\rmachine_state\x18\x05 \x01(\r\x12\x10\n\x08shutdown\x18\x06 \x01(\x08\x62\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0fkart_msgs.proto\x12\x04kart\"\x1d\n\x08\x41\x63tSpeed\x12\x11\n\tspeed_mps\x18\x01 \x01(\x02\"B\n\x0f\x41\x63tAcceleration\x12\x14\n\x0clateral_mps2\x18\x01 \x01(\x02\x12\x19\n\x11longitudinal_mps2\x18\x02 \x01(\x02\"\x1c\n\nActBraking\x12\x0e\n\x06\x65\x66\x66ort\x18\x01 \x01(\x02\"5\n\x0b\x41\x63tSteering\x12\x11\n\tangle_rad\x18\x01 \x01(\x02\x12\x13\n\x0braw_encoder\x18\x02 \x01(\r\"\x1e\n\tHeartbeat\x12\x11\n\tuptime_ms\x18\x01 \x01(\r\"\xcf\x01\n\x0cHealthStatus\x12\x11\n\tmagnet_ok\x18\x01 \x01(\x08\x12\x0e\n\x06i2c_ok\x18\x02 \x01(\x08\x12\x0f\n\x07heap_ok\x18\x03 \x01(\x08\x12\x0b\n\x03\x61gc\x18\x04 \x01(\r\x12\x0f\n\x07heap_kb\x18\x05 \x01(\r\x12\x12\n\ni2c_errors\x18\x06 \x01(\r\x12\x13\n\x0bstack_comms\x18\x07 \x01(\r\x12\x15\n\rstack_control\x18\x08 \x01(\r\x12\x17\n\x0fstack_heartbeat\x18\t \x01(\r\x12\x14\n\x0cstack_health\x18\n \x01(\r\"\x1e\n\x0cTargThrottle\x12\x0e\n\x06\x65\x66\x66ort\x18\x01 \x01(\x02\"\x1d\n\x0bTargBraking\x12\x0e\n\x06\x65\x66\x66ort\x18\x01 \x01(\x02\"!\n\x0cTargSteering\x12\x11\n\tangle_rad\x18\x01 \x01(\x02\"\x81\x01\n\x0cOrinComplete\x12\x10\n\x08throttle\x18\x01 \x01(\x02\x12\x0f\n\x07\x62raking\x18\x02 \x01(\x02\x12\x14\n\x0csteering_rad\x18\x03 \x01(\x02\x12\x0f\n\x07mission\x18\x04 \x01(\r\x12\x15\n\rmachine_state\x18\x05 \x01(\r\x12\x10\n\x08shutdown\x18\x06 \x01(\x08\x62\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -41,14 +41,14 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_ACTSTEERING']._serialized_end=207
   _globals['_HEARTBEAT']._serialized_start=209
   _globals['_HEARTBEAT']._serialized_end=239
-  _globals['_HEALTHSTATUS']._serialized_start=241
-  _globals['_HEALTHSTATUS']._serialized_end=357
-  _globals['_TARGTHROTTLE']._serialized_start=359
-  _globals['_TARGTHROTTLE']._serialized_end=389
-  _globals['_TARGBRAKING']._serialized_start=391
-  _globals['_TARGBRAKING']._serialized_end=420
-  _globals['_TARGSTEERING']._serialized_start=422
-  _globals['_TARGSTEERING']._serialized_end=455
-  _globals['_ORINCOMPLETE']._serialized_start=458
-  _globals['_ORINCOMPLETE']._serialized_end=587
+  _globals['_HEALTHSTATUS']._serialized_start=242
+  _globals['_HEALTHSTATUS']._serialized_end=449
+  _globals['_TARGTHROTTLE']._serialized_start=451
+  _globals['_TARGTHROTTLE']._serialized_end=481
+  _globals['_TARGBRAKING']._serialized_start=483
+  _globals['_TARGBRAKING']._serialized_end=512
+  _globals['_TARGSTEERING']._serialized_start=514
+  _globals['_TARGSTEERING']._serialized_end=547
+  _globals['_ORINCOMPLETE']._serialized_start=550
+  _globals['_ORINCOMPLETE']._serialized_end=679
 # @@protoc_insertion_point(module_scope)
