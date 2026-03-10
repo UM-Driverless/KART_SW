@@ -1,11 +1,11 @@
+import glob
+import os
+
 from launch import LaunchDescription
 from launch.actions import IncludeLaunchDescription, SetEnvironmentVariable
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
 from ament_index_python.packages import get_package_share_directory
-
-import glob
-import os
 
 
 def generate_launch_description():
@@ -68,10 +68,18 @@ def generate_launch_description():
         output="screen",
     )
 
+    steering_hud = Node(
+        package="kart_perception",
+        executable="steering_hud",
+        name="steering_hud",
+        output="screen",
+    )
+
     return LaunchDescription([
         set_ld_path,
         zed_camera,
         perception_launch,
+        steering_hud,
         cone_follower,
         cmd_vel_bridge,
         comms,

@@ -59,6 +59,10 @@ body { min-height: 100vh; -webkit-tap-highlight-color: transparent; }
   <span id="hAgc" title="AGC gain">AGC --</span>
   <span id="hStk" title="Stack free bytes (min ever): comms/control/heartbeat/health">STK --</span>
 </div>
+<div style="max-width:480px;margin:4px auto;text-align:center">
+  <img id="hudStream" style="width:100%;border-radius:6px;display:none"
+       onload="this.style.display='block'" alt="HUD">
+</div>
 <div id="app"></div>
 
 <script>
@@ -84,7 +88,14 @@ function connect() {
     if (!reconnectTimer) reconnectTimer = setInterval(connect, 2000);
   };
   ws.onerror = (ev) => { if (typeof dbgLog==='function') dbgLog('WS ERROR '+ev.type); ws.close(); };
+  ws.binaryType = 'blob';
   ws.onmessage = e => {
+    if (e.data instanceof Blob) {
+      // Binary frame = JPEG HUD image
+      const img = $('hudStream');
+      if (img) { const url = URL.createObjectURL(e.data); img.onload = () => URL.revokeObjectURL(url); img.src = url; }
+      return;
+    }
     try {
       lastData = JSON.parse(e.data);
       // Reflect ESP32 heartbeat in the connection dot (green only when HB alive)

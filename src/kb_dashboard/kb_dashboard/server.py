@@ -149,10 +149,12 @@ async def run_websocket_server(state: DashboardState, node, port: int, ready_cal
 
     async def broadcast_loop():
         nonlocal clients
+        frame_counter = 0
         while True:
             await asyncio.sleep(0.1)  # 10 Hz
             if not clients:
                 continue
+            # Telemetry JSON (every tick = 10 Hz)
             snapshot = json.dumps(state.snapshot()).encode()
             dead = set()
             for w in list(clients):
@@ -162,6 +164,17 @@ async def run_websocket_server(state: DashboardState, node, port: int, ready_cal
                 except Exception:
                     dead.add(w)
             clients -= dead
+            # HUD JPEG binary (every 3rd tick ≈ 3.3 Hz to save bandwidth)
+            frame_counter += 1
+            if frame_counter % 3 == 0 and hasattr(node, "get_hud_jpeg"):
+                jpeg = node.get_hud_jpeg()
+                if jpeg:
+                    for w in list(clients):
+                        try:
+                            ws_send(w, jpeg, opcode=0x2)  # binary frame
+                            await w.drain()
+                        except Exception:
+                            clients.discard(w)
 
     import socket
     server = await asyncio.start_server(

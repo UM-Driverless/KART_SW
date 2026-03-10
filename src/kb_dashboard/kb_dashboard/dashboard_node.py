@@ -10,12 +10,15 @@ and send commands (mission select, start/stop, EBS).
 import asyncio
 import threading
 
+import cv2
+import numpy as np
 import rclpy
+from cv_bridge import CvBridge
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy
 
 from kb_interfaces.msg import Frame
-from sensor_msgs.msg import Imu
+from sensor_msgs.msg import Image, Imu
 from std_msgs.msg import String
 
 from kb_dashboard.protocol import (
@@ -57,6 +60,11 @@ class DashboardNode(Node):
         self.create_subscription(Frame, "/orin/throttle", self._on_orin_throttle, qos_reliable)
         self.create_subscription(Frame, "/orin/brake", self._on_orin_brake, qos_reliable)
         self.create_subscription(Frame, "/orin/steering", self._on_orin_steering, qos_reliable)
+
+        # HUD image stream (JPEG bytes stored for WebSocket binary broadcast)
+        self._bridge = CvBridge()
+        self._hud_jpeg: bytes | None = None
+        self.create_subscription(Image, "/perception/hud", self._on_hud_image, 1)
 
         # Publishers for mission commands
         self.mission_pub = self.create_publisher(String, "/dashboard/mission", 10)
@@ -112,6 +120,14 @@ class DashboardNode(Node):
 
     def _on_orin_steering(self, msg: Frame):
         self.state.update("orin_cmd_steering_rad", decode_steering(list(msg.payload)))
+
+    def _on_hud_image(self, msg: Image):
+        img = self._bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
+        _, buf = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 60])
+        self._hud_jpeg = buf.tobytes()
+
+    def get_hud_jpeg(self) -> bytes | None:
+        return self._hud_jpeg
 
     def publish_mission(self, mission: str):
         msg = String()
