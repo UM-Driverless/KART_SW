@@ -190,6 +190,7 @@ class DashboardState:
             "health_agc": 0,
             "health_heap_kb": 0,
             "health_i2c_errors": 0,
+            "yolo_fps": 0.0,
             "mission": "manual",
             "state": "idle",  # idle | running | ebs
         }

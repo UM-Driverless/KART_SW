@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 import os
 import pathlib
+import threading
+import time
 import warnings
 
 import cv2
@@ -8,6 +10,7 @@ import rclpy
 from cv_bridge import CvBridge
 from rclpy.node import Node
 from sensor_msgs.msg import Image
+from std_msgs.msg import Float32
 from vision_msgs.msg import BoundingBox2D, Detection2D, Detection2DArray, ObjectHypothesisWithPose
 
 
@@ -71,6 +74,7 @@ class YoloDetectorNode(Node):
         self.bridge = CvBridge()
         self.publisher = self.create_publisher(Detection2DArray, self.detections_topic, 10)
         self.debug_publisher = self.create_publisher(Image, self.debug_image_topic, 10)
+        self.fps_publisher = self.create_publisher(Float32, "/perception/yolo/fps", 10)
         self.subscription = self.create_subscription(
             Image, self.image_topic, self._on_image, 1
         )
@@ -79,6 +83,19 @@ class YoloDetectorNode(Node):
         self._device = "cpu"
         self.model = self._load_model()
         self.class_names = self._get_class_names()
+
+        # Threading: ROS callback stores latest frame, inference thread processes it
+        self._latest_frame = None  # (header, frame_bgr)
+        self._frame_lock = threading.Lock()
+        self._frame_event = threading.Event()
+        self._shutdown = False
+
+        self._infer_thread = threading.Thread(target=self._inference_loop, daemon=True)
+        self._infer_thread.start()
+
+        # FPS counter
+        self._fps_count = 0
+        self._fps_time = time.monotonic()
 
     def _resolve_device(self) -> str:
         device = self.device
@@ -131,16 +148,48 @@ class YoloDetectorNode(Node):
         return self.model.names  # same format for YOLOv5
 
     def _on_image(self, msg: Image) -> None:
+        """ROS callback — just grab the frame and signal the inference thread."""
         if self.model is None:
             return
         frame_bgr = self.bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
+        with self._frame_lock:
+            self._latest_frame = (msg.header, frame_bgr)
+        self._frame_event.set()
 
-        if self._use_ultralytics:
-            self._infer_ultralytics(msg, frame_bgr)
-        else:
-            self._infer_yolov5(msg, frame_bgr)
+    def _inference_loop(self) -> None:
+        """Dedicated thread: grab latest frame, run inference, publish results."""
+        while not self._shutdown:
+            # Wait for a new frame (with timeout so we can check shutdown)
+            if not self._frame_event.wait(timeout=1.0):
+                continue
+            self._frame_event.clear()
 
-    def _infer_ultralytics(self, msg: Image, frame_bgr) -> None:
+            # Grab the latest frame
+            with self._frame_lock:
+                data = self._latest_frame
+                self._latest_frame = None
+            if data is None:
+                continue
+
+            header, frame_bgr = data
+
+            if self._use_ultralytics:
+                self._infer_ultralytics(header, frame_bgr)
+            else:
+                self._infer_yolov5(header, frame_bgr)
+
+            # FPS logging + publish
+            self._fps_count += 1
+            now = time.monotonic()
+            elapsed = now - self._fps_time
+            if elapsed >= 2.0:
+                fps = self._fps_count / elapsed
+                self.get_logger().info(f"YOLO inference: {fps:.1f} Hz")
+                self.fps_publisher.publish(Float32(data=fps))
+                self._fps_count = 0
+                self._fps_time = now
+
+    def _infer_ultralytics(self, header, frame_bgr) -> None:
         results = self.model(
             frame_bgr,
             imgsz=self.imgsz,
@@ -150,7 +199,7 @@ class YoloDetectorNode(Node):
             verbose=False,
         )
         detections = Detection2DArray()
-        detections.header = msg.header
+        detections.header = header
         parsed = []
 
         for r in results:
@@ -193,14 +242,14 @@ class YoloDetectorNode(Node):
                 cv2.putText(debug_img, label, (p1[0] + 3, p1[1] - 5),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 2, cv2.LINE_AA)
             debug_msg = self.bridge.cv2_to_imgmsg(debug_img, encoding="bgr8")
-            debug_msg.header = msg.header
+            debug_msg.header = header
             self.debug_publisher.publish(debug_msg)
 
-    def _infer_yolov5(self, msg: Image, frame_bgr) -> None:
+    def _infer_yolov5(self, header, frame_bgr) -> None:
         frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
         results = self.model(frame_rgb)
         detections = Detection2DArray()
-        detections.header = msg.header
+        detections.header = header
 
         for det in results.xyxy[0].tolist():
             x1, y1, x2, y2, conf, cls_id = det
@@ -242,16 +291,21 @@ class YoloDetectorNode(Node):
                 cv2.putText(debug_img, label, (p1[0] + 3, p1[1] - 5),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 2, cv2.LINE_AA)
             debug_msg = self.bridge.cv2_to_imgmsg(debug_img, encoding="bgr8")
-            debug_msg.header = msg.header
+            debug_msg.header = header
             self.debug_publisher.publish(debug_msg)
 
 
 def main() -> None:
     rclpy.init()
     node = YoloDetectorNode()
-    rclpy.spin(node)
-    node.destroy_node()
-    rclpy.shutdown()
+    try:
+        rclpy.spin(node)
+    finally:
+        node._shutdown = True
+        node._frame_event.set()  # unblock inference thread
+        node._infer_thread.join(timeout=2.0)
+        node.destroy_node()
+        rclpy.shutdown()
 
 
 if __name__ == "__main__":

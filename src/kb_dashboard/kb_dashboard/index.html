@@ -58,6 +58,7 @@ body { min-height: 100vh; -webkit-tap-highlight-color: transparent; }
   <span id="hHeap">HEAP --</span>
   <span id="hAgc">AGC --</span>
   <span id="hStk">STK --</span>
+  <span id="hFps">YOLO --</span>
   <span id="hInfo" style="cursor:pointer;color:#888;user-select:none" onclick="toggleHealthInfo()">ⓘ</span>
 </div>
 <div id="healthInfo" style="display:none;max-width:480px;margin:0 auto;padding:4px 12px 6px;font-size:9px;font-family:monospace;color:#aaa;line-height:1.5">
@@ -65,7 +66,8 @@ body { min-height: 100vh; -webkit-tap-highlight-color: transparent; }
   <b>I2C</b> I2C bus status to AS5600 steering sensor<br>
   <b>HEAP</b> Free heap memory on ESP32 (KB)<br>
   <b>AGC</b> Auto Gain Control (0–255). Ideal: 20–235. Indicates magnet field strength<br>
-  <b>STK</b> Min free stack bytes: comms / control / heartbeat / health. Red if &lt;200
+  <b>STK</b> Min free stack bytes: comms / control / heartbeat / health. Red if &lt;200<br>
+  <b>YOLO</b> YOLO inference rate (Hz). Green &gt;30, yellow 15-30, red &lt;15
 </div>
 <div style="max-width:480px;margin:4px auto;text-align:center">
   <img id="hudStream" style="width:100%;border-radius:6px;display:none"
@@ -872,6 +874,11 @@ function updateHealth(d) {
     const vals = [d.stack_comms, d.stack_control, d.stack_heartbeat, d.stack_health];
     hs.textContent = 'STK '+vals.join('/');
     hs.style.color = vals.some(v => v < 200) ? bad : dim;
+  }
+  const hf=$('hFps');
+  if (hf && d.yolo_fps !== undefined) {
+    hf.textContent = 'YOLO '+d.yolo_fps.toFixed(1)+'Hz';
+    hf.style.color = d.yolo_fps >= 30 ? ok : d.yolo_fps >= 15 ? '#f39c12' : bad;
   }
 }
 

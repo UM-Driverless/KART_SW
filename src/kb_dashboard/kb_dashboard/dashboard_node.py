@@ -19,7 +19,7 @@ from rclpy.qos import QoSProfile, ReliabilityPolicy
 
 from kb_interfaces.msg import Frame
 from sensor_msgs.msg import Image, Imu
-from std_msgs.msg import String
+from std_msgs.msg import Float32, String
 
 from kb_dashboard.protocol import (
     DashboardState,
@@ -60,6 +60,9 @@ class DashboardNode(Node):
         self.create_subscription(Frame, "/orin/throttle", self._on_orin_throttle, qos_reliable)
         self.create_subscription(Frame, "/orin/brake", self._on_orin_brake, qos_reliable)
         self.create_subscription(Frame, "/orin/steering", self._on_orin_steering, qos_reliable)
+
+        # YOLO FPS
+        self.create_subscription(Float32, "/perception/yolo/fps", self._on_yolo_fps, qos_reliable)
 
         # HUD image stream (JPEG bytes stored for WebSocket binary broadcast)
         self._bridge = CvBridge()
@@ -120,6 +123,9 @@ class DashboardNode(Node):
 
     def _on_orin_steering(self, msg: Frame):
         self.state.update("orin_cmd_steering_rad", decode_steering(list(msg.payload)))
+
+    def _on_yolo_fps(self, msg: Float32):
+        self.state.update("yolo_fps", round(msg.data, 1))
 
     def _on_hud_image(self, msg: Image):
         img = self._bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
