@@ -53,11 +53,19 @@ body { min-height: 100vh; -webkit-tap-highlight-color: transparent; }
   </div>
 </div>
 <div id="healthBar" style="max-width:480px;margin:0 auto;padding:0 12px 4px;display:flex;gap:6px;font-size:10px;font-family:monospace;opacity:0.7">
-  <span id="hMag" title="Magnet">MAG --</span>
-  <span id="hI2c" title="I2C bus">I2C --</span>
-  <span id="hHeap" title="Free heap">HEAP --</span>
-  <span id="hAgc" title="AGC gain">AGC --</span>
-  <span id="hStk" title="Stack free bytes (min ever): comms/control/heartbeat/health">STK --</span>
+  <span id="hMag">MAG --</span>
+  <span id="hI2c">I2C --</span>
+  <span id="hHeap">HEAP --</span>
+  <span id="hAgc">AGC --</span>
+  <span id="hStk">STK --</span>
+  <span id="hInfo" style="cursor:pointer;color:#888;user-select:none" onclick="toggleHealthInfo()">ⓘ</span>
+</div>
+<div id="healthInfo" style="display:none;max-width:480px;margin:0 auto;padding:4px 12px 6px;font-size:9px;font-family:monospace;color:#aaa;line-height:1.5">
+  <b>MAG</b> AS5600 magnet detected (OK) or missing (BAD)<br>
+  <b>I2C</b> I2C bus status to AS5600 steering sensor<br>
+  <b>HEAP</b> Free heap memory on ESP32 (KB)<br>
+  <b>AGC</b> Auto Gain Control (0–255). Ideal: 20–235. Indicates magnet field strength<br>
+  <b>STK</b> Min free stack bytes: comms / control / heartbeat / health. Red if &lt;200
 </div>
 <div style="max-width:480px;margin:4px auto;text-align:center">
   <img id="hudStream" style="width:100%;border-radius:6px;display:none"
@@ -840,6 +848,11 @@ function updatePills(d) {
 
 function updateMissions(d) {
   document.querySelectorAll('.mis-btn').forEach(b => b.classList.toggle('sel', b.dataset.m === d.mission));
+}
+
+function toggleHealthInfo() {
+  const el = $('healthInfo');
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
 }
 
 function updateHealth(d) {
