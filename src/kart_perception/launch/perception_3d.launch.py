@@ -22,7 +22,7 @@ def generate_launch_description():
     )
     weights_arg = DeclareLaunchArgument(
         "weights",
-        default_value="models/perception/yolo/nava_yolov11_2026_02.pt",
+        default_value="models/perception/yolo/nava_yolov11_2026_02.engine",
         description="Path to YOLO weights (.pt).",
     )
 
