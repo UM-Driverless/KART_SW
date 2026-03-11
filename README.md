@@ -50,7 +50,15 @@ source install/setup.bash
 |---|---|---|---|
 | **simulation.launch.py** | `ros2 launch kart_sim simulation.launch.py` | Full Gazebo simulation with dashboard | Gazebo, ros_gz_bridge, camera_info_fix, perfect_perception (or YOLO pipeline), cone_follower, cone_marker_viz_3d, ackermann_to_vel, esp32_sim, kb_dashboard |
 
-`simulation.launch.py` arguments: `track:=oval|hairpin|autocross`, `use_yolo:=true|false`, `gui:=true|false`, `controller:=geometric|neural|neural_v2`, `weights_json:=<path>`
+```bash
+# Example: autocross track, geometric controller, with Gazebo GUI
+ros2 launch kart_sim simulation.launch.py gui:=true controller:=geometric track:=autocross
+
+# Check all available arguments:
+ros2 launch kart_sim simulation.launch.py --show-args
+```
+
+Arguments: `track:=oval|hairpin|autocross`, `use_yolo:=true|false`, `gui:=true|false`, `controller:=geometric|neural|neural_v2`, `weights_json:=<path>`
 
 ### Perception (Testing)
 
