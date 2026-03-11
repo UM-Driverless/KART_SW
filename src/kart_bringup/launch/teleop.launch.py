@@ -13,7 +13,7 @@ def generate_launch_description():
         'teleop_params.yaml'
     )
 
-    # Reads /joy and produces AckermannDriveStamped on /actuation_cmd
+    # Reads /joy and produces Twist on /kart/cmd_vel
     joy_node_cmd = Node(
         package='joy_to_cmd_vel',
         executable='joy_to_cmd_vel',
@@ -35,11 +35,11 @@ def generate_launch_description():
         }]
     )
 
-    # Converts /actuation_cmd (AckermannDriveStamped) → /esp32/tx (Frame)
-    actuation_bridge = Node(
+    # Converts /kart/cmd_vel (Twist) → /orin/* protobuf Frame messages
+    cmd_vel_bridge = Node(
         package='kart_bringup',
-        executable='actuation_bridge_node.py',
-        name='actuation_bridge',
+        executable='cmd_vel_bridge_node.py',
+        name='cmd_vel_bridge',
         output='screen',
     )
 
@@ -54,7 +54,7 @@ def generate_launch_description():
     ld = LaunchDescription()
     ld.add_action(joy_node)
     ld.add_action(joy_node_cmd)
-    ld.add_action(actuation_bridge)
+    ld.add_action(cmd_vel_bridge)
     ld.add_action(comms_node)
 
     return ld

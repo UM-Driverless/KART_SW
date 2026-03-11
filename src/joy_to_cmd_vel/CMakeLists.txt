@@ -9,14 +9,14 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
-find_package(ackermann_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
 
 add_executable(joy_to_cmd_vel src/joy_to_cmd_vel_main.cpp)
 
 ament_target_dependencies(joy_to_cmd_vel
   rclcpp
   sensor_msgs
-  ackermann_msgs
+  geometry_msgs
 )
 
 install(TARGETS

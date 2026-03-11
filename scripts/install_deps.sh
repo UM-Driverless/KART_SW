@@ -9,7 +9,6 @@ sudo apt-get install -y \
   python3-pip \
   python3-colcon-common-extensions \
   python3-opencv \
-  ros-humble-ackermann-msgs \
   ros-humble-cv-bridge \
   ros-humble-image-geometry \
   ros-humble-joy \
