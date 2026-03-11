@@ -373,7 +373,7 @@ body { font-family:'Inter',-apple-system,BlinkMacSystemFont,'SF Pro',system-ui,s
   },
 
   update(d) {
-    $('vSteer').innerHTML = `${deg(d.esp32_steering_rad)} <span class="tu">° <small style="opacity:.4;font-size:11px">raw ${d.esp32_steering_raw}</small></span>`;
+    $('vSteer').innerHTML = `${deg(d.esp32_steering_rad)} <span class="tu">°</span>`;
     $('vSpeed').innerHTML = `${(d.esp32_speed*3.6).toFixed(1)} <span class="tu">km/h</span>`;
     const sPct = Math.max(-1, Math.min(1, d.esp32_steering_rad / 0.5));
     const sf = $('steerBarFill');
@@ -548,7 +548,7 @@ body::before { content:''; position:fixed; inset:0; background:repeating-linear-
   },
 
   update(d) {
-    $('ksSteer').textContent = deg(d.esp32_steering_rad) + ' (raw '+d.esp32_steering_raw+')';
+    $('ksSteer').textContent = deg(d.esp32_steering_rad);
     $('ksSpeed').textContent = (d.esp32_speed*3.6).toFixed(1);
     $('ksThr').textContent = String(Math.round(d.esp32_throttle*100)).padStart(3,'0');
     $('ksBrk').textContent = String(Math.round(d.esp32_braking*100)).padStart(3,'0');
@@ -713,7 +713,7 @@ body { font-family:'Inter',sans-serif; background:#0a0a0a; color:#f5f5f5; }
     const spd = d.esp32_speed*3.6;
     const accelTotal = Math.sqrt(d.esp32_accel_lat**2 + d.esp32_accel_lon**2);
     $('tBigSpeed').textContent = spd.toFixed(1);
-    $('tBigSteer').textContent = deg(d.esp32_steering_rad) + ' (raw '+d.esp32_steering_raw+')';
+    $('tBigSteer').textContent = deg(d.esp32_steering_rad);
     $('tBigAccel').textContent = accelTotal.toFixed(1);
 
     $('tsSteer').textContent = deg(d.esp32_steering_rad);
@@ -902,7 +902,7 @@ body::before { content:''; position:fixed; inset:0; pointer-events:none; backgro
   },
 
   update(d) {
-    $('hsSteer').textContent = deg(d.esp32_steering_rad) + ' (raw '+d.esp32_steering_raw+')';
+    $('hsSteer').textContent = deg(d.esp32_steering_rad);
     $('hsSpeed').textContent = (d.esp32_speed*3.6).toFixed(1);
     $('hsThr').textContent = Math.round(d.esp32_throttle*100);
     $('hsBrk').textContent = Math.round(d.esp32_braking*100);
