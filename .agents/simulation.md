@@ -206,20 +206,15 @@ ssh utm 'ps aux | grep -E "ign|kart" | grep -v grep | grep -v unattended | wc -l
 
 ```bash
 # Headless (no GUI) — most reliable for automated testing
-ssh utm 'nohup bash -c "source /opt/ros/humble/setup.bash && source ~/kart_brain/install/setup.bash && ros2 launch kart_bringup sim.launch.py" > /tmp/sim.log 2>&1 &'
+ssh utm 'nohup bash -c "source /opt/ros/humble/setup.bash && source ~/kart_brain/install/setup.bash && ros2 launch kart_sim simulation.launch.py" > /tmp/sim.log 2>&1 &'
 
 # With GUI (visible in UTM window) — slow, CPU rendering
-ssh utm 'DISPLAY=:0 nohup bash -c "source /opt/ros/humble/setup.bash && source ~/kart_brain/install/setup.bash && DISPLAY=:0 ros2 launch kart_bringup sim.launch.py gui:=true" > /tmp/sim_gui.log 2>&1 &'
+ssh utm 'DISPLAY=:0 nohup bash -c "source /opt/ros/humble/setup.bash && source ~/kart_brain/install/setup.bash && DISPLAY=:0 ros2 launch kart_sim simulation.launch.py gui:=true" > /tmp/sim_gui.log 2>&1 &'
 ```
 
-### Launch files
+### Launch file
 
-| Launch file | Package | What it runs |
-|---|---|---|
-| `simulation.launch.py` | `kart_sim` | Gazebo + bridge + perception + controller only |
-| `sim.launch.py` | `kart_bringup` | Above + esp32_sim + dashboard + cone_marker_viz |
-
-Use `sim.launch.py` for full stack (dashboard at port 8080). Use `simulation.launch.py` for Gazebo + control only.
+`simulation.launch.py` in `kart_sim` — runs everything: Gazebo + bridge + perception + controller + esp32_sim + dashboard (port 8080).
 
 ### Verifying it works
 

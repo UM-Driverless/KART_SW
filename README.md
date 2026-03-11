@@ -48,8 +48,7 @@ source install/setup.bash
 
 | Launch file | Command | Description | Nodes |
 |---|---|---|---|
-| **sim.launch.py** | `ros2 launch kart_bringup sim.launch.py` | Full sim with fake ESP32 telemetry and dashboard. Wraps simulation.launch.py | simulation.launch.py + esp32_sim, kb_dashboard |
-| **simulation.launch.py** | `ros2 launch kart_sim simulation.launch.py` | Core Gazebo simulation — headless by default | Gazebo, ros_gz_bridge, camera_info_fix, perfect_perception (or YOLO pipeline), cone_follower, cone_marker_viz_3d, ackermann_to_vel |
+| **simulation.launch.py** | `ros2 launch kart_sim simulation.launch.py` | Full Gazebo simulation with dashboard | Gazebo, ros_gz_bridge, camera_info_fix, perfect_perception (or YOLO pipeline), cone_follower, cone_marker_viz_3d, ackermann_to_vel, esp32_sim, kb_dashboard |
 
 `simulation.launch.py` arguments: `track:=oval|hairpin|autocross`, `use_yolo:=true|false`, `gui:=true|false`, `controller:=geometric|neural|neural_v2`, `weights_json:=<path>`
 

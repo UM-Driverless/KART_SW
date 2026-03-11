@@ -1,16 +1,19 @@
 """Master launch file for the kart simulation.
 
 Starts:
-1. Gazebo server (headless)
+1. Gazebo server (headless or GUI)
 2. ros_gz_bridge (topic bridging)
 3. Perfect perception node OR YOLO perception pipeline
 4. Cone follower control node
 5. Cone marker visualization
 6. CameraInfo fix node (when use_yolo=true)
+7. ESP32 simulator node (fake telemetry)
+8. Dashboard web UI (port 8080)
 
 Launch arguments:
     track:=oval      -> Oval track (default)
     track:=hairpin   -> Hairpin track
+    track:=autocross -> Autocross track
     use_yolo:=true   -> Launch YOLO pipeline (yolo_detector + cone_depth_localizer)
     use_yolo:=false  -> Launch perfect perception (ground truth from SDF) [default]
 """
@@ -221,6 +224,23 @@ def _launch_setup(context):
         output="screen",
     )
 
+    # --- 7. ESP32 simulator (fake telemetry) ---
+    esp32_sim = Node(
+        package="kart_sim",
+        executable="esp32_sim_node.py",
+        name="esp32_sim",
+        output="screen",
+    )
+
+    # --- 8. Dashboard web UI ---
+    dashboard = Node(
+        package="kb_dashboard",
+        executable="dashboard",
+        name="kb_dashboard",
+        parameters=[{"port": 8080}],
+        output="screen",
+    )
+
     return [
         gazebo_headless,
         gazebo_gui,
@@ -231,6 +251,8 @@ def _launch_setup(context):
         TimerAction(period=6.0, actions=[cone_follower]),
         TimerAction(period=5.0, actions=[marker_viz]),
         TimerAction(period=4.0, actions=[ackermann_to_vel]),
+        TimerAction(period=5.0, actions=[esp32_sim]),
+        TimerAction(period=5.0, actions=[dashboard]),
     ]
 
 
