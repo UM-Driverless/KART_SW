@@ -10,6 +10,15 @@ cd ~/kart_brain
 source /opt/ros/humble/setup.bash
 source install/setup.bash
 
+# Kill stale processes from previous runs
+echo "Cleaning up previous instances..."
+killall -q rqt_image_view rviz2 2>/dev/null
+pkill -f "rqt_image_view|rviz2|yolo_detector|image_source" 2>/dev/null
+sleep 1
+
+cleanup() { echo "Shutting down..."; kill 0; wait; }
+trap cleanup SIGINT SIGTERM
+
 # Image source (ZED as webcam, left eye only)
 ros2 run kart_perception image_source --ros-args   -p source:=/dev/video0   -p stereo_crop:=true   -p publish_rate:=10.0   -p image_topic:=/image_raw &
 

@@ -2,7 +2,11 @@ import glob
 import os
 
 from launch import LaunchDescription
-from launch.actions import IncludeLaunchDescription, SetEnvironmentVariable
+from launch.actions import (
+    ExecuteProcess,
+    IncludeLaunchDescription,
+    SetEnvironmentVariable,
+)
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
 from ament_index_python.packages import get_package_share_directory
@@ -15,8 +19,24 @@ def generate_launch_description():
     pip_nvidia_dirs = glob.glob(
         os.path.expanduser("~/.local/lib/python3.10/site-packages/nvidia/*/lib")
     )
-    ld_path = ":".join([cuda_sys] + pip_nvidia_dirs + [os.environ.get("LD_LIBRARY_PATH", "")])
+    ld_path = ":".join(
+        [cuda_sys] + pip_nvidia_dirs + [os.environ.get("LD_LIBRARY_PATH", "")]
+    )
     set_ld_path = SetEnvironmentVariable("LD_LIBRARY_PATH", ld_path)
+
+    # Kill stale GUI processes from previous runs to prevent accumulation on Orin
+    cleanup_gui = ExecuteProcess(
+        cmd=[
+            "bash",
+            "-c",
+            "killall -q rviz2 rqt_image_view 2>/dev/null; "
+            "pkill -f 'rviz2|rqt_image_view' 2>/dev/null; "
+            "sleep 0.5; exit 0",
+        ],
+        name="cleanup_stale_gui",
+        output="log",
+    )
+
     zed_camera = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(
@@ -75,13 +95,16 @@ def generate_launch_description():
         output="screen",
     )
 
-    return LaunchDescription([
-        set_ld_path,
-        zed_camera,
-        perception_launch,
-        steering_hud,
-        cone_follower,
-        cmd_vel_bridge,
-        comms,
-        dashboard,
-    ])
+    return LaunchDescription(
+        [
+            set_ld_path,
+            cleanup_gui,
+            zed_camera,
+            perception_launch,
+            steering_hud,
+            cone_follower,
+            cmd_vel_bridge,
+            comms,
+            dashboard,
+        ]
+    )
