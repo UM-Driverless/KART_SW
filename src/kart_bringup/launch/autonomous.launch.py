@@ -3,16 +3,26 @@ import os
 
 from launch import LaunchDescription
 from launch.actions import (
+    DeclareLaunchArgument,
     ExecuteProcess,
     IncludeLaunchDescription,
     SetEnvironmentVariable,
 )
 from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 from ament_index_python.packages import get_package_share_directory
 
 
 def generate_launch_description():
+    steering_gain_arg = DeclareLaunchArgument(
+        "steering_gain",
+        default_value="0.5",
+        description="Gain applied to lateral cone angle before sending to steering. "
+        "Lower values reduce oversteering. Default 0.5 (was 1.0).",
+    )
+    steering_gain = LaunchConfiguration("steering_gain")
+
     # System CUDA libs must precede pip NVIDIA libs to avoid cuBLAS version mismatch
     # (pip installs cuBLAS 12.9 which is incompatible with Jetson's CUDA 12.6)
     cuda_sys = "/usr/local/cuda-12.6/targets/aarch64-linux/lib"
@@ -63,7 +73,12 @@ def generate_launch_description():
         executable="cone_follower_node.py",
         name="cone_follower",
         output="screen",
-        parameters=[{"controller_type": "geometric"}],
+        parameters=[
+            {
+                "controller_type": "geometric",
+                "steering_gain": steering_gain,
+            }
+        ],
     )
 
     cmd_vel_bridge = Node(
@@ -97,6 +112,7 @@ def generate_launch_description():
 
     return LaunchDescription(
         [
+            steering_gain_arg,
             set_ld_path,
             cleanup_gui,
             zed_camera,
