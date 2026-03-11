@@ -69,6 +69,44 @@ body { min-height: 100vh; -webkit-tap-highlight-color: transparent; }
   <b>STK</b> Min free stack bytes: comms / control / heartbeat / health. Red if &lt;200<br>
   <b>YOLO</b> YOLO inference rate (Hz). Green &gt;30, yellow 15-30, red &lt;15
 </div>
+
+<!-- Manual Control Widget (Hidden unless mission is manual) -->
+<div id="manualWidget" style="display:none;max-width:480px;margin:8px auto;padding:12px;background:#14141f;border:1px solid #2a2a3a;border-radius:12px;color:#e0e0e8;font-family:'Inter',sans-serif;">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:#888;">
+    <span>🎮 Gamepad Control</span>
+    <span id="gpStatus" style="color:#e74c3c">Disconnected</span>
+  </div>
+  
+  <div style="display:flex;gap:12px;margin-bottom:12px;align-items:center;">
+    <div style="font-size:10px;color:#aaa;">Steer Target:</div>
+    <div style="display:flex;background:#0a0a0f;border-radius:6px;overflow:hidden;border:1px solid #2a2a3a;">
+      <button id="btnSteerAngle" style="padding:6px 12px;border:none;background:#4a9eff;color:#fff;font-size:10px;font-weight:600;cursor:pointer;">Angle</button>
+      <button id="btnSteerPWM" style="padding:6px 12px;border:none;background:transparent;color:#888;font-size:10px;font-weight:600;cursor:pointer;">PWM</button>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+    <div>
+      <div style="font-size:9px;color:#6a6a7a;margin-bottom:4px;text-transform:uppercase;">Steering Axis (L-Stick)</div>
+      <div style="height:4px;background:#0a0a0f;border-radius:2px;position:relative;overflow:hidden;">
+        <div id="gpSteerFill" style="position:absolute;top:0;height:100%;width:0%;left:50%;background:#4a9eff;"></div>
+      </div>
+      <div id="gpSteerVal" style="font-size:11px;margin-top:4px;text-align:center;font-family:monospace;">0.00</div>
+    </div>
+    <div>
+      <div style="font-size:9px;color:#6a6a7a;margin-bottom:4px;text-transform:uppercase;">Accel (R-Trig) / Brake (L-Trig)</div>
+      <div style="height:4px;background:#0a0a0f;border-radius:2px;position:relative;overflow:hidden;display:flex;">
+        <div id="gpBrakeFill" style="height:100%;width:0%;background:#e74c3c;margin-left:auto;"></div>
+        <div id="gpAccelFill" style="height:100%;width:0%;background:#2ecc71;"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;margin-top:4px;font-family:monospace;">
+        <span id="gpBrakeVal" style="color:#e74c3c">0%</span>
+        <span id="gpAccelVal" style="color:#2ecc71">0%</span>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div id="app"></div>
 <div style="max-width:480px;margin:4px auto;text-align:center">
   <img id="hudStream" style="width:100%;border-radius:6px" alt="HUD">
@@ -82,6 +120,104 @@ const $ = id => document.getElementById(id);
 const deg = r => (r * 180 / Math.PI).toFixed(1);
 const WS_URL = `ws://${location.hostname}:${location.port||80}/`;
 let ws = null, reconnectTimer = null, lastData = null, skinCleanup = null;
+let currentSkin = localStorage.getItem('skin') || 'default';
+let manualSteerType = 'angle'; // 'angle' or 'pwm'
+let currentMission = 'manual'; // Track mission state locally to show/hide widget
+
+// Gamepad polling
+let gamepadLoop = null;
+
+function updateGamepadUI() {
+  const gpWidget = $('manualWidget');
+  if (!gpWidget) return;
+  
+  if (currentMission === 'manual') {
+    gpWidget.style.display = 'block';
+  } else {
+    gpWidget.style.display = 'none';
+    return;
+  }
+
+  const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
+  let gp = null;
+  for (let i = 0; i < gamepads.length; i++) {
+    if (gamepads[i]) { gp = gamepads[i]; break; }
+  }
+
+  const status = $('gpStatus');
+  if (!gp) {
+    status.textContent = 'Disconnected';
+    status.style.color = '#e74c3c';
+    return;
+  }
+
+  status.textContent = 'Connected: ' + gp.id.substring(0, 15);
+  status.style.color = '#2ecc71';
+
+  // Typical mappings: Left stick X = axis 0, Left Trigger = button 6, Right Trigger = button 7
+  // Fallback to axis 2/5 for triggers depending on OS/Browser
+  let steerAxis = gp.axes[0] || 0;
+  
+  // Triggers are usually buttons[6] and [7]. value goes 0.0 to 1.0
+  let brakeVal = gp.buttons[6] ? gp.buttons[6].value : 0;
+  let accelVal = gp.buttons[7] ? gp.buttons[7].value : 0;
+
+  // Apply deadzones
+  if (Math.abs(steerAxis) < 0.1) steerAxis = 0;
+
+  // Update UI bars
+  const sf = $('gpSteerFill');
+  if (sf) {
+    if (steerAxis >= 0) {
+      sf.style.left = '50%';
+      sf.style.width = (steerAxis * 50) + '%';
+    } else {
+      sf.style.left = (50 + steerAxis * 50) + '%';
+      sf.style.width = (-steerAxis * 50) + '%';
+    }
+    $('gpSteerVal').textContent = steerAxis.toFixed(2);
+  }
+
+  if ($('gpBrakeFill')) {
+    $('gpBrakeFill').style.width = (brakeVal * 100) + '%';
+    $('gpAccelFill').style.width = (accelVal * 100) + '%';
+    $('gpBrakeVal').textContent = Math.round(brakeVal * 100) + '%';
+    $('gpAccelVal').textContent = Math.round(accelVal * 100) + '%';
+  }
+
+  // Send via WS
+  wsSend({
+    action: 'manual_control',
+    steering: steerAxis,
+    steer_type: manualSteerType,
+    throttle: accelVal,
+    brake: brakeVal
+  });
+}
+
+function startGamepadLoop() {
+  if (gamepadLoop) return;
+  gamepadLoop = setInterval(updateGamepadUI, 100); // 10Hz
+}
+
+// Steer type buttons
+window.addEventListener('DOMContentLoaded', () => {
+  $('btnSteerAngle').onclick = () => {
+    manualSteerType = 'angle';
+    $('btnSteerAngle').style.background = '#4a9eff';
+    $('btnSteerAngle').style.color = '#fff';
+    $('btnSteerPWM').style.background = 'transparent';
+    $('btnSteerPWM').style.color = '#888';
+  };
+  $('btnSteerPWM').onclick = () => {
+    manualSteerType = 'pwm';
+    $('btnSteerPWM').style.background = '#4a9eff';
+    $('btnSteerPWM').style.color = '#fff';
+    $('btnSteerAngle').style.background = 'transparent';
+    $('btnSteerAngle').style.color = '#888';
+  };
+  startGamepadLoop();
+});
 
 function connect() {
   if (typeof dbgLog==='function') dbgLog('WS connecting to '+WS_URL);
@@ -107,6 +243,7 @@ function connect() {
     }
     try {
       lastData = JSON.parse(e.data);
+      if (lastData.mission) currentMission = lastData.mission;
       // Reflect ESP32 heartbeat in the connection dot (green only when HB alive)
       const d = $('connDot');
       if (d) { if (lastData.esp32_heartbeat) d.classList.add('ok'); else d.classList.remove('ok'); }
@@ -915,7 +1052,6 @@ function drawGGhud(latG, lonG) {
 // SKIN SYSTEM
 // ═══════════════════════════════════════════════════════
 const SKINS = { default: skinDefault, kitt: skinKitt, tesla: skinTesla, hud: skinHud };
-let currentSkin = localStorage.getItem('skin') || 'default';
 if (!SKINS[currentSkin]) currentSkin = 'default';
 
 function applySkin(id) {

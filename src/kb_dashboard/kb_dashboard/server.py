@@ -1,4 +1,5 @@
 """HTTP + WebSocket server — no ROS dependencies."""
+
 import asyncio
 import base64
 import hashlib
@@ -10,7 +11,9 @@ from kb_dashboard.protocol import DashboardState, MISSIONS
 HTML_PATH = Path(__file__).parent / "index.html"
 
 
-async def run_websocket_server(state: DashboardState, node, port: int, ready_callback=None):
+async def run_websocket_server(
+    state: DashboardState, node, port: int, ready_callback=None
+):
     """Minimal HTTP + WebSocket server using only the stdlib + asyncio.
 
     `node` must have .publish_mission(str) and .get_logger().info(str).
@@ -47,7 +50,9 @@ async def run_websocket_server(state: DashboardState, node, port: int, ready_cal
         if "upgrade" in conn_header and "websocket" in upgrade_header:
             key = headers.get("sec-websocket-key", "").strip()
             accept = base64.b64encode(
-                hashlib.sha1((key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").encode()).digest()
+                hashlib.sha1(
+                    (key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").encode()
+                ).digest()
             ).decode()
             writer.write(
                 f"HTTP/1.1 101 Switching Protocols\r\n"
@@ -75,7 +80,9 @@ async def run_websocket_server(state: DashboardState, node, port: int, ready_cal
             ).encode()
             writer.write(header + body)
         else:
-            writer.write(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+            writer.write(
+                b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+            )
         await writer.drain()
         writer.close()
         await writer.wait_closed()
@@ -128,6 +135,14 @@ async def run_websocket_server(state: DashboardState, node, port: int, ready_cal
             if new_state in ("idle", "running", "ebs"):
                 state.update("state", new_state)
                 node.get_logger().info(f"State set: {new_state}")
+        elif action == "manual_control":
+            if hasattr(node, "publish_manual_control"):
+                node.publish_manual_control(
+                    steer=float(cmd.get("steering", 0.0)),
+                    steer_type=cmd.get("steer_type", "angle"),
+                    throttle=float(cmd.get("throttle", 0.0)),
+                    brake=float(cmd.get("brake", 0.0)),
+                )
 
     def ws_send(writer: asyncio.StreamWriter, data: bytes, opcode=0x1):
         nonlocal clients
@@ -177,8 +192,11 @@ async def run_websocket_server(state: DashboardState, node, port: int, ready_cal
                             clients.discard(w)
 
     import socket
+
     server = await asyncio.start_server(
-        ws_accept, "0.0.0.0", port,
+        ws_accept,
+        "0.0.0.0",
+        port,
         reuse_address=True,
         start_serving=False,
     )
