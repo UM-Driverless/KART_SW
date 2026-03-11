@@ -191,6 +191,28 @@ echo "0" | sudo -S bash -c "echo 0 > /sys/bus/usb/devices/2-3.2/authorized && sl
 - Avoid launching dashboard via `nohup` — use foreground launch so Ctrl+C cleanly stops it
 - Rule: **Always check `ss -tlnp | grep 8080` before relaunching the dashboard**
 
+## 2026-03-09 - Tried SSH to wrong host (orin) instead of reading user's message
+**What happened:** User said their bot is on "ssh debian". Instead of running `ssh debian`, I ran `ssh orin` (which timed out), then asked the user unnecessary questions about hostname/credentials — wasting their time.
+**Prevention added:**
+- Rule: **Read the user's message carefully before acting.** If they say "ssh debian", use `ssh debian` — don't substitute a different host.
+- Rule: **Don't ask questions you can answer by trying.** If the user says a machine is reachable, just connect to it.
+
+## 2026-03-09 - Reported training "in progress" when process had already crashed
+**What happened:** User asked for training status on y540-ubuntu. I grepped the log, saw no completed epoch lines, and reported "still on epoch 0 — doing the first pass." I did NOT check whether the process was actually running (`ps aux`) or whether the GPU was active (`nvidia-smi`). The training had crashed with `CUDNN_STATUS_INTERNAL_ERROR` right after starting. The user noticed because the laptop fan was silent. When they asked again, I finally checked the process list — it was dead.
+**Root cause:** Lazy status check — I only looked at log content, not process liveness. The absence of progress lines should have been a red flag (it had been running for hours with no epoch completed), but I explained it away as "still on the first pass."
+**Prevention added:**
+- Rule: **When checking remote training status, ALWAYS check BOTH the log AND the process.** Run `nvidia-smi` + `ps aux | grep python` alongside any log grep. If the GPU is idle and no training process exists, the training is NOT running — period.
+- Rule: **If expected progress is missing, assume failure first.** Don't rationalize absence of output as "still working." Verify the process is alive before making any claim about its status.
+- Rule: **A status check is: (1) is the process alive? (2) is the GPU active? (3) what does the log say?** — in that order. Never skip steps 1 and 2.
+
+## 2026-03-11 - Claimed ESP32 uses custom binary protocol when it already uses nanopb/protobuf
+**What happened:** User asked about protobuf in the project. I found `proto/kart_msgs.proto` but relied on stale MEMORY.md info ("custom binary protocol over UART") instead of checking the actual codebase. Commit `3a9999e` ("Migrate kart_brain Python side to nanopb/protobuf protocol") had already migrated both sides. I also missed `proto/generated_c/` and `proto/nanopb/` directories that were right there.
+**Root cause:** Trusted outdated memory over codebase evidence. The `.proto` file was found but I didn't investigate further (e.g., checking for generated C files or recent commits mentioning protobuf).
+**Prevention added:**
+- Updated MEMORY.md ESP32 section to document nanopb/protobuf migration
+- Rule: **When answering questions about what the codebase uses, CHECK THE CODE — not just memory.** Memory can be stale. Grep for relevant terms, check recent commits, look at generated files.
+- Rule: **If you find a .proto file, check for generated code too** (`generated_c/`, `*_pb2.py`, `nanopb/`). Their presence confirms protobuf is actively used.
+
 ## 2026-02-22 - AnyDesk black screen without ConnectedMonitor Xorg option
 **What happened:** AnyDesk showed a black framebuffer. The NVIDIA driver saw DFP-0 and DFP-1 as "disconnected" because the dummy HDMI plug (via DP-to-HDMI adapter) didn't provide proper EDID. Without a connected monitor, Xorg had no screen.
 **Prevention added:**

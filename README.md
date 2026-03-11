@@ -33,29 +33,39 @@ colcon build
 source install/setup.bash
 ```
 
-## Startup (no hardware)
-This launches just the teleop processing node; you can publish fake `/joy` input.
+## Launch Files
 
-```bash
-source /opt/ros/humble/setup.bash
-source install/setup.bash
-ros2 run joy_to_cmd_vel joy_to_cmd_vel --ros-args --params-file src/kart_bringup/config/teleop_params.yaml
-```
+### Real Hardware (Orin)
 
-```bash
-ros2 topic echo /actuation_cmd
-```
+| Launch file | Command | Description | Nodes |
+|---|---|---|---|
+| **autonomous.launch.py** | `ros2 launch kart_bringup autonomous.launch.py` | Full autonomous pipeline — camera, perception, control, comms, and dashboard | ZED camera, perception_3d (YOLO + depth localizer), steering_hud, cone_follower, cmd_vel_bridge, KB_Coms_micro, kb_dashboard |
+| **teleop.launch.py** | `ros2 launch kart_bringup teleop.launch.py` | Manual driving with a joystick. Requires gamepad at `/dev/input/js0` | joy_node, joy_to_cmd_vel, actuation_bridge, KB_Coms_micro |
+| **dashboard.launch.py** | `ros2 launch kart_bringup dashboard.launch.py` | Comms + web dashboard only — safe for firmware testing, sends no commands to the kart | KB_Coms_micro, kb_dashboard |
+| **gui.launch.py** | `ros2 launch kart_bringup gui.launch.py` | HUD viewer window on Orin display (launch separately from autonomous) | hud_viewer |
 
-```bash
-ros2 topic pub /joy sensor_msgs/msg/Joy "{axes: [0.0, 0.0, 0.0, 1.0, -1.0], buttons: [0,0,0,0,0,1]}"
-```
+### Simulation (VM)
 
-## Startup (with hardware)
-Requires a joystick at `/dev/input/js0` and the kart microcontroller on `/dev/ttyTHS1`.
+| Launch file | Command | Description | Nodes |
+|---|---|---|---|
+| **sim.launch.py** | `ros2 launch kart_bringup sim.launch.py` | Full sim with fake ESP32 telemetry and dashboard. Wraps simulation.launch.py | simulation.launch.py + esp32_sim, kb_dashboard |
+| **simulation.launch.py** | `ros2 launch kart_sim simulation.launch.py` | Core Gazebo simulation — headless by default | Gazebo, ros_gz_bridge, camera_info_fix, perfect_perception (or YOLO pipeline), cone_follower, cone_marker_viz_3d, ackermann_to_vel |
 
-```bash
-ros2 launch kart_bringup teleop_launch.py
-```
+`simulation.launch.py` arguments: `track:=oval|hairpin|autocross`, `use_yolo:=true|false`, `gui:=true|false`, `controller:=geometric|neural|neural_v2`, `weights_json:=<path>`
+
+### Perception (Testing)
+
+| Launch file | Command | Description | Nodes |
+|---|---|---|---|
+| **perception_test.launch.py** | `ros2 launch kart_perception perception_test.launch.py source:=<path> weights:=<path>` | 2D YOLO on recorded images/video — no camera needed | image_source, yolo_detector, cone_marker_viz, static_tf |
+| **perception_3d.launch.py** | `ros2 launch kart_perception perception_3d.launch.py` | Live 3D perception — YOLO + depth localization. Used as sub-launch by autonomous.launch.py | yolo_detector, cone_depth_localizer, cone_marker_viz_3d |
+
+### Standalone
+
+| Launch file | Command | Description | Nodes |
+|---|---|---|---|
+| **kb_dashboard** | `ros2 launch kb_dashboard dashboard.launch.py` | Dashboard web UI only (no comms) | kb_dashboard |
+| **display_zed_cam.launch.py** | `ros2 launch zed_display_rviz2 display_zed_cam.launch.py camera_model:=zed2` | ZED camera + RViz2 visualization | rviz2, zed_camera (optional) |
 
 ## FAQ
 

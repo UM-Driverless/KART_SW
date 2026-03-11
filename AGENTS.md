@@ -1,6 +1,8 @@
 # Agent Quick Reference
 
 ## Key Files (Read Before Working)
+**These `.agents/` files are the source of truth for this project.** Always consult them before answering technical questions or making changes — they are version-controlled and stay in sync with the code. Never rely on auto-memory or prior conversation context for project-specific technical state (architecture, protocols, hardware, conventions), as memory can go stale after commits.
+
 Before making any changes to the kart_brain workspace, consult:
 1. **`.agents/architecture.md`** — System architecture, packages, topic map, message types
 2. **`.agents/error_log.md`** — Past errors and added preventions

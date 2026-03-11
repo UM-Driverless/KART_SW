@@ -31,7 +31,7 @@
 │   │   ├── launch/
 │   │   │   ├── autonomous.launch.py      Full pipeline (perception→control→comms→dashboard)
 │   │   │   ├── dashboard.launch.py        Dashboard + comms (no commands sent to kart)
-│   │   │   └── teleop_launch.py          Joystick teleop
+│   │   │   └── teleop.launch.py          Joystick teleop
 │   │   ├── scripts/
 │   │   │   └── cmd_vel_bridge_node.py    Twist → Frame msgs (100 Hz)
 │   │   └── config/teleop_params.yaml
