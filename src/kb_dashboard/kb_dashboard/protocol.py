@@ -31,6 +31,7 @@ ESP_HEALTH_STATUS = 0x0B
 
 MISSIONS = {
     "manual": 0,
+    "remote_control": 7,
     "acceleration": 1,
     "skidpad": 2,
     "autocross": 3,

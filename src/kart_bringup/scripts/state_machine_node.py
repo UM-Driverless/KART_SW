@@ -75,8 +75,8 @@ class StateMachineNode(Node):
         # Auto-transition: selecting autonomous mission → AS_READY
         if self._mission in AUTONOMOUS_MISSIONS and self._state == AS_OFF:
             self._set_state(AS_READY)
-        # Selecting manual while in AS_READY → back to AS_OFF
-        elif self._mission == "manual" and self._state == AS_READY:
+        # Selecting manual/remote_control while in AS_READY → back to AS_OFF
+        elif self._mission not in AUTONOMOUS_MISSIONS and self._state == AS_READY:
             self._set_state(AS_OFF)
 
     def _on_state_cmd(self, msg: String):
@@ -116,7 +116,7 @@ class StateMachineNode(Node):
     def _mux_tick(self):
         out = Twist()
 
-        if self._mission == "manual":
+        if self._mission == "remote_control":
             out = self._last_manual_cmd
         elif self._mission in AUTONOMOUS_MISSIONS:
             if self._state == AS_DRIVING:
