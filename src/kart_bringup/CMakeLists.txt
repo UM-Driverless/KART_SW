@@ -38,6 +38,7 @@ include_directories(include)
 install(DIRECTORY launch config DESTINATION share/${PROJECT_NAME})
 install(PROGRAMS
   scripts/cmd_vel_bridge_node.py
+  scripts/state_machine_node.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

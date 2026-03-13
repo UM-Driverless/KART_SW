@@ -97,8 +97,14 @@ class DashboardNode(Node):
         self._hud_jpeg: bytes | None = None
         self.create_subscription(Image, "/perception/hud", self._on_hud_image, 1)
 
+        # State machine feedback
+        self.create_subscription(
+            String, "/kart/state", self._on_kart_state, qos_reliable
+        )
+
         # Publishers for mission commands
         self.mission_pub = self.create_publisher(String, "/dashboard/mission", 10)
+        self.state_cmd_pub = self.create_publisher(String, "/dashboard/state_cmd", 10)
 
         # Publisher for manual remote control (Twist for now)
         self.manual_cmd_pub = self.create_publisher(Twist, "/kart/cmd_vel_manual", 10)
@@ -162,6 +168,18 @@ class DashboardNode(Node):
     def _on_orin_steering(self, msg: Frame):
         self.state.update("orin_cmd_steering_rad", decode_steering(list(msg.payload)))
 
+    def _on_kart_state(self, msg: String):
+        # Map AS state names to dashboard state names for the UI
+        as_to_dash = {
+            "AS_OFF": "idle",
+            "AS_READY": "ready",
+            "AS_DRIVING": "running",
+            "AS_FINISHED": "finished",
+            "AS_EMERGENCY": "ebs",
+        }
+        self.state.update("state", as_to_dash.get(msg.data, "idle"))
+        self.state.update("as_state", msg.data)
+
     def _on_yolo_fps(self, msg: Float32):
         self.state.update("yolo_fps", round(msg.data, 1))
 
@@ -178,6 +196,12 @@ class DashboardNode(Node):
         msg.data = mission
         self.mission_pub.publish(msg)
         self.get_logger().info(f"Mission set: {mission}")
+
+    def publish_state_cmd(self, cmd: str):
+        msg = String()
+        msg.data = cmd
+        self.state_cmd_pub.publish(msg)
+        self.get_logger().info(f"State cmd: {cmd}")
 
     def publish_manual_control(
         self, steer: float, steer_type: str, throttle: float, brake: float

@@ -134,7 +134,10 @@ async def run_websocket_server(
             new_state = cmd.get("state", "idle")
             if new_state in ("idle", "running", "ebs"):
                 state.update("state", new_state)
-                node.get_logger().info(f"State set: {new_state}")
+                # Map dashboard states to state machine commands
+                cmd_map = {"idle": "stop", "running": "start", "ebs": "ebs"}
+                if hasattr(node, "publish_state_cmd"):
+                    node.publish_state_cmd(cmd_map[new_state])
         elif action == "manual_control":
             if hasattr(node, "publish_manual_control"):
                 node.publish_manual_control(

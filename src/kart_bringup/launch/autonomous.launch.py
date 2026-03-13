@@ -81,6 +81,13 @@ def generate_launch_description():
         ],
     )
 
+    state_machine = Node(
+        package="kart_bringup",
+        executable="state_machine_node.py",
+        name="state_machine",
+        output="screen",
+    )
+
     cmd_vel_bridge = Node(
         package="kart_bringup",
         executable="cmd_vel_bridge_node.py",
@@ -119,6 +126,7 @@ def generate_launch_description():
             perception_launch,
             steering_hud,
             cone_follower,
+            state_machine,
             cmd_vel_bridge,
             comms,
             dashboard,
