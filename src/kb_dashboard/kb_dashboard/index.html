@@ -70,6 +70,24 @@ body { min-height: 100vh; -webkit-tap-highlight-color: transparent; }
   <b>YOLO</b> YOLO inference rate (Hz). Green &gt;30, yellow 15-30, red &lt;15
 </div>
 
+<!-- Touch Joystick Widget (Hidden unless mission is manual) -->
+<div id="manualWidgetJoystick" style="display:none;max-width:480px;margin:8px auto;padding:20px;background:#14141f;border:1px solid #2a2a3a;border-radius:12px;text-align:center;">
+    <div style="font-size:11px;font-weight:600;text-transform:uppercase;color:#888;margin-bottom:20px;letter-spacing:1px;">
+        Touch Joystick
+    </div>
+    <div id="joystickZone" style="width:160px;height:160px;background:rgba(0,0,0,0.2);border-radius:50%;border:2px solid #2a2a3a;margin:0 auto;position:relative;touch-action:none;"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:20px;font-family:monospace;">
+        <div>
+            <div style="font-size:9px;color:#6a6a7a;text-transform:uppercase;">Steering</div>
+            <div id="jsSteerVal" style="font-size:16px;color:#4a9eff">0.00</div>
+        </div>
+        <div>
+            <div style="font-size:9px;color:#6a6a7a;text-transform:uppercase;">Throttle/Brake</div>
+            <div id="jsThrottleVal" style="font-size:16px;color:#2ecc71">0.00</div>
+        </div>
+    </div>
+</div>
+
 <!-- Manual Control Widget (Hidden unless mission is manual) -->
 <div id="manualWidget" style="display:none;max-width:480px;margin:8px auto;padding:12px;background:#14141f;border:1px solid #2a2a3a;border-radius:12px;color:#e0e0e8;font-family:'Inter',sans-serif;">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:#888;">
@@ -112,6 +130,7 @@ body { min-height: 100vh; -webkit-tap-highlight-color: transparent; }
   <img id="hudStream" style="width:100%;border-radius:6px" alt="HUD">
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/nipplejs/0.10.1/nipplejs.min.js"></script>
 <script>
 // ═══════════════════════════════════════════════════════
 // SHARED INFRASTRUCTURE
@@ -123,6 +142,54 @@ let ws = null, reconnectTimer = null, lastData = null, skinCleanup = null;
 let currentSkin = localStorage.getItem('skin') || 'default';
 let manualSteerType = 'angle'; // 'angle' or 'pwm'
 let currentMission = 'manual'; // Track mission state locally to show/hide widget
+
+// Touch joystick (nipplejs)
+let jsManager = null;
+
+function initJoystick() {
+  const zone = $('joystickZone');
+  if (!zone || typeof nipplejs === 'undefined') return;
+  if (jsManager) jsManager.destroy();
+
+  jsManager = nipplejs.create({
+    zone: zone, mode: 'static',
+    position: { left: '50%', top: '50%' },
+    color: '#4a9eff', size: 130
+  });
+
+  jsManager.on('move', (evt, data) => {
+    const steer = data.vector.x;
+    const drive = data.vector.y;
+    $('jsSteerVal').textContent = steer.toFixed(2);
+    $('jsThrottleVal').textContent = drive.toFixed(2);
+    wsSend({
+      action: 'manual_control',
+      steering: steer,
+      steer_type: 'angle',
+      throttle: drive > 0 ? drive : 0,
+      brake: drive < 0 ? Math.abs(drive) : 0
+    });
+  });
+
+  jsManager.on('end', () => {
+    $('jsSteerVal').textContent = '0.00';
+    $('jsThrottleVal').textContent = '0.00';
+    wsSend({ action: 'manual_control', steering: 0, steer_type: 'angle', throttle: 0, brake: 0 });
+  });
+}
+
+function updateJoystickWidget() {
+  const w = $('manualWidgetJoystick');
+  if (!w) return;
+  if (currentMission === 'manual') {
+    if (w.style.display === 'none') {
+      w.style.display = 'block';
+      setTimeout(initJoystick, 50);
+    }
+  } else {
+    w.style.display = 'none';
+  }
+}
 
 // Gamepad polling
 let gamepadLoop = null;
@@ -243,7 +310,7 @@ function connect() {
     }
     try {
       lastData = JSON.parse(e.data);
-      if (lastData.mission) currentMission = lastData.mission;
+      if (lastData.mission) { currentMission = lastData.mission; updateJoystickWidget(); }
       // Reflect ESP32 heartbeat in the connection dot (green only when HB alive)
       const d = $('connDot');
       if (d) { if (lastData.esp32_heartbeat) d.classList.add('ok'); else d.classList.remove('ok'); }
