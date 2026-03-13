@@ -416,6 +416,10 @@ body { font-family:'Inter',-apple-system,BlinkMacSystemFont,'SF Pro',system-ui,s
 `,
   render() { return `<div class="container">
   <div class="sbar"><div class="spill" id="pillState">IDLE</div><div class="spill" id="pillMission">MANUAL</div><div class="spill" id="pillHb">HB --</div></div>
+  <div class="card"><div class="card-t">Mission</div>
+    <div class="mis-grid" id="misGrid"><button class="mis-btn sel" data-m="manual">Manual</button><button class="mis-btn" data-m="remote_control">Remote</button><button class="mis-btn" data-m="acceleration">Accel</button><button class="mis-btn" data-m="skidpad">Skidpad</button><button class="mis-btn" data-m="autocross">Autocross</button><button class="mis-btn" data-m="trackdrive">Trackdrive</button><button class="mis-btn" data-m="inspection">Inspect</button></div>
+    <div class="ctrl-row"><button class="ctrl-btn go" onclick="wsSend({action:'set_state',state:'running'})">Start</button><button class="ctrl-btn stop" onclick="wsSend({action:'set_state',state:'idle'})">Stop</button><button class="ctrl-btn ebs" onclick="wsSend({action:'set_state',state:'ebs'})">EBS</button></div>
+  </div>
   <div class="card"><div class="card-t">Kart State</div>
     <div class="tg"><div class="ti"><div class="tl">Steering</div><div class="tv" id="vSteer">0.0 <span class="tu">°</span></div><div class="ti-bar"><div class="ti-bar-fill" id="steerBarFill" style="width:0%;background:#4a9eff"></div></div></div>
     <div class="ti"><div class="tl">Speed</div><div class="tv" id="vSpeed">0.0 <span class="tu">km/h</span></div><div class="ti-bar"><div class="ti-bar-fill" id="speedBarFill" style="width:0%;background:#2ecc71"></div></div></div></div>
@@ -428,10 +432,7 @@ body { font-family:'Inter',-apple-system,BlinkMacSystemFont,'SF Pro',system-ui,s
     <div class="trg-item"><div class="trg-lbl">Steering</div><div class="trg-val" id="cSteer">0.0°</div></div>
     <div class="trg-item"><div class="trg-lbl">Throttle</div><div class="trg-val" id="cThr">0%</div></div>
     <div class="trg-item"><div class="trg-lbl">Brake</div><div class="trg-val" id="cBrk">0%</div></div></div></div>
-  <div class="card"><div class="card-t">Mission</div>
-    <div class="mis-grid" id="misGrid"><button class="mis-btn sel" data-m="manual">Manual</button><button class="mis-btn" data-m="remote_control">Remote</button><button class="mis-btn" data-m="acceleration">Accel</button><button class="mis-btn" data-m="skidpad">Skidpad</button><button class="mis-btn" data-m="autocross">Autocross</button><button class="mis-btn" data-m="trackdrive">Trackdrive</button><button class="mis-btn" data-m="inspection">Inspect</button></div>
-    <div class="ctrl-row"><button class="ctrl-btn go" onclick="wsSend({action:'set_state',state:'running'})">Start</button><button class="ctrl-btn stop" onclick="wsSend({action:'set_state',state:'idle'})">Stop</button><button class="ctrl-btn ebs" onclick="wsSend({action:'set_state',state:'ebs'})">EBS</button></div>
-  </div></div>`; },
+  </div>`; },
 
   init() {
     $('misGrid').addEventListener('click', missionClick);
@@ -555,6 +556,14 @@ body::before { content:''; position:fixed; inset:0; background:repeating-linear-
   <div class="k-mode-strip" id="kModeStrip"><button class="k-mode active" data-st="idle">IDLE</button><button class="k-mode" data-st="manual">MANUAL</button><button class="k-mode" data-st="auto">AUTONOMOUS</button></div>
   <div class="k-body">
     <div class="k-sec">
+      <div class="k-sec-hd"><div class="k-sec-t">MISSION SELECT</div><div class="k-sec-badge" id="kMisBadge">MANUAL</div></div>
+      <div class="k-sec-body">
+        <div class="k-mis-grid" id="misGrid"><button class="k-mis-btn sel" data-m="manual">MANUAL</button><button class="k-mis-btn" data-m="remote_control">REMOTE</button><button class="k-mis-btn" data-m="acceleration">ACCEL</button><button class="k-mis-btn" data-m="skidpad">SKIDPAD</button><button class="k-mis-btn" data-m="autocross">AUTOCROSS</button><button class="k-mis-btn" data-m="trackdrive">TRACKDRIVE</button><button class="k-mis-btn" data-m="inspection">INSPECT</button></div>
+        <div class="k-ctrl-row"><button class="k-ctrl go" onclick="wsSend({action:'set_state',state:'running'})">START</button><button class="k-ctrl stop" onclick="wsSend({action:'set_state',state:'idle'})">STOP</button><button class="k-ctrl ebs" onclick="wsSend({action:'set_state',state:'ebs'})">EBS</button></div>
+      </div>
+      <div class="k-voice"><span class="k-voice-icon">▶</span><span id="voiceText">SYSTEM INITIALISED. AWAITING COMMAND.</span></div>
+    </div>
+    <div class="k-sec">
       <div class="k-sec-hd"><div class="k-sec-t">ESP32 · SENSOR ARRAY</div><div class="k-sec-badge" id="kSensorBadge">OFFLINE</div></div>
       <div class="k-sec-body"><div class="k-sg">
         <div class="k-sensor"><div class="k-s-lbl">STEERING</div><div class="k-s-val" id="ksSteer">0.0</div><div class="k-s-unit">DEG</div><div class="k-s-bar"><div class="k-s-bar-fill" id="kbSteer" style="width:0%"></div></div></div>
@@ -571,14 +580,6 @@ body::before { content:''; position:fixed; inset:0; background:repeating-linear-
         <div class="k-orin-cell"><div class="k-orin-lbl">BRAKE</div><div class="k-orin-val" id="koCBrk">000</div></div>
         <div class="k-orin-cell"><div class="k-orin-lbl">STEERING</div><div class="k-orin-val" id="koCStr">0.0°</div></div>
       </div></div>
-    </div>
-    <div class="k-sec">
-      <div class="k-sec-hd"><div class="k-sec-t">MISSION SELECT</div><div class="k-sec-badge" id="kMisBadge">MANUAL</div></div>
-      <div class="k-sec-body">
-        <div class="k-mis-grid" id="misGrid"><button class="k-mis-btn sel" data-m="manual">MANUAL</button><button class="k-mis-btn" data-m="remote_control">REMOTE</button><button class="k-mis-btn" data-m="acceleration">ACCEL</button><button class="k-mis-btn" data-m="skidpad">SKIDPAD</button><button class="k-mis-btn" data-m="autocross">AUTOCROSS</button><button class="k-mis-btn" data-m="trackdrive">TRACKDRIVE</button><button class="k-mis-btn" data-m="inspection">INSPECT</button></div>
-        <div class="k-ctrl-row"><button class="k-ctrl go" onclick="wsSend({action:'set_state',state:'running'})">START</button><button class="k-ctrl stop" onclick="wsSend({action:'set_state',state:'idle'})">STOP</button><button class="k-ctrl ebs" onclick="wsSend({action:'set_state',state:'ebs'})">EBS</button></div>
-      </div>
-      <div class="k-voice"><span class="k-voice-icon">▶</span><span id="voiceText">SYSTEM INITIALISED. AWAITING COMMAND.</span></div>
     </div>
   </div>
   <div class="k-footer"><div class="k-footer-l">KNIGHT INDUSTRIES TWO THOUSAND</div><div class="k-footer-dot"></div><div class="k-footer-r">UM · FSAE · v2.4.1</div></div>
@@ -746,6 +747,16 @@ body { font-family:'Inter',sans-serif; background:#0a0a0a; color:#f5f5f5; }
       <div class="t-car-stat"><div class="t-big-val" id="tBigAccel">0.0</div><div class="t-big-unit">m/s²</div></div>
     </div>
   </div>
+  <div class="t-sec-label">Mission</div>
+  <div class="t-mis-grid" id="misGrid">
+    <button class="t-mis-btn sel" data-m="manual">Manual</button><button class="t-mis-btn" data-m="remote_control">Remote</button><button class="t-mis-btn" data-m="acceleration">Accel</button>
+    <button class="t-mis-btn" data-m="skidpad">Skidpad</button><button class="t-mis-btn" data-m="autocross">Autocross</button><button class="t-mis-btn" data-m="trackdrive">Trackdrive</button><button class="t-mis-btn" data-m="inspection">Inspect</button>
+  </div>
+  <div class="t-ctrl-row">
+    <button class="t-ctrl go" onclick="wsSend({action:'set_state',state:'running'})">Start</button>
+    <button class="t-ctrl stop" onclick="wsSend({action:'set_state',state:'idle'})">Stop</button>
+    <button class="t-ctrl ebs" onclick="wsSend({action:'set_state',state:'ebs'})">EBS</button>
+  </div>
   <div class="t-sec-label">Sensors</div>
   <div class="t-grid2">
     <div class="t-card"><div class="t-card-label">Steering</div><div class="t-card-val" id="tsSteer">0.0</div><div class="t-card-unit">°</div><div class="t-card-bar"><div class="t-card-bar-fill" id="tbSteer" style="background:#1e88e5"></div></div></div>
@@ -758,16 +769,6 @@ body { font-family:'Inter',sans-serif; background:#0a0a0a; color:#f5f5f5; }
     <div class="t-cmd-card"><div class="t-cmd-label">Throttle</div><div class="t-cmd-val" id="tcThr">0%</div></div>
     <div class="t-cmd-card"><div class="t-cmd-label">Brake</div><div class="t-cmd-val" id="tcBrk">0%</div></div>
     <div class="t-cmd-card"><div class="t-cmd-label">Steer</div><div class="t-cmd-val" id="tcStr">0.00°</div></div>
-  </div>
-  <div class="t-sec-label">Mission</div>
-  <div class="t-mis-grid" id="misGrid">
-    <button class="t-mis-btn sel" data-m="manual">Manual</button><button class="t-mis-btn" data-m="remote_control">Remote</button><button class="t-mis-btn" data-m="acceleration">Accel</button>
-    <button class="t-mis-btn" data-m="skidpad">Skidpad</button><button class="t-mis-btn" data-m="autocross">Autocross</button><button class="t-mis-btn" data-m="trackdrive">Trackdrive</button><button class="t-mis-btn" data-m="inspection">Inspect</button>
-  </div>
-  <div class="t-ctrl-row">
-    <button class="t-ctrl go" onclick="wsSend({action:'set_state',state:'running'})">Start</button>
-    <button class="t-ctrl stop" onclick="wsSend({action:'set_state',state:'idle'})">Stop</button>
-    <button class="t-ctrl ebs" onclick="wsSend({action:'set_state',state:'ebs'})">EBS</button>
   </div>
 </div>`; },
 
