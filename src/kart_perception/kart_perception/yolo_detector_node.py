@@ -155,10 +155,9 @@ class YoloDetectorNode(Node):
         # Override generic names (e.g. "class0") with canonical cone class names
         if names and any(v != self.EXPECTED_CLASS_NAMES.get(k) for k, v in names.items()):
             self.get_logger().warn(
-                f"Model class names {names} don't match expected; overriding with {self.EXPECTED_CLASS_NAMES}"
+                f"Model class names don't match expected; overriding with {self.EXPECTED_CLASS_NAMES}"
             )
-            self.model.names = dict(self.EXPECTED_CLASS_NAMES)
-            names = self.model.names
+            return dict(self.EXPECTED_CLASS_NAMES)
         return names
 
     def _on_image(self, msg: Image) -> None:
