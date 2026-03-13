@@ -140,12 +140,26 @@ class YoloDetectorNode(Node):
             self.get_logger().error(f"Failed to load YOLO model: {exc}")
             return None
 
+    # Canonical class names matching our dataset.yaml
+    EXPECTED_CLASS_NAMES = {
+        0: "blue_cone",
+        1: "yellow_cone",
+        2: "orange_cone",
+        3: "large_orange_cone",
+    }
+
     def _get_class_names(self):
         if self.model is None:
             return None
-        if self._use_ultralytics:
-            return self.model.names  # dict {0: "blue_cone", ...}
-        return self.model.names  # same format for YOLOv5
+        names = self.model.names
+        # Override generic names (e.g. "class0") with canonical cone class names
+        if names and any(v != self.EXPECTED_CLASS_NAMES.get(k) for k, v in names.items()):
+            self.get_logger().warn(
+                f"Model class names {names} don't match expected; overriding with {self.EXPECTED_CLASS_NAMES}"
+            )
+            self.model.names = dict(self.EXPECTED_CLASS_NAMES)
+            names = self.model.names
+        return names
 
     def _on_image(self, msg: Image) -> None:
         """ROS callback — just grab the frame and signal the inference thread."""

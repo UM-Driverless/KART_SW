@@ -175,8 +175,8 @@ class ConeFollowerNode(Node):
         # Safety: if no cones visible, slow down and keep last steer
         # (don't hard-stop — cones may reappear after a curve transition)
         if not cones:
-            speed = self.min_speed
-            steer = self._last_steer
+            speed = 0.0
+            steer = 0.0
 
         cmd = Twist()
         cmd.angular.z = steer
@@ -276,8 +276,8 @@ class ConeFollowerNode(Node):
         elapsed = (self.get_clock().now() - self.last_detection_time).nanoseconds / 1e9
         if elapsed > self.no_cone_timeout:
             cmd = Twist()
-            cmd.linear.x = self.min_speed
-            cmd.angular.z = self._last_steer
+            cmd.linear.x = 0.0
+            cmd.angular.z = 0.0
             self.cmd_pub.publish(cmd)
 
 

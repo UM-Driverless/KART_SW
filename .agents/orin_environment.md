@@ -113,6 +113,23 @@ cd ~/Desktop/kart_medulla
 - **`outputLimit`** on steering actuator: float 0.0-1.0 (was uint8_t — caused hardware damage, see error_log)
 - See `architecture.md` for protocol details and message types
 
+## TensorRT Export
+
+**`trtexec` does NOT embed ultralytics metadata** (class names, task type, input size). Engines built with `trtexec` will show generic `class0..class998` names when loaded by ultralytics. The proper export is `model.export(format='engine')` from the ultralytics Python API, but this fails on the Orin with `CUBLAS_STATUS_ALLOC_FAILED` during `model.fuse()` (cuBLAS 12.9 pip vs system CUDA 12.6 conflict — see error_log entry "cuBLAS fails on Jetson").
+
+**Workaround**: `yolo_detector_node.py` has `EXPECTED_CLASS_NAMES` that auto-overrides wrong/generic names at runtime. If you add/change classes, update both `EXPECTED_CLASS_NAMES` in the node and `dataset.yaml`.
+
+**Export procedure** (on Orin):
+```bash
+cd ~/kart_brain
+# 1. Export .pt → ONNX (CPU-safe, no CUBLAS needed)
+python3 -c "from ultralytics import YOLO; YOLO('models/perception/yolo/<model>.pt').export(format='onnx', imgsz=640, device='cpu')"
+# 2. Convert ONNX → TensorRT engine (uses trtexec, avoids PyTorch fuse)
+/usr/src/tensorrt/bin/trtexec --onnx=models/perception/yolo/<model>.onnx --saveEngine=models/perception/yolo/<model>.engine --fp16
+# 3. Clean up ONNX
+rm models/perception/yolo/<model>.onnx
+```
+
 ## Known Issues
 1. **numpy must be <2** — cv2 was compiled against numpy 1.x, numpy 2 breaks it
 2. **ZED camera "NOT DETECTED" after reboot**: The ZED ROS wrapper may fail even though `lsusb` shows the device. Fix with a software USB reset (no physical re-plug needed): `echo "0" | sudo -S bash -c "echo 0 > /sys/bus/usb/devices/2-3.2/authorized && sleep 1 && echo 1 > /sys/bus/usb/devices/2-3.2/authorized"`. The ZED is at USB path `2-3.2` (SuperSpeed 5 Gbps).
