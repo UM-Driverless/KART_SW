@@ -97,13 +97,14 @@ void SerialDriver::stop()
  * Thread-safe.
  */
 void SerialDriver::send(uint8_t type,
-                        const std::vector<uint8_t>& payload)
+                        const std::vector<int32_t>& data)
 {
-    if (payload.size() > 251)
+    int count = data.size();
+    if (count > 60)
         return;
     
     std::lock_guard<std::mutex> lock(tx_mutex_);
-    tx_queue_.push(build_frame(type, payload));
+    tx_queue_.push(build_frame(type, data));
     tx_cv_.notify_one();
 }
 
@@ -393,20 +394,39 @@ int SerialDriver::process_byte(uint8_t byte)
             if (crc == byte) {
                 Frame frame;
                 frame.type = type_;
-                frame.payload.assign(payload_.begin(),
-                     payload_.begin() + len_);
+        
+                // Reconstruir los int32_t desde los bytes
+                size_t count = len_ / 4;
+                std::vector<int32_t> data(count);
+        
+                for (size_t i = 0; i < count; i++) {
+                    data[i] = (int32_t(payload_[i*4]) << 24) |
+                                (int32_t(payload_[i*4+1]) << 16) |
+                                (int32_t(payload_[i*4+2]) << 8) |
+                                int32_t(payload_[i*4+3]);
+                }
+        
+                // Aquí se podría pasar data a la callback o almacenarlo en otro miembro
+                // Si Frame.payload sigue siendo std::vector<uint8_t>, NO puedes asignar int32_t ahí
+                // Una opción: hacer Frame.payload std::vector<int32_t>
+                frame.payload.clear();
+                for (auto& val : data) {
+                    frame.payload.push_back( (val >> 24) & 0xFF );
+                    frame.payload.push_back( (val >> 16) & 0xFF );
+                    frame.payload.push_back( (val >> 8) & 0xFF );
+                    frame.payload.push_back( val & 0xFF );
+                }
+        
                 rx_ok_++;
                 callback_(frame);
                 state_ = State::WAIT_SOF;
-
-                // End of msg
+        
                 return 1;
-
             } else {
                 std::cerr << "Serial: CRC mismatch" << std::endl;
                 rx_crc_error_++;
             }
-
+        
             state_ = State::WAIT_SOF;
             break;
         }
@@ -426,19 +446,24 @@ int SerialDriver::process_byte(uint8_t byte)
  * @param payload Payload.
  * @return Serialized byte vector.
  */
-std::vector<uint8_t> SerialDriver::build_frame(
-        uint8_t type,
-        const std::vector<uint8_t>& payload)
-{
+std::vector<uint8_t> SerialDriver::build_frame( uint8_t type, const std::vector<int32_t>& payload) {
     std::vector<uint8_t> frame;
-    uint8_t len = payload.size();
+    std::vector<uint8_t> payload_bytes(payload.size() * 4);
 
+    for (size_t i = 0; i < payload.size(); i++) {
+        payload_bytes[i*4 + 0] = (payload[i] >> 24) & 0xFF;
+        payload_bytes[i*4 + 1] = (payload[i] >> 16) & 0xFF;
+        payload_bytes[i*4 + 2] = (payload[i] >> 8) & 0xFF;
+        payload_bytes[i*4 + 3] = payload[i] & 0xFF;
+    }
+
+    uint8_t len = payload_bytes.size();
     frame.reserve(len + 4);
     frame.push_back(SOF);
     frame.push_back(len);
     frame.push_back(type);
-    frame.insert(frame.end(), payload.begin(), payload.end());
-    frame.push_back(crc8(len, type, payload.data(), len));
+    frame.insert(frame.end(), payload_bytes.begin(), payload_bytes.end());
+    frame.push_back(crc8(len, type, payload_bytes.data(), len));
 
     return frame;
 }

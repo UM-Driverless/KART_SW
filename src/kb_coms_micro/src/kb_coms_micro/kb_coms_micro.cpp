@@ -69,7 +69,7 @@ KB_coms_micro::~KB_coms_micro() { serial_->stop(); }
 void KB_coms_micro::kb_coms_OrinHeartbeat(void) {
 
     uint8_t type = static_cast<uint8_t>(message_type_t::ORIN_HEARTBEAT);
-    std::vector<uint8_t> payload;
+    std::vector<int32_t> payload;
 
     serial_->send(type, payload);
 }
@@ -77,8 +77,6 @@ void KB_coms_micro::kb_coms_OrinHeartbeat(void) {
 // Callback de mensajes de la ESP
 void KB_coms_micro::kb_coms_RXcallback(const SerialDriver::Frame &frame_esp) {
     RCLCPP_DEBUG(this->get_logger(), "Se ha recibido un msg: %d", frame_esp.type);
-
-    // TODO: Procesar los payloads
 
     switch(frame_esp.type) {
     case kb_interfaces::msg::Frame::ESP_ACT_SPEED: {
