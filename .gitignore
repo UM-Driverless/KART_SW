@@ -9,3 +9,6 @@ training/perception/runs/
 .env
 .vscode/
 .playwright-mcp/
+.colcon/
+*.engine
+*.onnx
