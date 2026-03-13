@@ -150,7 +150,7 @@ def _launch_setup(context):
     # --- 3b. YOLO perception pipeline (when use_yolo=true) ---
     weights_path = os.path.join(
         os.path.expanduser("~"), "kart_brain", "models", "perception", "yolo",
-        "nava_yolov11_2026_02.pt",
+        "ruben_yolov11n_2026_03.pt",
     )
     try:
         pkg_perception = get_package_share_directory("kart_perception")

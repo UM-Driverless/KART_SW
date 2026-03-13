@@ -23,7 +23,7 @@ trap cleanup SIGINT SIGTERM
 ros2 run kart_perception image_source --ros-args   -p source:=/dev/video0   -p stereo_crop:=true   -p publish_rate:=10.0   -p image_topic:=/image_raw &
 
 # YOLO detector
-ros2 run kart_perception yolo_detector --ros-args   -p image_topic:=/image_raw   -p detections_topic:=/perception/cones_2d   -p debug_image_topic:=/perception/yolo/annotated   -p weights_path:=models/perception/yolo/nava_yolov11_2026_02.pt &
+ros2 run kart_perception yolo_detector --ros-args   -p image_topic:=/image_raw   -p detections_topic:=/perception/cones_2d   -p debug_image_topic:=/perception/yolo/annotated   -p weights_path:=models/perception/yolo/ruben_yolov11n_2026_03.pt &
 
 sleep 25
 echo 'Opening viewer...'

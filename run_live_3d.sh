@@ -29,7 +29,7 @@ ros2 run kart_perception yolo_detector --ros-args \
   -p image_topic:=/zed/zed_node/rgb/image_rect_color \
   -p detections_topic:=/perception/cones_2d \
   -p debug_image_topic:=/perception/yolo/annotated \
-  -p weights_path:=models/perception/yolo/nava_yolov11_2026_02.pt &
+  -p weights_path:=models/perception/yolo/ruben_yolov11n_2026_03.pt &
 
 # Depth localizer (2D cones + depth → 3D cones)
 ros2 run kart_perception cone_depth_localizer --ros-args \

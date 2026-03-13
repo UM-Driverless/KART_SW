@@ -15,7 +15,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--weights",
-        default="models/perception/yolo/nava_yolov11_2026_02.pt",
+        default="models/perception/yolo/ruben_yolov11n_2026_03.pt",
         help="Path to YOLO weights (.pt).",
     )
     parser.add_argument(
