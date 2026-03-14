@@ -123,7 +123,9 @@ class DashboardNode(Node):
         # Pending commands set from asyncio thread, published by ROS timer
         self._pending_manual_cmd = None
         self._pending_mission = None
+        self._pending_mission_count = 0
         self._pending_state_cmd = None
+        self._pending_state_cmd_count = 0
         self.create_timer(0.01, self._publish_pending)  # 100 Hz
 
         self.get_logger().info(f"Dashboard node started, web UI on port {self.port}")
@@ -218,27 +220,19 @@ class DashboardNode(Node):
         return self._hud_jpeg
 
     def publish_mission(self, mission: str):
-        """@brief Publish a mission selection to /dashboard/mission.
-
-        @param mission Mission name (e.g. "manual", "trackdrive").
-        """
+        """@brief Queue a mission selection for the ROS timer to publish."""
         msg = String()
         msg.data = mission
-        # Publish directly — mission changes are infrequent, cross-thread
-        # publish works for single calls even if unreliable at high frequency
-        self.mission_pub.publish(msg)
-        self._pending_mission = msg  # also queue for timer as backup
+        self._pending_mission = msg
+        self._pending_mission_count = 100  # publish for 1 second (100 Hz timer)
         self.get_logger().info(f"Mission set: {mission}")
 
     def publish_state_cmd(self, cmd: str):
-        """@brief Publish a state command to /dashboard/state_cmd.
-
-        @param cmd Command string (e.g. "start", "stop", "ebs").
-        """
+        """@brief Queue a state command for the ROS timer to publish."""
         msg = String()
         msg.data = cmd
-        self.state_cmd_pub.publish(msg)
-        self._pending_state_cmd = msg  # backup
+        self._pending_state_cmd = msg
+        self._pending_state_cmd_count = 100
         self.get_logger().info(f"State cmd: {cmd}")
 
     def _publish_pending(self):
@@ -250,14 +244,12 @@ class DashboardNode(Node):
         cmd = self._pending_manual_cmd
         if cmd is not None:
             self.manual_cmd_pub.publish(cmd)
-        mission = self._pending_mission
-        if mission is not None:
-            self._pending_mission = None
-            self.mission_pub.publish(mission)
-        state_cmd = self._pending_state_cmd
-        if state_cmd is not None:
-            self._pending_state_cmd = None
-            self.state_cmd_pub.publish(state_cmd)
+        if self._pending_mission is not None and self._pending_mission_count > 0:
+            self.mission_pub.publish(self._pending_mission)
+            self._pending_mission_count -= 1
+        if self._pending_state_cmd is not None and self._pending_state_cmd_count > 0:
+            self.state_cmd_pub.publish(self._pending_state_cmd)
+            self._pending_state_cmd_count -= 1
 
     def publish_manual_control(
         self, steer: float, steer_type: str, throttle: float, brake: float
