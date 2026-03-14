@@ -137,9 +137,10 @@ async def run_websocket_server(
             if opcode == 0x1:  # text
                 try:
                     cmd = json.loads(data.decode())
+                    node.get_logger().info(f"WS cmd: {cmd.get('action', '?')}")
                     handle_command(cmd, state, node)
-                except Exception:
-                    pass
+                except Exception as e:
+                    node.get_logger().warn(f"WS cmd error: {e}")
 
     def handle_command(cmd: dict, state, node):
         """@brief Dispatch a JSON command received from the browser.
