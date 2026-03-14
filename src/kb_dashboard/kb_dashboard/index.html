@@ -461,7 +461,9 @@ body { font-family:'Inter',-apple-system,BlinkMacSystemFont,'SF Pro',system-ui,s
   </div>
   <div class="card"><div class="card-t">Kart State</div>
     <div class="tg"><div class="ti"><div class="tl">Steering</div><div class="tv" id="vSteer">0.0 <span class="tu">°</span></div><div class="ti-bar"><div class="ti-bar-fill" id="steerBarFill" style="width:0%;background:#4a9eff"></div></div></div>
-    <div class="ti"><div class="tl">Speed</div><div class="tv" id="vSpeed">0.0 <span class="tu">km/h</span></div><div class="ti-bar"><div class="ti-bar-fill" id="speedBarFill" style="width:0%;background:#2ecc71"></div></div></div></div>
+    <!-- Speed: no sensor yet
+    <div class="ti"><div class="tl">Speed</div><div class="tv" id="vSpeed">0.0 <span class="tu">km/h</span></div><div class="ti-bar"><div class="ti-bar-fill" id="speedBarFill" style="width:0%;background:#2ecc71"></div></div></div>
+    --></div>
     <div class="gg-row"><div class="gg-wrap"><canvas class="gg-canvas" id="ggCanvas" width="140" height="140"></canvas></div>
     <div class="gg-labels"><div><div class="gg-vl">Lateral</div><div class="gg-v" id="vALat">0.00 g</div></div><div><div class="gg-vl">Longitudinal</div><div class="gg-v" id="vALon">0.00 g</div></div><div><div class="gg-vl">Total</div><div class="gg-v" id="vATotal">0.00 g</div></div></div></div>
     <div class="ped-row"><div class="ped-item"><div class="ped-lbl">Throttle <span id="vThr">0%</span></div><div class="ped-track"><div class="ped-fill thr" id="thrFill" style="width:0%"></div></div></div>
@@ -481,12 +483,13 @@ body { font-family:'Inter',-apple-system,BlinkMacSystemFont,'SF Pro',system-ui,s
 
   update(d) {
     $('vSteer').innerHTML = `${deg(d.esp32_steering_rad)}<span style="font-size:.55em;vertical-align:super">°</span>` + (d.esp32_steering_raw != null ? ` <span class="tu" style="font-size:.5em;opacity:.6">raw ${d.esp32_steering_raw}</span>` : '');
-    $('vSpeed').innerHTML = `${(d.esp32_speed*3.6).toFixed(1)} <span class="tu">km/h</span>`;
+    // Speed: no sensor yet
+    // $('vSpeed').innerHTML = `${(d.esp32_speed*3.6).toFixed(1)} <span class="tu">km/h</span>`;
     const sPct = Math.max(-1, Math.min(1, d.esp32_steering_rad / 0.5));
     const sf = $('steerBarFill');
     if (sPct >= 0) { sf.style.left='50%'; sf.style.width=(sPct*50)+'%'; }
     else { sf.style.width=(-sPct*50)+'%'; sf.style.left=(50+sPct*50)+'%'; }
-    $('speedBarFill').style.width = Math.min(d.esp32_speed/30*100,100)+'%';
+    // $('speedBarFill').style.width = Math.min(d.esp32_speed/30*100,100)+'%';
     const latG = d.esp32_accel_lat/9.81, lonG = d.esp32_accel_lon/9.81;
     drawGG(latG, lonG, '#2a2a3a', '#6a6a7a40', '#4a9eff', 8);
     $('vALat').textContent = latG.toFixed(2)+' g';
@@ -802,8 +805,10 @@ body::after {
     </div>
     <div class="k-tc on" id="tc-tele">
       <div class="s-grid">
+        <!-- Speed/RPM: no sensor yet
         <div class="sc"><div class="sc-lbl">SPEED</div><div class="sc-val" id="speedVal">0.0</div><div class="sc-unit">M / S</div><div class="sc-segs" id="speedSegs"></div></div>
         <div class="sc"><div class="sc-lbl">MOTOR RPM</div><div class="sc-val" id="rpmVal">0.0</div><div class="sc-unit">KRPM</div><div class="sc-segs" id="rpmSegs"></div></div>
+        -->
         <div class="sc"><div class="sc-lbl">THROTTLE OUT</div><div class="sc-val" id="thoVal">000</div><div class="sc-unit">%</div><div class="sc-segs" id="thoSegs"></div></div>
         <div class="sc"><div class="sc-lbl">STEERING OUT</div><div class="sc-val" id="stoVal">0.0°</div><div class="sc-unit">DEG</div><div class="sc-segs" id="stoSegs"></div></div>
       </div>
@@ -893,7 +898,7 @@ body::after {
       for (let i = 0; i < n; i++) el.appendChild(document.createElement('span'));
     };
     ['steerSegs','driveSegs'].forEach(id => mkSegs(id, 20));
-    ['speedSegs','rpmSegs','thoSegs','stoSegs'].forEach(id => mkSegs(id, 16));
+    ['thoSegs','stoSegs'].forEach(id => mkSegs(id, 16)); // Speed/RPM segs removed (no sensor)
 
     // HELPERS
     window.litSegs = (id, norm, centered) => {
@@ -977,13 +982,12 @@ body::after {
       else { s.textContent = d.state.toUpperCase(); s.className = 'status-pill'; }
     }
     
-    $('speedVal').textContent = d.esp32_speed.toFixed(1);
-    litSmall('speedSegs', Math.min(1, Math.abs(d.esp32_speed)/10));
-    
-    // RPM Simulation or data if available
-    const rpm = d.esp32_rpm !== undefined ? d.esp32_rpm : (Math.abs(d.esp32_speed) * 0.5);
-    $('rpmVal').textContent = rpm.toFixed(1);
-    litSmall('rpmSegs', Math.min(1, rpm/5));
+    // Speed/RPM: no sensor yet
+    // $('speedVal').textContent = d.esp32_speed.toFixed(1);
+    // litSmall('speedSegs', Math.min(1, Math.abs(d.esp32_speed)/10));
+    // const rpm = d.esp32_rpm !== undefined ? d.esp32_rpm : (Math.abs(d.esp32_speed) * 0.5);
+    // $('rpmVal').textContent = rpm.toFixed(1);
+    // litSmall('rpmSegs', Math.min(1, rpm/5));
     
     $('thoVal').textContent = Math.round(d.esp32_throttle * 100);
     litSmall('thoSegs', d.esp32_throttle);
@@ -1084,7 +1088,8 @@ body { font-family:'Inter',sans-serif; background:#0a0a0a; color:#f5f5f5; }
       </svg>
     </div>
     <div class="t-car-stats">
-      <div class="t-car-stat"><div class="t-big-val" id="tBigSpeed">0.0</div><div class="t-big-unit">km/h</div></div>
+      <!-- Speed: no sensor yet -->
+      <div class="t-car-stat"><div class="t-big-val" id="tBigSpeed">--</div><div class="t-big-unit">km/h</div></div>
       <div class="t-car-stat"><div class="t-big-val" id="tBigSteer">0.0</div><div class="t-big-unit">°</div></div>
       <div class="t-car-stat"><div class="t-big-val" id="tBigAccel">0.0</div><div class="t-big-unit">m/s²</div></div>
     </div>
@@ -1102,7 +1107,9 @@ body { font-family:'Inter',sans-serif; background:#0a0a0a; color:#f5f5f5; }
   <div class="t-sec-label">Sensors</div>
   <div class="t-grid2">
     <div class="t-card"><div class="t-card-label">Steering</div><div class="t-card-val" id="tsSteer">0.0</div><div class="t-card-unit">°</div><div class="t-card-bar"><div class="t-card-bar-fill" id="tbSteer" style="background:#1e88e5"></div></div></div>
+    <!-- Speed: no sensor yet
     <div class="t-card"><div class="t-card-label">Speed</div><div class="t-card-val" id="tsSpeed">0.0</div><div class="t-card-unit">km/h</div><div class="t-card-bar"><div class="t-card-bar-fill" id="tbSpeed" style="background:#43a047"></div></div></div>
+    -->
     <div class="t-card"><div class="t-card-label">Throttle</div><div class="t-card-val" id="tsThr">0</div><div class="t-card-unit">%</div><div class="t-card-bar"><div class="t-card-bar-fill" id="tbThr" style="background:#fb8c00"></div></div></div>
     <div class="t-card"><div class="t-card-label">Braking</div><div class="t-card-val" id="tsBrk">0</div><div class="t-card-unit">%</div><div class="t-card-bar"><div class="t-card-bar-fill" id="tbBrk" style="background:#e53935"></div></div></div>
   </div>
@@ -1120,18 +1127,19 @@ body { font-family:'Inter',sans-serif; background:#0a0a0a; color:#f5f5f5; }
   },
 
   update(d) {
-    const spd = d.esp32_speed*3.6;
+    // Speed: no sensor yet
+    // const spd = d.esp32_speed*3.6;
     const accelTotal = Math.sqrt(d.esp32_accel_lat**2 + d.esp32_accel_lon**2);
-    $('tBigSpeed').textContent = spd.toFixed(1);
+    // $('tBigSpeed').textContent = spd.toFixed(1);
     $('tBigSteer').textContent = deg(d.esp32_steering_rad);
     $('tBigAccel').textContent = accelTotal.toFixed(1);
 
     $('tsSteer').textContent = deg(d.esp32_steering_rad);
-    $('tsSpeed').textContent = (d.esp32_speed*3.6).toFixed(1);
+    // $('tsSpeed').textContent = (d.esp32_speed*3.6).toFixed(1);
     $('tsThr').textContent = Math.round(d.esp32_throttle*100);
     $('tsBrk').textContent = Math.round(d.esp32_braking*100);
     $('tbSteer').style.width = Math.min(Math.abs(d.esp32_steering_rad)/1*100,100)+'%';
-    $('tbSpeed').style.width = Math.min(d.esp32_speed/30*100,100)+'%';
+    // $('tbSpeed').style.width = Math.min(d.esp32_speed/30*100,100)+'%';
     $('tbThr').style.width = (d.esp32_throttle*100)+'%';
     $('tbBrk').style.width = (d.esp32_braking*100)+'%';
 
@@ -1252,7 +1260,9 @@ body::before { content:''; position:fixed; inset:0; pointer-events:none; backgro
     <div class="h-sec-title"><div class="h-sec-dot" style="background:#00b4ff;box-shadow:0 0 6px #00b4ff"></div>ESP32 SENSORS</div>
     <div class="h-sg">
       <div class="h-metric"><div class="h-metric-line" style="background:linear-gradient(90deg,transparent,#00b4ff,transparent)"></div><div class="h-metric-label">STEERING</div><div class="h-metric-row"><span class="h-metric-val" id="hsSteer">0.0</span><span class="h-metric-unit" style="color:#00b4ff">°</span></div><div class="h-metric-bar"><div class="h-metric-bar-fill" id="hbSteer" style="background:linear-gradient(90deg,#00b4ff88,#00b4ff);box-shadow:0 0 8px #00b4ff;width:0%"></div></div></div>
+      <!-- Speed: no sensor yet
       <div class="h-metric"><div class="h-metric-line" style="background:linear-gradient(90deg,transparent,#39ff14,transparent)"></div><div class="h-metric-label">SPEED</div><div class="h-metric-row"><span class="h-metric-val" id="hsSpeed">0.0</span><span class="h-metric-unit" style="color:#39ff14">km/h</span></div><div class="h-metric-bar"><div class="h-metric-bar-fill" id="hbSpeed" style="background:linear-gradient(90deg,#39ff1488,#39ff14);box-shadow:0 0 8px #39ff14;width:0%"></div></div></div>
+      -->
       <div class="h-metric"><div class="h-metric-line" style="background:linear-gradient(90deg,transparent,#ff9500,transparent)"></div><div class="h-metric-label">THROTTLE</div><div class="h-metric-row"><span class="h-metric-val" id="hsThr">0</span><span class="h-metric-unit" style="color:#ff9500">%</span></div><div class="h-metric-bar"><div class="h-metric-bar-fill" id="hbThr" style="background:linear-gradient(90deg,#ff950088,#ff9500);box-shadow:0 0 8px #ff9500;width:0%"></div></div></div>
       <div class="h-metric"><div class="h-metric-line" style="background:linear-gradient(90deg,transparent,#ff3060,transparent)"></div><div class="h-metric-label">BRAKING</div><div class="h-metric-row"><span class="h-metric-val" id="hsBrk">0</span><span class="h-metric-unit" style="color:#ff3060">%</span></div><div class="h-metric-bar"><div class="h-metric-bar-fill" id="hbBrk" style="background:linear-gradient(90deg,#ff306088,#ff3060);box-shadow:0 0 8px #ff3060;width:0%"></div></div></div>
     </div>
@@ -1313,11 +1323,11 @@ body::before { content:''; position:fixed; inset:0; pointer-events:none; backgro
 
   update(d) {
     $('hsSteer').textContent = deg(d.esp32_steering_rad);
-    $('hsSpeed').textContent = (d.esp32_speed*3.6).toFixed(1);
+    // $('hsSpeed').textContent = (d.esp32_speed*3.6).toFixed(1); // no sensor yet
     $('hsThr').textContent = Math.round(d.esp32_throttle*100);
     $('hsBrk').textContent = Math.round(d.esp32_braking*100);
     $('hbSteer').style.width = Math.min(Math.abs(d.esp32_steering_rad)/1*100,100)+'%';
-    $('hbSpeed').style.width = Math.min(d.esp32_speed/30*100,100)+'%';
+    // $('hbSpeed').style.width = Math.min(d.esp32_speed/30*100,100)+'%'; // no sensor yet
     $('hbThr').style.width = (d.esp32_throttle*100)+'%';
     $('hbBrk').style.width = (d.esp32_braking*100)+'%';
 
