@@ -66,7 +66,10 @@ class KB_coms_micro : public rclcpp::Node {
     rclcpp::Publisher<kb_interfaces::msg::Frame>::SharedPtr esp_mision_pub_;
     rclcpp::Publisher<kb_interfaces::msg::Frame>::SharedPtr esp_machine_state_pub_;
     rclcpp::Publisher<kb_interfaces::msg::Frame>::SharedPtr esp_shutdown_pub_;
-    rclcpp::Publisher<kb_interfaces::msg::Frame>::SharedPtr esp_health_pub_;
+    rclcpp::Publisher<kb_interfaces::msg::Frame>::SharedPtr esp_diag_steering_pub_;
+    // health status
+    rclcpp::Publisher<kb_interfaces::msg::Frame>::SharedPtr esp_health_flags_pub_;
+    rclcpp::Publisher<kb_interfaces::msg::Frame>::SharedPtr esp_health_data_pub_;
 
     // Declaration of all subscribers
     rclcpp::Subscription<kb_interfaces::msg::Frame>::SharedPtr orin_throttle_sub_;
