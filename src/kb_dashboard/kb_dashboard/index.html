@@ -1134,8 +1134,8 @@ body { font-family:'Inter',sans-serif; background:#0a0a0a; color:#f5f5f5; }
     $('tbThr').style.width = (d.esp32_throttle*100)+'%';
     $('tbBrk').style.width = (d.esp32_braking*100)+'%';
 
-    $('tcThr').textContent = Math.round(d.orin_cmd_throttle/255*100)+'%';
-    $('tcBrk').textContent = Math.round(d.orin_cmd_brake/255*100)+'%';
+    $('tcThr').textContent = Math.round(d.orin_cmd_throttle*100)+'%';
+    $('tcBrk').textContent = Math.round(d.orin_cmd_brake*100)+'%';
     $('tcStr').textContent = deg(d.orin_cmd_steering_rad)+'°';
 
     // Status pill
@@ -1326,8 +1326,8 @@ body::before { content:''; position:fixed; inset:0; pointer-events:none; backgro
     $('hALon').textContent = lonG.toFixed(2)+' g';
     $('hATotal').textContent = Math.sqrt(latG*latG+lonG*lonG).toFixed(2)+' g';
 
-    $('hcThr').textContent = Math.round(d.orin_cmd_throttle/255*100)+'%';
-    $('hcBrk').textContent = Math.round(d.orin_cmd_brake/255*100)+'%';
+    $('hcThr').textContent = Math.round(d.orin_cmd_throttle*100)+'%';
+    $('hcBrk').textContent = Math.round(d.orin_cmd_brake*100)+'%';
     $('hcStr').textContent = deg(d.orin_cmd_steering_rad)+'°';
 
     // Status pill
@@ -1378,8 +1378,8 @@ function updatePedals(d) {
 
 function updateTargets(d) {
   $('cSteer').textContent = deg(d.orin_cmd_steering_rad)+'°';
-  $('cThr').textContent = Math.round(d.orin_cmd_throttle/255*100)+'%';
-  $('cBrk').textContent = Math.round(d.orin_cmd_brake/255*100)+'%';
+  $('cThr').textContent = Math.round(d.orin_cmd_throttle*100)+'%';
+  $('cBrk').textContent = Math.round(d.orin_cmd_brake*100)+'%';
 }
 
 function updatePills(d) {
