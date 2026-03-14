@@ -122,6 +122,7 @@ class DashboardNode(Node):
         self.manual_cmd_pub = self.create_publisher(Twist, "/kart/cmd_vel_manual", 10)
         # Pending commands set from asyncio thread, published by ROS timer
         self._pending_manual_cmd = None
+        self._manual_cmd_time = 0.0  # monotonic timestamp of last WS manual_control
         self._pending_mission = None
         self._pending_mission_count = 0
         self._pending_state_cmd = None
@@ -266,7 +267,11 @@ class DashboardNode(Node):
         """@brief Publish any pending commands. Safe to call from any ROS callback."""
         cmd = self._pending_manual_cmd
         if cmd is not None:
-            self.manual_cmd_pub.publish(cmd)
+            # Clear stale manual commands (no WS input for 500ms)
+            if time.monotonic() - self._manual_cmd_time > 0.5:
+                self._pending_manual_cmd = None
+            else:
+                self.manual_cmd_pub.publish(cmd)
         if self._pending_mission is not None and self._pending_mission_count > 0:
             self.mission_pub.publish(self._pending_mission)
             self._pending_mission_count -= 1
@@ -295,7 +300,7 @@ class DashboardNode(Node):
         # steer already positive=left (negated in JS)
         cmd.angular.z = steer * NOMINAL_MAX_STEER
         self._pending_manual_cmd = cmd
-        self._manual_cmd_stamp = time.monotonic()
+        self._manual_cmd_time = time.monotonic()
 
 
 # ── Entrypoint ─────────────────────────────────────────────────────────
