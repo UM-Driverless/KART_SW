@@ -267,11 +267,10 @@ class DashboardNode(Node):
         """@brief Publish any pending commands. Safe to call from any ROS callback."""
         cmd = self._pending_manual_cmd
         if cmd is not None:
-            # Clear stale manual commands (no WS input for 500ms)
+            # If no WS input for 500ms, publish zeros (safe stop)
             if time.monotonic() - self._manual_cmd_time > 0.5:
-                self._pending_manual_cmd = None
-            else:
-                self.manual_cmd_pub.publish(cmd)
+                self._pending_manual_cmd = Twist()  # zero, not None — keep publishing zeros
+            self.manual_cmd_pub.publish(self._pending_manual_cmd)
         if self._pending_mission is not None and self._pending_mission_count > 0:
             self.mission_pub.publish(self._pending_mission)
             self._pending_mission_count -= 1
