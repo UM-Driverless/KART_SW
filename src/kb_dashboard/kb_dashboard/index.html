@@ -162,9 +162,10 @@ function initJoystick() {
   jsManager.on('move', (evt, data) => {
     const rawSteer = -data.vector.x; // negate: nipplejs left=negative, our convention positive=left
     const rawDrive = data.vector.y;
-    // Dead zone: ignore cross-axis bleed below 0.15
-    const steer = Math.abs(rawSteer) > 0.15 ? rawSteer : 0;
-    const drive = Math.abs(rawDrive) > 0.15 ? rawDrive : 0;
+    // Axis-dominant: if mostly horizontal → steer only, if mostly vertical → throttle only
+    const horizontal = Math.abs(rawSteer) >= Math.abs(rawDrive);
+    const steer = horizontal ? rawSteer : 0;
+    const drive = horizontal ? 0 : rawDrive;
     $('jsSteerVal').textContent = steer.toFixed(2);
     $('jsThrottleVal').textContent = drive.toFixed(2);
     wsSend({
