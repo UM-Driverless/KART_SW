@@ -160,7 +160,7 @@ function initJoystick() {
   });
 
   jsManager.on('move', (evt, data) => {
-    const steer = data.vector.x;
+    const steer = -data.vector.x; // negate: nipplejs left=negative, our convention positive=left
     const drive = data.vector.y;
     $('jsSteerVal').textContent = steer.toFixed(2);
     $('jsThrottleVal').textContent = drive.toFixed(2);
