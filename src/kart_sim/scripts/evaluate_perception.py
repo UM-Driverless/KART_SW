@@ -36,7 +36,11 @@ os.environ.setdefault("MPLBACKEND", "Agg")
 # ── Cone parsing (same logic as perfect_perception_node) ──────────────────
 
 def parse_cones_from_sdf(sdf_path: str) -> List[Dict]:
-    """Parse cone positions from the world SDF file."""
+    """@brief Parse cone positions from the world SDF file.
+
+    @param sdf_path Path to the SDF world file.
+    @return List of dicts with keys: name, x, y, z, class_id.
+    """
     import re
 
     cones = []
@@ -65,6 +69,12 @@ def parse_cones_from_sdf(sdf_path: str) -> List[Dict]:
 
 
 def _make_cone(name: str, pose: List[str]) -> Dict:
+    """@brief Create a cone dict from an SDF model name and pose strings.
+
+    @param name SDF model name (e.g. "blue_rs_0").
+    @param pose List of pose coordinate strings [x, y, z, ...].
+    @return Dict with keys: name, x, y, z, class_id.
+    """
     x, y, z = float(pose[0]), float(pose[1]), float(pose[2])
     if name.startswith("blue"):
         cls = "blue_cone"
@@ -106,10 +116,13 @@ def project_cone_to_bbox(
     cone: Dict,
     kart_x: float, kart_y: float, kart_yaw: float,
 ) -> Optional[Tuple[float, float, float, float, str]]:
-    """Project a 3D cone into a 2D bounding box in the image.
+    """@brief Project a 3D cone into a 2D bounding box in the image.
 
-    Returns (x1, y1, x2, y2, class_id) or None if cone is behind camera
-    or outside the image.
+    @param cone Dict with x, y, z, name, class_id keys.
+    @param kart_x Kart X position in world frame (meters).
+    @param kart_y Kart Y position in world frame (meters).
+    @param kart_yaw Kart heading in world frame (radians).
+    @return Tuple (x1, y1, x2, y2, class_id) or None if cone is not visible.
     """
     cos_yaw = math.cos(kart_yaw)
     sin_yaw = math.sin(kart_yaw)
@@ -176,7 +189,12 @@ def project_cone_to_bbox(
 # ── IoU computation ───────────────────────────────────────────────────────
 
 def iou(box_a: Tuple, box_b: Tuple) -> float:
-    """Compute IoU between two (x1, y1, x2, y2) boxes."""
+    """@brief Compute Intersection over Union between two bounding boxes.
+
+    @param box_a First box as (x1, y1, x2, y2).
+    @param box_b Second box as (x1, y1, x2, y2).
+    @return IoU value in [0.0, 1.0].
+    """
     xa = max(box_a[0], box_b[0])
     ya = max(box_a[1], box_b[1])
     xb = min(box_a[2], box_b[2])
@@ -191,6 +209,13 @@ def iou(box_a: Tuple, box_b: Tuple) -> float:
 # ── Main evaluation ──────────────────────────────────────────────────────
 
 def load_yolo_model(weights_path: str, conf: float = 0.25, iou_thresh: float = 0.45):
+    """@brief Load a YOLOv5 model from custom weights.
+
+    @param weights_path Path to the .pt weights file.
+    @param conf Confidence threshold for detections.
+    @param iou_thresh NMS IoU threshold.
+    @return Loaded YOLOv5 model on CPU.
+    """
     import torch
     model = torch.hub.load("ultralytics/yolov5", "custom", path=weights_path)
     model.conf = conf
@@ -210,6 +235,19 @@ def run_evaluation(
     iou_threshold: float = 0.5,
     conf_threshold: float = 0.25,
 ):
+    """@brief Run YOLO evaluation on captured Gazebo frames against ground-truth cone positions.
+
+    @param frames_dir Directory containing captured RGB frames.
+    @param weights_path Path to YOLOv5 weights (.pt).
+    @param world_sdf Path to the SDF world file for ground-truth cone positions.
+    @param kart_x Default kart X position (used if no odom CSV).
+    @param kart_y Default kart Y position.
+    @param kart_yaw Default kart heading (radians).
+    @param odom_csv Optional CSV with per-frame x, y, yaw columns.
+    @param iou_threshold IoU threshold for matching predictions to ground truth.
+    @param conf_threshold Confidence threshold for YOLO detections.
+    @return True if detection rate exceeds 80%.
+    """
     # Parse cones from world
     cones = parse_cones_from_sdf(world_sdf)
     print(f"Loaded {len(cones)} cones from {world_sdf}")
@@ -368,6 +406,7 @@ def run_evaluation(
 
 
 def main():
+    """@brief CLI entrypoint for YOLO perception evaluation."""
     parser = argparse.ArgumentParser(description="Evaluate YOLO on Gazebo frames")
     parser.add_argument("--frames", required=True, help="Directory with captured frames")
     parser.add_argument("--weights", required=True, help="Path to YOLOv5 weights (.pt)")

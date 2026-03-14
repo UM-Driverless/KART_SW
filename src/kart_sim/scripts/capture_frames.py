@@ -108,6 +108,7 @@ class FrameCaptureNode(Node):
         self._check_done()
 
     def _check_done(self):
+        """@brief Check if all frames have been captured and exit if so."""
         if self.rgb_count >= self.num_frames and self.depth_count >= self.num_frames:
             self.get_logger().info(
                 f"Done! Captured {self.rgb_count} RGB + {self.depth_count} depth frames "
@@ -117,6 +118,7 @@ class FrameCaptureNode(Node):
 
 
 def main():
+    """@brief Entrypoint for the frame capture node."""
     rclpy.init()
     node = FrameCaptureNode()
     try:

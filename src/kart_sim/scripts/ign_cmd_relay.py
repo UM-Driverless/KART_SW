@@ -14,7 +14,14 @@ from geometry_msgs.msg import Twist
 
 
 class IgnCmdRelay(Node):
+    """@brief Relay ROS cmd_vel to Gazebo via ign topic subprocess.
+
+    Workaround for ros_gz_bridge not delivering Twist on some platforms.
+    Publishes at ~10 Hz using shell commands in a background thread.
+    """
+
     def __init__(self):
+        """@brief Initialize subscriber and background publisher thread."""
         super().__init__("ign_cmd_relay")
         self.sub = self.create_subscription(
             Twist, "/kart/cmd_vel", self._on_cmd, 10
@@ -28,10 +35,15 @@ class IgnCmdRelay(Node):
         self.get_logger().info("IgnCmdRelay active — relaying cmd_vel via ign topic")
 
     def _on_cmd(self, msg: Twist):
+        """@brief Callback for cmd_vel. Stores latest linear.x and angular.z for relay.
+
+        @param msg Twist message from the cone follower or controller.
+        """
         with self._lock:
             self._latest_msg = (msg.linear.x, msg.angular.z)
 
     def _publish_loop(self):
+        """@brief Background thread: publish latest cmd_vel to Gazebo via ign topic at ~10 Hz."""
         while self._running:
             with self._lock:
                 msg = self._latest_msg
@@ -46,6 +58,7 @@ class IgnCmdRelay(Node):
 
 
 def main():
+    """@brief Entrypoint for the Ignition command relay node."""
     rclpy.init()
     node = IgnCmdRelay()
     rclpy.spin(node)
