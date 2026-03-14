@@ -119,6 +119,11 @@ class DashboardNode(Node):
 
         # Publisher for manual remote control (Twist for now)
         self.manual_cmd_pub = self.create_publisher(Twist, "/kart/cmd_vel_manual", 10)
+        # Pending commands set from asyncio thread, published by ROS timer
+        self._pending_manual_cmd = None
+        self._pending_mission = None
+        self._pending_state_cmd = None
+        self.create_timer(0.01, self._publish_pending)  # 100 Hz
 
         self.get_logger().info(f"Dashboard node started, web UI on port {self.port}")
 
@@ -212,69 +217,63 @@ class DashboardNode(Node):
         return self._hud_jpeg
 
     def publish_mission(self, mission: str):
-        """@brief Publish a mission selection to /dashboard/mission.
+        """@brief Queue a mission selection for publishing by the ROS thread.
 
         @param mission Mission name (e.g. "manual", "trackdrive").
         """
         msg = String()
         msg.data = mission
-        self.mission_pub.publish(msg)
+        self._pending_mission = msg
         self.get_logger().info(f"Mission set: {mission}")
 
     def publish_state_cmd(self, cmd: str):
-        """@brief Publish a state command to /dashboard/state_cmd.
+        """@brief Queue a state command for publishing by the ROS thread.
 
         @param cmd Command string (e.g. "start", "stop", "ebs").
         """
         msg = String()
         msg.data = cmd
-        self.state_cmd_pub.publish(msg)
+        self._pending_state_cmd = msg
         self.get_logger().info(f"State cmd: {cmd}")
+
+    def _publish_pending(self):
+        """@brief Timer callback (100 Hz): publish any pending commands from the ROS thread.
+
+        Commands are set by the asyncio thread (WebSocket handlers) and published
+        here on the ROS spin thread to avoid cross-thread publish issues.
+        """
+        cmd = self._pending_manual_cmd
+        if cmd is not None:
+            self.manual_cmd_pub.publish(cmd)
+        mission = self._pending_mission
+        if mission is not None:
+            self._pending_mission = None
+            self.mission_pub.publish(mission)
+        state_cmd = self._pending_state_cmd
+        if state_cmd is not None:
+            self._pending_state_cmd = None
+            self.state_cmd_pub.publish(state_cmd)
 
     def publish_manual_control(
         self, steer: float, steer_type: str, throttle: float, brake: float
     ):
-        """@brief Publish remote control commands from the dashboard joystick.
+        """@brief Store remote control command for publishing by the ROS timer.
+
+        Called from the asyncio thread. The actual publish happens in _publish_pending_manual
+        on the ROS spin thread to avoid thread-safety issues.
 
         @param steer Steering input, -1.0 (left) to 1.0 (right).
         @param steer_type Steering mode string (e.g. "angle", "pwm").
         @param throttle Throttle input, 0.0 to 1.0.
         @param brake Brake input, 0.0 to 1.0.
         """
-        # Optional: Print/log if they chose PWM, since Twist doesn't natively support it.
-        # But we can map "steer" straight to cmd.angular.z for now.
-        cmd = Twist()
-
-        # We assume gamepad provides:
-        #   steer: -1.0 (left) to 1.0 (right)
-        #   throttle: 0.0 to 1.0
-        #   brake: 0.0 to 1.0
-
-        # Combine throttle and brake into linear.x
-        # For cmd_vel_bridge, positive is throttle, negative is brake.
-        speed_cmd = throttle - brake
-
-        # Assuming max speed is handled downstream by cmd_vel_bridge.
-        # But we'll scale it to some nominal 'max speed' so it's not strictly 1.0 m/s
-        # In cmd_vel_bridge_node: max_speed default is 5.0
         NOMINAL_MAX_SPEED = 5.0
         NOMINAL_MAX_STEER = 0.5  # radians
 
-        cmd.linear.x = speed_cmd * NOMINAL_MAX_SPEED
+        cmd = Twist()
+        cmd.linear.x = (throttle - brake) * NOMINAL_MAX_SPEED
         cmd.angular.z = -steer * NOMINAL_MAX_STEER
-
-        self.manual_cmd_pub.publish(cmd)
-
-        # Log periodically or only if state changes?
-        now = self.get_clock().now().nanoseconds
-        if (
-            not hasattr(self, "_last_manual_log")
-            or now - self._last_manual_log > 1_000_000_000
-        ):
-            self._last_manual_log = now
-            self.get_logger().info(
-                f"Manual Ctrl: steer={steer:.2f}({steer_type}), thr={throttle:.2f}, brk={brake:.2f}"
-            )
+        self._pending_manual_cmd = cmd
 
 
 # ── Entrypoint ─────────────────────────────────────────────────────────
