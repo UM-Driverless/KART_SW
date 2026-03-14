@@ -47,6 +47,9 @@ def generate_launch_description():
         output="log",
     )
 
+    zed_overrides = os.path.join(
+        get_package_share_directory("kart_bringup"), "config", "zed_overrides.yaml"
+    )
     zed_camera = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(
@@ -55,7 +58,10 @@ def generate_launch_description():
                 "zed_camera.launch.py",
             )
         ),
-        launch_arguments={"camera_model": "zed2"}.items(),
+        launch_arguments={
+            "camera_model": "zed2",
+            "ros_params_override_path": zed_overrides,
+        }.items(),
     )
 
     perception_launch = IncludeLaunchDescription(
