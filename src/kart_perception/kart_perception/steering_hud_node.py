@@ -141,6 +141,8 @@ class SteeringHudNode(Node):
             Float32, "/perception/yolo/fps", self._on_yolo_fps, 10
         )
 
+        self._hud_frame_skip = 0
+
         self.get_logger().info("SteeringHudNode ready")
 
     # ---- Callbacks ----
@@ -190,10 +192,15 @@ class SteeringHudNode(Node):
         """@brief Main callback triggered by each annotated YOLO image.
 
         Computes HUD overlays (cone highlights, midpoint, steering arrow, gauge,
-        text, status) and publishes the composited image.
+        text, status) and publishes the composited image.  Throttled to ~20 Hz
+        (processes every 5th frame at 100 Hz input).
 
         @param img_msg Annotated image from the YOLO detector.
         """
+        self._hud_frame_skip += 1
+        if self._hud_frame_skip % 5 != 0:
+            return
+
         # FPS (EMA)
         now = time.monotonic()
         dt = now - self._fps_prev_time
