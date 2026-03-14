@@ -26,7 +26,7 @@ def generate_launch_description():
 
     use_zed_od_arg = DeclareLaunchArgument(
         "use_zed_od",
-        default_value="true",
+        default_value="false",
         description="Use ZED SDK built-in object detection (true) or custom YOLO node (false).",
     )
     use_zed_od = LaunchConfiguration("use_zed_od")

@@ -22,8 +22,8 @@ def generate_launch_description():
     )
     weights_arg = DeclareLaunchArgument(
         "weights",
-        default_value="models/perception/yolo/ruben_yolov11n_2026_03.engine",
-        description="Path to YOLO weights (.pt).",
+        default_value="models/perception/yolo/ruben_yolov11n_2026_03_320.engine",
+        description="Path to YOLO weights (.pt or .engine).",
     )
 
     yolo_detector = Node(
