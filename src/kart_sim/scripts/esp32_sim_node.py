@@ -21,7 +21,14 @@ from kb_dashboard.protocol import (
 
 
 class Esp32SimNode(Node):
+    """@brief Simulated ESP32 node for Gazebo.
+
+    Replaces kb_coms_micro in simulation: reads Gazebo odometry and cmd_vel,
+    then publishes the same /esp32/* Frame topics that the real ESP32 would produce.
+    """
+
     def __init__(self):
+        """@brief Initialize publishers, subscribers, and periodic telemetry timers."""
         super().__init__("esp32_sim")
 
         # Publishers (same as kb_coms_micro)
@@ -52,6 +59,10 @@ class Esp32SimNode(Node):
         self.get_logger().info("ESP32 sim node started (fake telemetry from Gazebo)")
 
     def _on_odom(self, msg: Odometry):
+        """@brief Callback for Gazebo odometry. Computes speed and acceleration from odom deltas.
+
+        @param msg Odometry message from the Gazebo simulation.
+        """
         now = self.get_clock().now()
         dt = (now - self._prev_time).nanoseconds / 1e9
         speed = msg.twist.twist.linear.x
@@ -67,6 +78,10 @@ class Esp32SimNode(Node):
         self._prev_time = now
 
     def _on_cmd_vel(self, msg: Twist):
+        """@brief Callback for cmd_vel. Extracts steering, throttle, and brake from Twist.
+
+        @param msg Twist with linear.x as speed command and angular.z as steering angle.
+        """
         self._steer_angle = msg.angular.z  # steer angle in radians
         speed = msg.linear.x
         if speed > 0.1:
@@ -80,48 +95,51 @@ class Esp32SimNode(Node):
             self._brake = 0.0
 
     def _publish_heartbeat(self):
+        """@brief Timer callback (1 Hz): publish a simulated heartbeat frame."""
         msg = Frame()
         msg.type = Frame.ESP_HEARTBEAT
         msg.payload = encode_heartbeat()
         self.pub_heartbeat.publish(msg)
 
     def _publish_telemetry(self):
+        """@brief Timer callback (20 Hz): publish simulated steering, speed, accel, throttle, and braking frames."""
         speed = getattr(self, "_speed", 0.0)
         accel_lat = getattr(self, "_accel_lat", 0.0)
         accel_lon = getattr(self, "_accel_lon", 0.0)
 
-        # Steering: protobuf ActSteering with angle + fake raw encoder
+        # Steering: int32 [angle_rad x 1000, raw_encoder]
         steer_msg = Frame()
         steer_msg.type = Frame.ESP_ACT_STEERING
         raw_encoder = 2048 + int(self._steer_angle * 650)  # fake AS5600-like value
         steer_msg.payload = encode_act_steering(self._steer_angle, raw_encoder)
         self.pub_steering.publish(steer_msg)
 
-        # Speed: protobuf ActSpeed
+        # Speed: int32 [speed_mps x 1000]
         speed_msg = Frame()
         speed_msg.type = Frame.ESP_ACT_SPEED
         speed_msg.payload = encode_act_speed(speed)
         self.pub_speed.publish(speed_msg)
 
-        # Acceleration: protobuf ActAcceleration
+        # Acceleration: int32 [lat x 1000, lon x 1000]
         accel_msg = Frame()
         accel_msg.type = Frame.ESP_ACT_ACCELERATION
         accel_msg.payload = encode_act_accel(accel_lat, accel_lon)
         self.pub_accel.publish(accel_msg)
 
-        # Throttle: protobuf TargThrottle (reused for sim feedback)
+        # Throttle: int32 [effort x 255]
         throttle_msg = Frame()
         throttle_msg.type = 0x00  # sim-only: dashboard routes by topic
         throttle_msg.payload = encode_act_throttle(self._throttle)
         self.pub_throttle.publish(throttle_msg)
 
-        # Braking: protobuf ActBraking
+        # Braking: int32 [effort x 255]
         brake_msg = Frame()
         brake_msg.type = Frame.ESP_ACT_BRAKING
         brake_msg.payload = encode_act_braking(self._brake)
         self.pub_braking.publish(brake_msg)
 
     def _publish_health(self):
+        """@brief Timer callback (0.5 Hz): publish simulated health status (all-OK)."""
         msg = Frame()
         msg.type = 0x0B  # ESP_HEALTH_STATUS
         msg.payload = encode_health(
@@ -132,6 +150,7 @@ class Esp32SimNode(Node):
 
 
 def main():
+    """@brief Entrypoint for the ESP32 simulation node."""
     rclpy.init()
     node = Esp32SimNode()
     rclpy.spin(node)

@@ -463,196 +463,499 @@ body { font-family:'Inter',-apple-system,BlinkMacSystemFont,'SF Pro',system-ui,s
 const skinKitt = {
   name: 'KITT',
   css: `
-body { font-family:'Share Tech Mono',monospace; background:#000; color:#ff8800; }
-body::before { content:''; position:fixed; inset:0; background:repeating-linear-gradient(to bottom,transparent 0px,transparent 2px,rgba(255,34,0,0.03) 2px,rgba(255,34,0,0.03) 4px); pointer-events:none; z-index:9000; }
-#topbarTitle { font-family:'Share Tech Mono',monospace; color:#ff2200; text-shadow:0 0 8px #ff2200, 0 0 20px #ff220066; letter-spacing:3px; font-size:16px; }
-.conn-dot { background:#330700; border:1px solid #ff2200; }
-.conn-dot.ok { background:#ff2200; box-shadow:0 0 8px #ff2200; }
-.skin-btn { background:#040000; border:1px solid #1a0500; border-radius:1px; color:#440800; font-family:'Share Tech Mono',monospace; letter-spacing:2px; font-size:9px; }
-.skin-dropdown { background:#040000; border:1px solid #1a0500; border-radius:2px; overflow:hidden; }
-.skin-option { background:#040000; color:#ff8800; font-family:'Share Tech Mono',monospace; font-size:10px; letter-spacing:2px; border-bottom:1px solid #1a0500; }
-.skin-option:hover { background:#0d0200; }
-.skin-option.active { color:#ff2200; text-shadow:0 0 8px #ff2200; }
+:root {
+  --r: #ff2200;
+  --r2: #cc1500;
+  --r3: #881000;
+  --rg: rgba(255,34,0,0.35);
+  --rg2: rgba(255,34,0,0.08);
+  --amb: #ff7700;
+  --amg: rgba(255,119,0,0.4);
+  --grn: #33ff44;
+  --grg: rgba(51,255,68,0.35);
+  --bg: #030303;
+  --panel: #070707;
+  --border: rgba(255,34,0,0.25);
+  --dim: rgba(255,34,0,0.45);
+}
+body {
+  background: var(--bg);
+  background-image: radial-gradient(ellipse at center, #0a0000 0%, #030303 70%, #000 100%);
+  color: var(--r);
+  font-family: 'Share Tech Mono', monospace;
+  min-height: 100vh;
+}
+body::before {
+  content:''; position:fixed; inset:0;
+  background: repeating-linear-gradient(0deg, rgba(0,0,0,0.18) 0px, rgba(0,0,0,0.18) 1px, transparent 1px, transparent 3px);
+  pointer-events:none; z-index:999;
+}
+body::after {
+  content:''; position:fixed; inset:0;
+  background: linear-gradient(transparent 0%, rgba(255,30,0,0.012) 50%, transparent 100%);
+  animation: crtroll 9s linear infinite;
+  pointer-events:none; z-index:998;
+}
+@keyframes crtroll { 0%{transform:translateY(-100%)} 100%{transform:translateY(100vh)} }
 
-.kitt-shell { width:100%; max-width:480px; margin:0 auto; background:#000; border:1px solid #330800; border-radius:4px; position:relative; overflow:hidden; box-shadow:0 0 40px #ff220022, 0 0 80px #ff220011, inset 0 0 40px #0a0000; }
-.kitt-shell::before { content:''; position:absolute; top:0; left:0; right:0; height:1px; background:linear-gradient(90deg,transparent,#ff2200 30%,#ff5533 50%,#ff2200 70%,transparent); box-shadow:0 0 12px #ff2200; z-index:10; }
+.k-wrap { width:100%; max-width:500px; display:flex; flex-direction:column; gap:10px; margin: 0 auto; padding: 16px; }
 
-.scan-wrap { background:#060000; border-bottom:1px solid #220500; padding:12px 20px 10px; }
-.scan-track { height:28px; background:#0a0000; border:1px solid #1a0500; border-radius:2px; overflow:hidden; display:flex; gap:2px; padding:3px; align-items:center; }
-.seg { flex:1; height:100%; border-radius:1px; background:#1a0300; transition:background 0.05s, box-shadow 0.05s; }
-.seg.on { background:#ff2200; box-shadow:0 0 6px #ff2200, 0 0 12px #ff5533; }
-.seg.mid { background:#ff4400; box-shadow:0 0 4px #ff4400; }
+/* MASTHEAD */
+.masthead {
+  border:1px solid var(--r2); background:var(--panel); overflow:hidden;
+}
+.masthead-top {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:12px 16px 8px; border-bottom:1px solid rgba(255,34,0,0.15);
+}
+.kitt-logo {
+  font-family:'VT323',monospace; font-size:52px; line-height:1;
+  color:var(--r); letter-spacing:6px;
+  text-shadow:0 0 8px var(--r), 0 0 20px var(--rg), 0 0 40px rgba(255,34,0,0.15);
+}
+.status-pill {
+  font-family:'Orbitron',sans-serif;
+  font-size:10px; font-weight:700; letter-spacing:3px;
+  padding:5px 11px;
+  border:1px solid var(--amb); color:var(--amb);
+  box-shadow:0 0 10px var(--amg);
+  animation:pillpulse 2.5s ease-in-out infinite;
+}
+.status-pill.run { border-color:var(--grn); color:var(--grn); box-shadow:0 0 10px var(--grg); animation:none; }
+@keyframes pillpulse { 0%,100%{box-shadow:0 0 8px var(--amg)} 50%{box-shadow:0 0 20px var(--amg), 0 0 40px rgba(255,119,0,0.12)} }
+.masthead-sub { padding:6px 16px 10px; font-size:9px; letter-spacing:3px; color:var(--dim); }
 
-.k-hdr { display:flex; align-items:center; justify-content:space-between; padding:14px 20px 10px; border-bottom:1px solid #1a0500; }
-.k-logo-sup { font-size:8px; letter-spacing:5px; color:#550f00; }
-.k-logo { font-size:20px; color:#ff2200; letter-spacing:4px; text-shadow:0 0 8px #ff2200, 0 0 20px #ff220066; line-height:1; }
-.k-logo-sub { font-size:9px; letter-spacing:3px; color:#440800; margin-top:3px; }
-.k-status-lbl { font-size:8px; letter-spacing:3px; color:#440800; margin-bottom:4px; text-align:right; }
-.k-status-val { font-family:'VT323',monospace; font-size:22px; letter-spacing:2px; color:#ff2200; text-shadow:0 0 8px #ff2200, 0 0 20px #ff220066; transition:color 0.3s; }
+/* KNIGHT RIDER SCANNER */
+.kr-scanner {
+  border:1px solid var(--r2); background:#020202; padding:10px 14px;
+}
+.kr-lbl { font-size:8px; letter-spacing:3px; color:var(--dim); margin-bottom:8px; }
+.led-track {
+  background:#040000; border:1px solid rgba(255,34,0,0.1);
+  height:30px; position:relative; overflow:hidden;
+}
+.led-track canvas { display:block; width:100%; height:100%; }
 
-.k-body { padding:16px 20px; display:flex; flex-direction:column; gap:12px; }
-.k-sec { border:1px solid #1a0500; border-radius:2px; background:#040000; overflow:hidden; }
-.k-sec-hd { display:flex; align-items:center; justify-content:space-between; padding:6px 12px; background:#080000; border-bottom:1px solid #1a0500; }
-.k-sec-t { font-size:8px; letter-spacing:4px; color:#550f00; }
-.k-sec-badge { font-size:8px; letter-spacing:2px; color:#330700; }
-.k-sec-badge.on { color:#ff2200; text-shadow:0 0 8px #ff2200; }
-.k-sec-body { padding:12px; }
+/* PANEL */
+.k-panel { border:1px solid var(--border); background:var(--panel); overflow:hidden; }
+.k-ph {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:8px 14px; border-bottom:1px solid var(--border);
+  background:rgba(255,20,0,0.025);
+}
+.k-ph-title { font-family:'Orbitron',sans-serif; font-size:9px; letter-spacing:4px; color:var(--dim); }
+.k-ph-title::before { content:'// '; opacity:0.4; }
+.k-pb { padding:14px; }
 
-.k-sg { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
-.k-sensor { border:1px solid #1a0500; padding:10px 12px; background:#020000; position:relative; overflow:hidden; }
-.k-sensor::before { content:''; position:absolute; top:0; left:0; right:0; height:1px; background:#ff2200; opacity:0.4; }
-.k-s-lbl { font-size:7px; letter-spacing:3px; color:#440800; margin-bottom:6px; text-transform:uppercase; }
-.k-s-val { font-family:'VT323',monospace; font-size:32px; line-height:1; color:#ff8800; text-shadow:0 0 4px #ff8800, 0 0 14px #ff880066; }
-.k-s-unit { font-size:9px; color:#550f00; letter-spacing:1px; margin-top:2px; }
-.k-s-bar { height:2px; background:#1a0500; margin-top:8px; border-radius:1px; overflow:hidden; }
-.k-s-bar-fill { height:100%; background:#ff2200; box-shadow:0 0 6px #ff2200; border-radius:1px; transition:width 0.2s; }
+/* JOYSTICK */
+.joy-wrap { display:flex; flex-direction:column; align-items:center; gap:14px; }
+.joy-outer {
+  width:170px; height:170px; border-radius:50%;
+  background:radial-gradient(circle at 38% 32%, #1c0400 0%, #080000 60%, #020000 100%);
+  border:2px solid rgba(255,34,0,0.4);
+  box-shadow:0 0 0 4px rgba(255,34,0,0.05), 0 0 30px rgba(255,34,0,0.1), inset 0 0 50px rgba(0,0,0,0.9);
+  position:relative; cursor:crosshair; touch-action:none;
+}
+.joy-outer::before { content:''; position:absolute; inset:12px; border-radius:50%; border:1px solid rgba(255,34,0,0.12); }
+.joy-outer::after  { content:''; position:absolute; inset:34px;  border-radius:50%; border:1px dashed rgba(255,34,0,0.07); }
+.joy-cross-h,.joy-cross-v { position:absolute; background:rgba(255,34,0,0.09); pointer-events:none; }
+.joy-cross-h { top:50%; left:8%; right:8%; height:1px; transform:translateY(-50%); }
+.joy-cross-v { left:50%; top:8%; bottom:8%; width:1px;  transform:translateX(-50%); }
+.joy-ticks {
+  position:absolute; inset:0; border-radius:50%;
+  background:repeating-conic-gradient(rgba(255,34,0,0.07) 0deg, rgba(255,34,0,0.07) 1deg, transparent 1deg, transparent 45deg);
+}
+.joy-thumb {
+  width:58px; height:58px; border-radius:50%;
+  background:radial-gradient(circle at 35% 30%, #3a0e00, #1a0500 60%, #0d0200);
+  border:2px solid var(--r);
+  box-shadow:0 0 16px var(--rg), 0 0 30px rgba(255,34,0,0.12);
+  position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+}
+.joy-thumb::after {
+  content:''; position:absolute; inset:6px; border-radius:50%;
+  background:radial-gradient(circle at 40% 35%, rgba(255,60,0,0.28), transparent);
+}
+.joy-readings { display:grid; grid-template-columns:1fr 1fr; gap:10px; width:100%; }
+.rbox { background:rgba(255,20,0,0.04); border:1px solid var(--border); padding:9px 12px; }
+.rbox-lbl { font-size:8px; letter-spacing:2px; color:var(--dim); margin-bottom:5px; }
+.rbox-val { font-family:'VT323',monospace; font-size:28px; color:var(--r); text-shadow:0 0 8px var(--rg); line-height:1; }
 
-.k-orin-row { display:flex; gap:8px; }
-.k-orin-cell { flex:1; border:1px solid #1a0500; padding:10px 8px; text-align:center; background:#020000; }
-.k-orin-lbl { font-size:7px; letter-spacing:3px; color:#440800; margin-bottom:6px; text-transform:uppercase; }
-.k-orin-val { font-family:'VT323',monospace; font-size:34px; line-height:1; color:#ff2200; text-shadow:0 0 8px #ff2200, 0 0 20px #ff220066; }
+/* GAMEPAD */
+.gp-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+.gp-conn { display:flex; align-items:center; gap:6px; font-size:9px; letter-spacing:2px; color:#333; }
+.gp-conn.on { color:var(--grn); }
+.gp-led { width:7px; height:7px; border-radius:50%; background:#1a1a1a; }
+.gp-led.on { background:var(--grn); box-shadow:0 0 8px var(--grg); animation:gpled 1.8s ease-in-out infinite; }
+@keyframes gpled { 50%{opacity:0.4} }
+.tog-wrap { display:flex; border:1px solid var(--border); overflow:hidden; }
+.tog { background:transparent; border:none; color:var(--dim); font-family:'Share Tech Mono',monospace; font-size:9px; letter-spacing:2px; padding:5px 12px; cursor:pointer; transition:all 0.15s; }
+.tog.on { background:var(--r2); color:#ff9977; }
+.ax-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.ax-lbl { font-size:8px; letter-spacing:2px; color:var(--dim); margin-bottom:6px; }
+.seg-bar { display:flex; gap:2px; height:8px; margin-bottom:5px; }
+.seg { flex:1; height:100%; background:rgba(255,34,0,0.07); border:1px solid rgba(255,34,0,0.1); transition:background 0.05s; }
+.seg.on { background:var(--r2); box-shadow:0 0 4px var(--rg); }
+.seg.on.pk { background:var(--r); box-shadow:0 0 6px var(--rg); }
+.ax-val { font-family:'VT323',monospace; font-size:18px; color:var(--r); }
 
-.k-mis-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-bottom:10px; }
-.k-mis-btn { padding:9px 4px; background:#020000; border:1px solid #1a0500; border-radius:1px; color:#330700; font-family:'Share Tech Mono',monospace; font-size:8px; letter-spacing:2px; cursor:pointer; text-transform:uppercase; }
-.k-mis-btn.sel { color:#ff2200; border-color:#ff2200; text-shadow:0 0 8px #ff2200; background:#0d0100; box-shadow:inset 0 0 12px #ff220015, 0 0 8px #ff2200, 0 0 20px #ff220066; }
-.k-ctrl-row { display:flex; gap:8px; }
-.k-ctrl { flex:1; padding:14px 6px; border-radius:2px; font-family:'Share Tech Mono',monospace; font-size:11px; letter-spacing:3px; cursor:pointer; border:2px solid; }
-.k-ctrl:active { transform:scale(0.96); }
-.k-ctrl.go { background:#001a00; border-color:#00cc33; color:#00ff44; text-shadow:0 0 10px #00ff44; box-shadow:0 0 14px #00cc3322; }
-.k-ctrl.stop { background:#110000; border-color:#cc1100; color:#ff2200; text-shadow:0 0 8px #ff2200; }
-.k-ctrl.ebs { background:#110600; border-color:#cc6600; color:#ff8800; text-shadow:0 0 4px #ff8800; }
+/* TABS */
+.k-tabs { display:flex; border-bottom:1px solid var(--border); }
+.k-tab {
+  flex:1; background:transparent; border:none;
+  color:var(--dim); font-family:'Share Tech Mono',monospace;
+  font-size:9px; letter-spacing:3px; padding:10px 6px; cursor:pointer;
+  border-right:1px solid var(--border); position:relative; transition:all 0.2s;
+}
+.k-tab:last-child { border-right:none; }
+.k-tab.on { color:var(--r); background:rgba(255,30,0,0.04); }
+.k-tab.on::after { content:''; position:absolute; bottom:-1px; left:0; right:0; height:2px; background:var(--r); box-shadow:0 0 8px var(--rg); }
+.k-tc { display:none; padding:14px; }
+.k-tc.on { display:block; }
 
-.k-hb-row { display:flex; align-items:center; gap:10px; padding:8px 12px; border-top:1px solid #1a0500; background:#030000; }
-.k-hb-lbl { font-size:7px; letter-spacing:3px; color:#330700; white-space:nowrap; }
-.k-hb-line { flex:1; display:flex; gap:2px; align-items:center; }
-.k-hb-seg { flex:1; border-radius:1px; background:#1a0500; transition:all 0.08s; }
-.k-hb-ok { font-size:8px; letter-spacing:2px; color:#330700; }
-.k-hb-ok.on { color:#ff2200; text-shadow:0 0 8px #ff2200; }
+/* SENSORS */
+.s-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px; }
+.sc {
+  border:1px solid var(--border); background:rgba(255,20,0,0.02); padding:10px 12px;
+  position:relative;
+}
+.sc::before { content:''; position:absolute; top:0; left:0; right:0; height:1px; background:linear-gradient(90deg,transparent,rgba(255,34,0,0.28),transparent); }
+.sc-lbl { font-size:8px; letter-spacing:2px; color:var(--dim); margin-bottom:6px; }
+.sc-val { font-family:'VT323',monospace; font-size:32px; line-height:1; color:var(--r); text-shadow:0 0 10px var(--rg); }
+.sc-unit { font-size:8px; letter-spacing:2px; color:var(--dim); margin-top:2px; }
+.sc-segs { display:flex; gap:1px; margin-top:7px; height:3px; }
+.sc-segs span { flex:1; background:rgba(255,34,0,0.06); border-radius:1px; }
+.sc-segs span.on { background:var(--r3); box-shadow:0 0 3px rgba(255,34,0,0.35); }
 
-.k-voice { padding:8px 12px 10px; font-family:'VT323',monospace; font-size:16px; color:#441000; letter-spacing:1px; border-top:1px solid #1a0500; background:#020000; display:flex; align-items:center; gap:8px; }
-.k-voice-icon { color:#ff2200; font-size:14px; opacity:0.6; }
-#voiceText { color:#ff8800; transition:opacity 0.2s; }
+/* online strip */
+.online-strip {
+  display:flex; align-items:center; gap:10px;
+  border:1px solid rgba(51,255,68,0.18); background:rgba(51,255,68,0.015);
+  padding:7px 12px; margin-bottom:10px;
+}
+.ol-dot { width:6px; height:6px; border-radius:50%; background:var(--grn); box-shadow:0 0 8px var(--grg); animation:oldot 1.2s ease-in-out infinite; }
+@keyframes oldot { 50%{opacity:0.3} }
+.ol-lbl { font-size:9px; letter-spacing:3px; color:var(--grn); flex:1; }
+.ol-hex { font-size:8px; color:rgba(51,255,68,0.4); letter-spacing:1px; }
 
-.k-footer { display:flex; align-items:center; justify-content:space-between; padding:8px 20px 10px; border-top:1px solid #1a0500; }
-.k-footer-l, .k-footer-r { font-size:7px; letter-spacing:3px; color:#220500; }
-.k-footer-dot { width:5px; height:5px; border-radius:50%; background:#ff2200; box-shadow:0 0 8px #ff2200; animation:blink 1.4s infinite; }
-@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.1} }
+/* IMU */
+.imu-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; }
+.imu-c { border:1px solid var(--border); background:rgba(255,20,0,0.02); padding:9px 10px; text-align:center; }
+.imu-lbl { font-size:8px; letter-spacing:2px; color:var(--dim); margin-bottom:5px; }
+.imu-val { font-family:'VT323',monospace; font-size:24px; color:var(--r); text-shadow:0 0 8px var(--rg); }
+.imu-val.hdg { color:var(--amb); text-shadow:0 0 8px var(--amg); }
 
-.k-mode-strip { display:flex; border-bottom:1px solid #1a0500; }
-.k-mode { flex:1; padding:8px 4px; background:transparent; border:none; border-right:1px solid #1a0500; color:#330700; font-family:'Share Tech Mono',monospace; font-size:9px; letter-spacing:2px; cursor:pointer; text-transform:uppercase; transition:all 0.15s; }
-.k-mode:last-child { border-right:none; }
-.k-mode:hover { color:#ff5533; background:#0d0200; }
-.k-mode.active { color:#ff2200; background:#0d0100; text-shadow:0 0 8px #ff2200, 0 0 20px #ff220066; box-shadow:inset 0 -2px 0 #ff2200; }
+/* MOTION BUTTONS */
+.mode-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-bottom:10px; }
+.mbtn {
+  background:rgba(255,20,0,0.03); border:1px solid rgba(255,34,0,0.18);
+  color:rgba(255,34,0,0.3); font-family:'Share Tech Mono',monospace;
+  font-size:9px; letter-spacing:2px; padding:10px 4px; cursor:pointer;
+  transition:all 0.12s; text-align:center;
+}
+.mbtn:hover { border-color:rgba(255,34,0,0.45); color:rgba(255,34,0,0.65); }
+.mbtn.on { border-color:var(--r); color:var(--r); background:rgba(255,34,0,0.07); box-shadow:0 0 8px rgba(255,34,0,0.1); }
+
+/* ACTION BUTTONS */
+.act-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; }
+.abtn {
+  border:none; cursor:pointer;
+  font-family:'VT323',monospace; font-size:24px; letter-spacing:3px;
+  padding:13px 6px; transition:all 0.1s; position:relative; overflow:hidden;
+}
+.abtn::before { content:''; position:absolute; top:0; left:0; right:0; height:1px; background:rgba(255,255,255,0.06); }
+.abtn-start { background:rgba(0,0,0,0); border:2px solid rgba(51,255,68,0.55); color:var(--grn); box-shadow:0 0 10px rgba(51,255,68,0.12); }
+.abtn-start:active { background:rgba(51,255,68,0.08); box-shadow:0 0 22px rgba(51,255,68,0.35); }
+.abtn-stop  { background:rgba(0,0,0,0); border:2px solid rgba(255,119,0,0.55); color:var(--amb); box-shadow:0 0 10px rgba(255,119,0,0.1); }
+.abtn-stop:active  { background:rgba(255,119,0,0.07); box-shadow:0 0 22px rgba(255,119,0,0.32); }
+.abtn-ebs   { background:rgba(0,0,0,0); border:2px solid rgba(255,34,0,0.65); color:#ff2200; box-shadow:0 0 12px rgba(255,34,0,0.18); animation:ebsp 2.5s ease-in-out infinite; }
+.abtn-ebs:active   { background:rgba(255,34,0,0.12); box-shadow:0 0 28px rgba(255,34,0,0.5); }
+@keyframes ebsp { 0%,100%{box-shadow:0 0 10px rgba(255,34,0,0.15)} 50%{box-shadow:0 0 20px rgba(255,34,0,0.35), 0 0 40px rgba(255,34,0,0.1)} }
+
+/* LOG */
+.log-bar {
+  border:1px solid rgba(255,34,0,0.18); background:rgba(0,0,0,0.5);
+  padding:9px 14px; font-size:11px; letter-spacing:2px; color:var(--grn);
+  display:flex; align-items:center; gap:10px;
+}
+.log-cur { display:inline-block; width:8px; height:14px; background:var(--grn); box-shadow:0 0 6px var(--grg); animation:cur 1s step-end infinite; flex-shrink:0; }
+@keyframes cur { 50%{opacity:0} }
+
+.k-top-btns { display: flex; justify-content: space-between; align-items: center; }
 `,
   render() {
-    const hbHeights = [3,3,3,3,7,16,16,7,3,3,3,3];
-    const hbSegs = hbHeights.map((h,i) => `<div class="k-hb-seg" id="hbs${i}" style="height:${h}px"></div>`).join('');
-    return `<div class="container" style="padding:20px 12px"><div class="kitt-shell">
-  <div class="scan-wrap"><div class="scan-track" id="scanTrack"></div></div>
-  <div class="k-hdr">
-    <div><div class="k-logo-sup">KNIGHT INDUSTRIES</div><div class="k-logo">K·I·T·T</div><div class="k-logo-sub">UM DRIVERLESS · AUTONOMOUS SYS</div></div>
-    <div><div class="k-status-lbl">SYSTEM STATUS</div><div class="k-status-val" id="kStatus">STANDBY</div></div>
-  </div>
-  <div class="k-mode-strip" id="kModeStrip"><button class="k-mode active" data-st="idle">IDLE</button><button class="k-mode" data-st="manual">MANUAL</button><button class="k-mode" data-st="auto">AUTONOMOUS</button></div>
-  <div class="k-body">
-    <div class="k-sec">
-      <div class="k-sec-hd"><div class="k-sec-t">MISSION SELECT</div><div class="k-sec-badge" id="kMisBadge">MANUAL</div></div>
-      <div class="k-sec-body">
-        <div class="k-mis-grid" id="misGrid"><button class="k-mis-btn sel" data-m="manual">MANUAL</button><button class="k-mis-btn" data-m="remote_control">REMOTE</button><button class="k-mis-btn" data-m="acceleration">ACCEL</button><button class="k-mis-btn" data-m="skidpad">SKIDPAD</button><button class="k-mis-btn" data-m="autocross">AUTOCROSS</button><button class="k-mis-btn" data-m="trackdrive">TRACKDRIVE</button><button class="k-mis-btn" data-m="inspection">INSPECT</button></div>
-        <div class="k-ctrl-row"><button class="k-ctrl go" onclick="wsSend({action:'set_state',state:'running'})">START</button><button class="k-ctrl stop" onclick="wsSend({action:'set_state',state:'idle'})">STOP</button><button class="k-ctrl ebs" onclick="wsSend({action:'set_state',state:'ebs'})">EBS</button></div>
+    return `<div class="k-wrap">
+  <!-- MASTHEAD -->
+  <div class="masthead">
+    <div class="masthead-top">
+      <div class="kitt-logo">K·I·T·T</div>
+      <div style="text-align:right">
+        <div style="font-size:8px;letter-spacing:3px;color:var(--dim);margin-bottom:6px">SYSTEM STATUS</div>
+        <div class="status-pill" id="mainStatus">STANDBY</div>
       </div>
-      <div class="k-voice"><span class="k-voice-icon">▶</span><span id="voiceText">SYSTEM INITIALISED. AWAITING COMMAND.</span></div>
     </div>
-    <div class="k-sec">
-      <div class="k-sec-hd"><div class="k-sec-t">ESP32 · SENSOR ARRAY</div><div class="k-sec-badge" id="kSensorBadge">OFFLINE</div></div>
-      <div class="k-sec-body"><div class="k-sg">
-        <div class="k-sensor"><div class="k-s-lbl">STEERING</div><div class="k-s-val" id="ksSteer">0.0</div><div class="k-s-unit">DEG</div><div class="k-s-bar"><div class="k-s-bar-fill" id="kbSteer" style="width:0%"></div></div></div>
-        <div class="k-sensor"><div class="k-s-lbl">VELOCITY</div><div class="k-s-val" id="ksSpeed">0.0</div><div class="k-s-unit">KM/H</div><div class="k-s-bar"><div class="k-s-bar-fill" id="kbSpeed" style="width:0%"></div></div></div>
-        <div class="k-sensor"><div class="k-s-lbl">THROTTLE</div><div class="k-s-val" id="ksThr">000</div><div class="k-s-unit">%</div><div class="k-s-bar"><div class="k-s-bar-fill" id="kbThr" style="width:0%"></div></div></div>
-        <div class="k-sensor"><div class="k-s-lbl">BRAKING</div><div class="k-s-val" id="ksBrk">000</div><div class="k-s-unit">%</div><div class="k-s-bar"><div class="k-s-bar-fill" id="kbBrk" style="width:0%"></div></div></div>
-      </div></div>
-      <div class="k-hb-row"><div class="k-hb-lbl">HEARTBEAT</div><div class="k-hb-line">${hbSegs}</div><div class="k-hb-ok" id="kHbOk">——</div></div>
+    <div class="masthead-sub">KNIGHT INDUSTRIES TWO THOUSAND &nbsp;/&nbsp; AI SUBSYSTEM v3.2</div>
+  </div>
+
+  <!-- KNIGHT RIDER SCANNER -->
+  <div class="kr-scanner">
+    <div class="kr-lbl">VOICE SYNTHESIZER &nbsp;//&nbsp; AUDIO PROCESSOR</div>
+    <div class="led-track"><canvas id="ledCanvas" height="30"></canvas></div>
+  </div>
+
+  <!-- TOUCH JOYSTICK -->
+  <div class="k-panel">
+    <div class="k-ph">
+      <div class="k-ph-title">Touch Joystick</div>
+      <div style="font-size:8px;letter-spacing:2px;color:var(--dim)">HAPTIC ON</div>
     </div>
-    <div class="k-sec">
-      <div class="k-sec-hd"><div class="k-sec-t">ORIN · DRIVE COMMANDS</div><div class="k-sec-badge" id="kOrinBadge">PASSIVE</div></div>
-      <div class="k-sec-body"><div class="k-orin-row">
-        <div class="k-orin-cell"><div class="k-orin-lbl">THROTTLE</div><div class="k-orin-val" id="koCThr">000</div></div>
-        <div class="k-orin-cell"><div class="k-orin-lbl">BRAKE</div><div class="k-orin-val" id="koCBrk">000</div></div>
-        <div class="k-orin-cell"><div class="k-orin-lbl">STEERING</div><div class="k-orin-val" id="koCStr">0.0°</div></div>
-      </div></div>
+    <div class="k-pb">
+      <div class="joy-wrap">
+        <div class="joy-outer" id="joyPad">
+          <div class="joy-ticks"></div>
+          <div class="joy-cross-h"></div>
+          <div class="joy-cross-v"></div>
+          <div class="joy-thumb" id="joyThumb"></div>
+        </div>
+        <div class="joy-readings">
+          <div class="rbox"><div class="rbox-lbl">STEERING</div><div class="rbox-val" id="steerVal">0.00</div></div>
+          <div class="rbox"><div class="rbox-lbl">THROTTLE / BRAKE</div><div class="rbox-val" id="throttleVal">0.00</div></div>
+        </div>
+      </div>
     </div>
   </div>
-  <div class="k-footer"><div class="k-footer-l">KNIGHT INDUSTRIES TWO THOUSAND</div><div class="k-footer-dot"></div><div class="k-footer-r">UM · FSAE · v2.4.1</div></div>
-</div></div>`; },
 
-  init() {
-    // Scanner segments
-    const N = 32, track = $('scanTrack');
-    for (let i = 0; i < N; i++) { const s = document.createElement('div'); s.className='seg'; s.id='seg'+i; track.appendChild(s); }
-    let pos = 0, dir = 1;
-    const scanId = setInterval(() => {
-      for (let i=0;i<N;i++) {
-        const dist = Math.abs(i-pos);
-        $('seg'+i).className = dist===0?'seg on':dist<=4?'seg mid':'seg';
-      }
-      pos += dir; if (pos>=N-1) dir=-1; if (pos<=0) dir=1;
-    }, 55);
+  <!-- GAMEPAD -->
+  <div class="k-panel">
+    <div class="k-ph">
+      <div class="k-ph-title">Gamepad Control</div>
+      <div class="gp-conn" id="gpConn"><div class="gp-led" id="gpLed"></div><span id="gpTxt">DISCONNECTED</span></div>
+    </div>
+    <div class="k-pb">
+      <div class="gp-top">
+        <div style="font-size:9px;letter-spacing:2px;color:var(--dim)">STEER TARGET</div>
+        <div class="tog-wrap">
+          <button class="tog on" id="togAngle" onclick="setKittSteer('angle')">ANGLE</button>
+          <button class="tog" id="togPwm" onclick="setKittSteer('pwm')">PWM</button>
+        </div>
+      </div>
+      <div class="ax-grid">
+        <div>
+          <div class="ax-lbl">STEERING AXIS (L-STICK)</div>
+          <div class="seg-bar" id="steerSegs"></div>
+          <div class="ax-val" id="axSteerVal">0.00</div>
+        </div>
+        <div>
+          <div class="ax-lbl">ACCEL (R-TRIO) / BRAKE (L-TRIO)</div>
+          <div class="seg-bar" id="driveSegs"></div>
+          <div class="ax-val" id="axDriveVal">0% &nbsp; 0%</div>
+        </div>
+      </div>
+    </div>
+  </div>
 
-    // Heartbeat animation
-    let hbTick = false;
-    const hbId = setInterval(() => {
-      hbTick = !hbTick;
-      for (let i=0;i<12;i++) {
-        const el = $('hbs'+i);
-        if (lastData && lastData.esp32_heartbeat) {
-          if ((i===5||i===6)&&hbTick) { el.style.background='#ff2200'; el.style.boxShadow='0 0 6px #ff2200'; }
-          else { el.style.background='rgba(255,34,0,0.25)'; el.style.boxShadow='none'; }
-        } else { el.style.background='#1a0500'; el.style.boxShadow='none'; }
-      }
-    }, 90);
+  <!-- TELEMETRY -->
+  <div class="k-panel">
+    <div class="k-tabs">
+      <button class="k-tab on" id="tab-tele-btn" onclick="switchKittTab(this,'tele')">TELE</button>
+      <button class="k-tab" id="tab-radar-btn" onclick="switchKittTab(this,'radar')">RADAR</button>
+      <button class="k-tab" id="tab-net-btn" onclick="switchKittTab(this,'net')">NETWORK</button>
+    </div>
+    <div class="k-tc on" id="tc-tele">
+      <div class="s-grid">
+        <div class="sc"><div class="sc-lbl">SPEED</div><div class="sc-val" id="speedVal">0.0</div><div class="sc-unit">M / S</div><div class="sc-segs" id="speedSegs"></div></div>
+        <div class="sc"><div class="sc-lbl">MOTOR RPM</div><div class="sc-val" id="rpmVal">0.0</div><div class="sc-unit">KRPM</div><div class="sc-segs" id="rpmSegs"></div></div>
+        <div class="sc"><div class="sc-lbl">THROTTLE OUT</div><div class="sc-val" id="thoVal">000</div><div class="sc-unit">%</div><div class="sc-segs" id="thoSegs"></div></div>
+        <div class="sc"><div class="sc-lbl">STEERING OUT</div><div class="sc-val" id="stoVal">0.0°</div><div class="sc-unit">DEG</div><div class="sc-segs" id="stoSegs"></div></div>
+      </div>
+      <div class="online-strip">
+        <div class="ol-dot"></div>
+        <div class="ol-lbl">TELEMETRY LINK // ONLINE</div>
+        <div class="ol-hex" id="hexStream">A3 F2 08 1C...</div>
+      </div>
+      <div style="font-size:8px;letter-spacing:3px;color:var(--dim);margin-bottom:8px">IMU // INERTIAL NAVIGATION</div>
+      <div class="imu-grid">
+        <div class="imu-c"><div class="imu-lbl">ROLL</div><div class="imu-val" id="rollVal">000</div></div>
+        <div class="imu-c"><div class="imu-lbl">PITCH</div><div class="imu-val" id="pitchVal">000</div></div>
+        <div class="imu-c"><div class="imu-lbl">HEADING</div><div class="imu-val hdg" id="hdgVal">0.0°</div></div>
+      </div>
+    </div>
+    <div class="k-tc" id="tc-radar">
+      <div style="text-align:center;padding:28px 0;font-size:9px;letter-spacing:3px;color:var(--dim)">RADAR SUBSYSTEM<br><br><span style="font-family:'VT323',monospace;font-size:30px;color:var(--r)">-- OFFLINE --</span></div>
+    </div>
+    <div class="k-tc" id="tc-net">
+      <div style="text-align:center;padding:28px 0;font-size:9px;letter-spacing:3px;color:var(--dim)">NETWORK INTERFACE<br><br><span style="font-family:'VT323',monospace;font-size:30px;color:var(--amb)">-- STANDBY --</span></div>
+    </div>
+  </div>
 
-    $('misGrid').addEventListener('click', missionClick);
-    return () => { clearInterval(scanId); clearInterval(hbId); };
+  <!-- MOTION MODE -->
+  <div class="k-panel">
+    <div class="k-ph"><div class="k-ph-title">Mission Select</div></div>
+    <div class="k-pb">
+      <div class="mode-grid">
+        <button class="mbtn" data-m="manual" onclick="wsSend({action:'set_mission',mission:'manual'})">MANUAL</button>
+        <button class="mbtn" data-m="remote_control" onclick="wsSend({action:'set_mission',mission:'remote_control'})">REMOTE</button>
+        <button class="mbtn" data-m="acceleration" onclick="wsSend({action:'set_mission',mission:'acceleration'})">ACCEL</button>
+        <button class="mbtn" data-m="skidpad" onclick="wsSend({action:'set_mission',mission:'skidpad'})">SKIDPAD</button>
+        <button class="mbtn" data-m="autocross" onclick="wsSend({action:'set_mission',mission:'autocross'})">AUTOCROSS</button>
+        <button class="mbtn" data-m="trackdrive" onclick="wsSend({action:'set_mission',mission:'trackdrive'})">TRACKDRIVE</button>
+      </div>
+      <div class="act-grid">
+        <button class="abtn abtn-start" onclick="wsSend({action:'set_state',state:'running'})">START</button>
+        <button class="abtn abtn-stop"  onclick="wsSend({action:'set_state',state:'idle'})">STOP</button>
+        <button class="abtn abtn-ebs"   onclick="wsSend({action:'set_state',state:'ebs'})">EBS</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- LOG -->
+  <div class="log-bar"><div class="log-cur"></div><span id="logTxt">FULL STOP. STANDING BY.</span></div>
+</div>`;
   },
+  init() {
+    // LED SCANNER
+    const canvas = $('ledCanvas');
+    const ctx = canvas.getContext('2d');
+    let ledW = canvas.offsetWidth; canvas.width = ledW; canvas.height = 30;
+    const DOT_W = 5, DOT_H = 5, DOT_GAP = 3, ROWS = 3;
+    let scanPos = 0, scanDir = 1, scanSpd = 0.55;
 
+    let animId;
+    const drawLed = () => {
+      ctx.clearRect(0, 0, ledW, 30);
+      const cols = Math.floor(ledW / (DOT_W + DOT_GAP));
+      if (cols < 2) { animId = requestAnimationFrame(drawLed); return; }
+      scanPos += scanDir * scanSpd;
+      if (scanPos >= cols - 1) { scanPos = cols - 1; scanDir = -1; }
+      if (scanPos <= 0)         { scanPos = 0;        scanDir = 1; }
+      for (let r = 0; r < ROWS; r++) {
+        const y = 2 + r * (DOT_H + 4);
+        for (let c = 0; c < cols; c++) {
+          const x = c * (DOT_W + DOT_GAP);
+          const dist = Math.abs(c - scanPos);
+          const fall = Math.max(0, 1 - dist / 6.5);
+          ctx.fillStyle = 'rgba(60,5,0,0.55)';
+          ctx.fillRect(x, y, DOT_W, DOT_H);
+          if (fall > 0.01) {
+            const ri = Math.round(255 * Math.min(1, fall * 1.15)), gi = Math.round(18 * fall);
+            ctx.fillStyle = `rgba(${ri},${gi},0,${fall})`;
+            ctx.fillRect(x, y, DOT_W, DOT_H);
+            if (dist < 1.2) { ctx.fillStyle = `rgba(255,70,0,${fall * 0.85})`; ctx.fillRect(x+1, y+1, DOT_W-2, DOT_H-2); }
+          }
+        }
+      }
+      animId = requestAnimationFrame(drawLed);
+    };
+    animId = requestAnimationFrame(drawLed);
+
+    // SEGMENTED BARS
+    const mkSegs = (id, n) => {
+      const el = $(id); if (!el) return; el.innerHTML = '';
+      for (let i = 0; i < n; i++) el.appendChild(document.createElement('span'));
+    };
+    ['steerSegs','driveSegs'].forEach(id => mkSegs(id, 20));
+    ['speedSegs','rpmSegs','thoSegs','stoSegs'].forEach(id => mkSegs(id, 16));
+
+    // HELPERS
+    window.litSegs = (id, norm, centered) => {
+      const el = $(id); if (!el) return; const s = el.children, n = s.length;
+      for (let i = 0; i < n; i++) {
+        let lit = false;
+        if (centered) { const mid = n / 2, span = Math.abs(norm) * mid; lit = norm >= 0 ? (i >= mid && i < mid + span) : (i < mid && i >= mid + span); }
+        else { lit = i < norm * n; }
+        s[i].className = lit ? (i > n * 0.8 ? 'on pk' : 'on') : '';
+      }
+    };
+    window.litSmall = (id, frac) => {
+      const el = $(id); if (!el) return; const s = el.children, n = s.length;
+      for (let i = 0; i < n; i++) s[i].className = i < frac * n ? 'on' : '';
+    };
+    window.setKittSteer = m => {
+      manualSteerType = m;
+      $('togAngle').classList.toggle('on', m==='angle');
+      $('togPwm').classList.toggle('on', m==='pwm');
+    };
+    window.switchKittTab = (btn, id) => {
+      document.querySelectorAll('.k-tab').forEach(t=>t.classList.remove('on'));
+      document.querySelectorAll('.k-tc').forEach(t=>t.classList.remove('on'));
+      btn.classList.add('on'); $( 'tc-' + id).classList.add('on');
+    };
+    window.kLog = t => { const el = $('logTxt'); if (el) el.textContent = t; };
+
+    // JOYSTICK
+    const joyPad = $('joyPad'), joyThumb = $('joyThumb');
+    let jDrag = false, jOx = 0, jOy = 0, jDx = 0, jDy = 0;
+    const JR = 55;
+    const applyJoy = (dx, dy) => {
+      jDx = dx; jDy = dy;
+      joyThumb.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+      const sv = (dx/JR).toFixed(2), tv = (-dy/JR).toFixed(2);
+      $('steerVal').textContent = sv; $('throttleVal').textContent = tv;
+      litSegs('steerSegs', parseFloat(sv), true);
+      wsSend({ action: 'manual_control', steering: parseFloat(sv), steer_type: 'angle', throttle: tv > 0 ? tv : 0, brake: tv < 0 ? Math.abs(tv) : 0 });
+    };
+    const jDown = e => { jDrag = true; const r = joyPad.getBoundingClientRect(); jOx = r.left + r.width/2; jOy = r.top + r.height/2; joyPad.setPointerCapture(e.pointerId); e.preventDefault(); };
+    const jMove = e => { if (!jDrag) return; let dx = e.clientX-jOx, dy = e.clientY-jOy; const d = Math.sqrt(dx*dx+dy*dy); if(d>JR){dx=dx/d*JR;dy=dy/d*JR;} applyJoy(dx, dy); };
+    const jUp = () => { jDrag = false; const sp = setInterval(() => { jDx*=0.72; jDy*=0.72; if(Math.abs(jDx)<0.4&&Math.abs(jDy)<0.4){jDx=0;jDy=0;clearInterval(sp); wsSend({ action: 'manual_control', steering: 0, steer_type: 'angle', throttle: 0, brake: 0 }); } applyJoy(jDx, jDy); }, 16); };
+    joyPad.addEventListener('pointerdown', jDown);
+    joyPad.addEventListener('pointermove', jMove);
+    joyPad.addEventListener('pointerup', jUp);
+
+    // HEX STREAM
+    const hexId = setInterval(() => {
+      const b = Array.from({length:4}, ()=>Math.floor(Math.random()*256).toString(16).padStart(2,'0').toUpperCase());
+      const el = $('hexStream'); if (el) el.textContent = b.join(' ')+'...';
+    }, 160);
+
+    // GAMEPAD POLLING (Sync with index.html global logic but target our IDs)
+    const gpId = setInterval(() => {
+      const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
+      let gp = null; for (let i = 0; i < gamepads.length; i++) { if (gamepads[i]) { gp = gamepads[i]; break; } }
+      const led = $('gpLed'), txt = $('gpTxt'), conn = $('gpConn');
+      if (!gp) { if(led)led.classList.remove('on'); if(conn)conn.classList.remove('on'); if(txt)txt.textContent = 'DISCONNECTED'; return; }
+      if(led)led.classList.add('on'); if(conn)conn.classList.add('on'); if(txt)txt.textContent = 'CONNECTED: ' + gp.id.substring(0,12);
+      let sa = gp.axes[0] || 0, ac = gp.buttons[7] ? gp.buttons[7].value : 0, br = gp.buttons[6] ? gp.buttons[6].value : 0;
+      if (Math.abs(sa) < 0.1) sa = 0;
+      $('axSteerVal').textContent = sa.toFixed(2);
+      $('axDriveVal').textContent = Math.round(ac*100)+'% ' + Math.round(br*100)+'%';
+      litSegs('steerSegs', sa, true);
+      litSegs('driveSegs', ac, false);
+    }, 100);
+
+    return () => {
+      cancelAnimationFrame(animId);
+      clearInterval(hexId);
+      clearInterval(gpId);
+      joyPad.removeEventListener('pointerdown', jDown);
+      joyPad.removeEventListener('pointermove', jMove);
+      joyPad.removeEventListener('pointerup', jUp);
+      delete window.litSegs; delete window.litSmall; delete window.setKittSteer; delete window.switchKittTab; delete window.kLog;
+    };
+  },
   update(d) {
-    $('ksSteer').textContent = deg(d.esp32_steering_rad);
-    $('ksSpeed').textContent = (d.esp32_speed*3.6).toFixed(1);
-    $('ksThr').textContent = String(Math.round(d.esp32_throttle*100)).padStart(3,'0');
-    $('ksBrk').textContent = String(Math.round(d.esp32_braking*100)).padStart(3,'0');
-    $('kbSteer').style.width = Math.min(Math.abs(d.esp32_steering_rad)/1*100,100)+'%';
-    $('kbSpeed').style.width = Math.min(d.esp32_speed/30*100,100)+'%';
-    $('kbThr').style.width = (d.esp32_throttle*100)+'%';
-    $('kbBrk').style.width = (d.esp32_braking*100)+'%';
-
-    $('koCThr').textContent = String(Math.round(d.orin_cmd_throttle/255*100)).padStart(3,'0');
-    $('koCBrk').textContent = String(Math.round(d.orin_cmd_brake/255*100)).padStart(3,'0');
-    $('koCStr').textContent = deg(d.orin_cmd_steering_rad)+'°';
-
-    const running = d.state === 'running';
-    const s = $('kStatus');
-    if (d.state === 'ebs') { s.textContent='EBS ACTIVE'; s.style.color='#ff8800'; }
-    else if (running) { s.textContent='RUNNING'; s.style.color='#00ff44'; s.style.textShadow='0 0 10px #00ff44'; }
-    else { s.textContent='STANDBY'; s.style.color='#ff2200'; s.style.textShadow='0 0 8px #ff2200'; }
-
-    $('kSensorBadge').textContent = running?'ONLINE':'OFFLINE';
-    $('kSensorBadge').className = 'k-sec-badge'+(running?' on':'');
-    $('kOrinBadge').textContent = running?'ACTIVE':'PASSIVE';
-    $('kOrinBadge').className = 'k-sec-badge'+(running?' on':'');
-
-    const hb = $('kHbOk');
-    if (d.esp32_heartbeat) { hb.textContent='ONLINE'; hb.className='k-hb-ok on'; }
-    else { hb.textContent='——'; hb.className='k-hb-ok'; }
-
-    $('kMisBadge').textContent = d.mission.toUpperCase();
+    const s = $('mainStatus'); if (s) {
+      if (d.state === 'running') { s.textContent = 'ACTIVE'; s.className = 'status-pill run'; }
+      else { s.textContent = d.state.toUpperCase(); s.className = 'status-pill'; }
+    }
+    
+    $('speedVal').textContent = d.esp32_speed.toFixed(1);
+    litSmall('speedSegs', Math.min(1, Math.abs(d.esp32_speed)/10));
+    
+    // RPM Simulation or data if available
+    const rpm = d.esp32_rpm !== undefined ? d.esp32_rpm : (Math.abs(d.esp32_speed) * 0.5);
+    $('rpmVal').textContent = rpm.toFixed(1);
+    litSmall('rpmSegs', Math.min(1, rpm/5));
+    
+    $('thoVal').textContent = Math.round(d.esp32_throttle * 100);
+    litSmall('thoSegs', d.esp32_throttle);
+    
+    $('stoVal').textContent = deg(d.esp32_steering_rad) + '°';
+    litSmall('stoSegs', Math.min(1, Math.abs(d.esp32_steering_rad)/0.5));
 
     const voices = { running:'TURBO BOOST ENGAGED. ALL SYSTEMS NOMINAL.', idle:'FULL STOP. STANDING BY.', ebs:'EMERGENCY BRAKE SYSTEM ACTIVATED.' };
-    const vt = $('voiceText');
-    if (vt._lastState !== d.state) { vt.textContent = voices[d.state]||'AWAITING COMMAND.'; vt._lastState = d.state; }
+    if (this._lastState !== d.state) { kLog(voices[d.state] || (d.state.toUpperCase() + '. STANDING BY.')); this._lastState = d.state; }
 
-    document.querySelectorAll('.k-mis-btn').forEach(b => b.classList.toggle('sel', b.dataset.m === d.mission));
-    const stMap = {idle:'idle',running:'auto',ebs:'idle'};
-    document.querySelectorAll('.k-mode').forEach(b => b.classList.toggle('active', b.dataset.st === (stMap[d.state]||'idle')));
+    document.querySelectorAll('.mbtn').forEach(b => b.classList.toggle('on', b.dataset.m === d.mission));
   }
 };
 

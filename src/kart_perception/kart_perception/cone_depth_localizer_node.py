@@ -18,7 +18,20 @@ from vision_msgs.msg import (
 
 
 class ConeDepthLocalizerNode(Node):
+    """@brief ROS2 node that fuses 2D cone detections with a depth map to produce 3D cone positions.
+
+    Synchronizes YOLO 2D detections, a depth image, and camera info using
+    ApproximateTimeSynchronizer. For each 2D detection, samples the median depth
+    in a small ROI around the bounding box center and back-projects to 3D using
+    the pinhole camera model.
+    """
+
     def __init__(self) -> None:
+        """@brief Initialize the cone depth localizer node.
+
+        Declares parameters for input/output topics, depth ROI size, depth range
+        limits, default 3D bounding box size, and time synchronization slop.
+        """
         super().__init__("cone_depth_localizer")
 
         self.declare_parameter("detections_topic", "/perception/cones_2d")
@@ -56,11 +69,21 @@ class ConeDepthLocalizerNode(Node):
         self.sync.registerCallback(self._on_synced)
 
     def _update_camera_model(self, info_msg: CameraInfo) -> None:
+        """@brief Initialize the pinhole camera model from camera info (once).
+
+        @param info_msg Camera intrinsics and distortion parameters.
+        """
         if not self.camera_info_ready:
             self.camera_model.fromCameraInfo(info_msg)
             self.camera_info_ready = True
 
     def _depth_to_meters(self, depth_img: np.ndarray, encoding: str) -> np.ndarray:
+        """@brief Convert a depth image to float32 meters.
+
+        @param depth_img Raw depth image array.
+        @param encoding ROS image encoding string (e.g. "16UC1", "32FC1").
+        @return Depth image in meters as float32.
+        """
         if encoding in ("16UC1", "mono16"):
             return depth_img.astype(np.float32) * 0.001
         return depth_img.astype(np.float32)
@@ -68,6 +91,14 @@ class ConeDepthLocalizerNode(Node):
     def _median_depth(
         self, depth_m: np.ndarray, u: int, v: int, radius: int
     ) -> Optional[float]:
+        """@brief Compute the median valid depth in a square ROI around a pixel.
+
+        @param depth_m Depth image in meters.
+        @param u Horizontal pixel coordinate (column).
+        @param v Vertical pixel coordinate (row).
+        @param radius Half-size of the square ROI in pixels.
+        @return Median depth in meters, or None if no valid depths in the ROI.
+        """
         h, w = depth_m.shape[:2]
         u0 = max(0, u - radius)
         u1 = min(w - 1, u + radius)
@@ -81,6 +112,13 @@ class ConeDepthLocalizerNode(Node):
         return float(np.median(valid))
 
     def _project(self, u: float, v: float, depth_m: float) -> Tuple[float, float, float]:
+        """@brief Back-project a pixel with known depth to a 3D point in camera frame.
+
+        @param u Horizontal pixel coordinate.
+        @param v Vertical pixel coordinate.
+        @param depth_m Depth value in meters.
+        @return 3D point (x, y, z) in the camera optical frame.
+        """
         ray = self.camera_model.projectPixelTo3dRay((u, v))
         return (
             ray[0] * depth_m,
@@ -95,6 +133,14 @@ class ConeDepthLocalizerNode(Node):
         score: float,
         xyz: Tuple[float, float, float],
     ) -> Detection3D:
+        """@brief Construct a Detection3D message from a class label, score, and 3D position.
+
+        @param header ROS message header.
+        @param class_id Cone class name string.
+        @param score Detection confidence score.
+        @param xyz 3D position (x, y, z) in camera frame.
+        @return Populated Detection3D message.
+        """
         det3d = Detection3D()
         det3d.header = header
 
@@ -122,6 +168,15 @@ class ConeDepthLocalizerNode(Node):
     def _on_synced(
         self, detections_msg: Detection2DArray, depth_msg: Image, info_msg: CameraInfo
     ) -> None:
+        """@brief Callback triggered when 2D detections, depth image, and camera info are synchronized.
+
+        For each 2D detection, samples depth at the bounding box center, back-projects
+        to 3D, and publishes the resulting Detection3DArray.
+
+        @param detections_msg Synchronized 2D detection array from YOLO.
+        @param depth_msg Synchronized depth image.
+        @param info_msg Synchronized camera intrinsics.
+        """
         self._update_camera_model(info_msg)
         if not self.camera_info_ready:
             return
@@ -158,6 +213,7 @@ class ConeDepthLocalizerNode(Node):
 
 
 def main() -> None:
+    """@brief Entry point for the cone depth localizer node."""
     rclpy.init()
     node = ConeDepthLocalizerNode()
     rclpy.spin(node)

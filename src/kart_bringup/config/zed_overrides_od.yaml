@@ -1,0 +1,19 @@
+# ZED camera overrides with built-in object detection for cone detection.
+# Used when use_zed_od:=true (default).
+/**:
+    ros__parameters:
+        general:
+            pub_frame_rate: 100.0
+        depth:
+            point_cloud_freq: 30.0
+        object_detection:
+            od_enabled: true
+            model: 'CUSTOM_YOLOLIKE_BOX_OBJECTS'
+            custom_onnx_file: '/home/orin/kart_brain/models/perception/yolo/ruben_yolov11n_2026_03.onnx'
+            custom_onnx_input_size: 640
+            allow_reduced_precision_inference: true
+            max_range: 40.0
+            confidence_threshold: 25.0
+            prediction_timeout: 0.2
+            enable_tracking: true
+            filtering_mode: 2

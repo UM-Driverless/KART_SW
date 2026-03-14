@@ -1,4 +1,8 @@
-"""Unit tests for payload decoding and DashboardState."""
+"""Unit tests for payload decoding and DashboardState.
+
+Precision: int32 x1000 gives 0.001 quant for steering/speed,
+int32 x255 gives ~0.004 quant for throttle/braking.
+"""
 import time
 import threading
 
@@ -26,27 +30,21 @@ from kb_dashboard.protocol import (
 
 class TestDecodeSteering:
     def test_zero(self):
-        # Empty proto (all defaults) → 0.0
         assert decode_steering(encode_steering(0.0)) == 0.0
 
     def test_positive(self):
-        assert abs(decode_steering(encode_steering(0.25)) - 0.25) < 1e-6
+        assert abs(decode_steering(encode_steering(0.25)) - 0.25) < 0.001
 
     def test_negative(self):
-        assert abs(decode_steering(encode_steering(-0.5)) - (-0.5)) < 1e-6
+        assert abs(decode_steering(encode_steering(-0.5)) - (-0.5)) < 0.001
 
     def test_empty_payload(self):
-        # Empty bytes = all defaults
         assert decode_steering([]) == 0.0
-        assert decode_steering(b"") == 0.0
 
     def test_act_steering_angle(self):
-        """decode_steering works on ActSteering payloads too (reads angle_rad field 1)."""
         payload = encode_act_steering(0.42, 2500)
-        # ActSteering uses field 1 for angle_rad, same as TargSteering
-        # But they're different message types — decode_steering uses ActSteering
         angle = decode_steering(payload)
-        assert abs(angle - 0.42) < 1e-6
+        assert abs(angle - 0.42) < 0.001
 
 
 # ── decode with raw encoder ──────────────────────────────────────────
@@ -55,13 +53,13 @@ class TestDecodeSteeringRaw:
     def test_with_encoder(self):
         payload = encode_act_steering(0.3, 2243)
         angle, raw = decode_steering_raw(payload)
-        assert abs(angle - 0.3) < 1e-6
+        assert abs(angle - 0.3) < 0.001
         assert raw == 2243
 
     def test_without_encoder(self):
         payload = encode_act_steering(0.1)
         angle, raw = decode_steering_raw(payload)
-        assert abs(angle - 0.1) < 1e-6
+        assert abs(angle - 0.1) < 0.001
         assert raw == 0
 
 
@@ -69,7 +67,7 @@ class TestDecodeSteeringRaw:
 
 class TestDecodeSpeed:
     def test_positive(self):
-        assert abs(decode_speed(encode_act_speed(3.5)) - 3.5) < 1e-6
+        assert abs(decode_speed(encode_act_speed(3.5)) - 3.5) < 0.001
 
     def test_zero(self):
         assert decode_speed(encode_act_speed(0.0)) == 0.0
@@ -80,18 +78,18 @@ class TestDecodeSpeed:
 class TestDecodeAccel:
     def test_values(self):
         lat, lon = decode_accel(encode_act_accel(1.5, -0.8))
-        assert abs(lat - 1.5) < 1e-6
-        assert abs(lon - (-0.8)) < 1e-6
+        assert abs(lat - 1.5) < 0.001
+        assert abs(lon - (-0.8)) < 0.001
 
 
 # ── decode_throttle / decode_braking ─────────────────────────────────
 
 class TestDecodeEffort:
     def test_throttle(self):
-        assert abs(decode_throttle(encode_throttle(0.75)) - 0.75) < 1e-6
+        assert abs(decode_throttle(encode_throttle(0.75)) - 0.75) < 0.004
 
     def test_braking(self):
-        assert abs(decode_braking(encode_braking(0.3)) - 0.3) < 1e-6
+        assert abs(decode_braking(encode_braking(0.3)) - 0.3) < 0.004
 
     def test_zero(self):
         assert decode_throttle(encode_throttle(0.0)) == 0.0
@@ -177,5 +175,5 @@ class TestMissions:
         assert len(ids) == len(set(ids))
 
     def test_expected_missions(self):
-        expected = {"manual", "acceleration", "skidpad", "autocross", "trackdrive", "ebs_test", "inspection"}
+        expected = {"manual", "remote_control", "acceleration", "skidpad", "autocross", "trackdrive", "ebs_test", "inspection"}
         assert set(MISSIONS.keys()) == expected

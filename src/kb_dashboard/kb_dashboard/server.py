@@ -14,14 +14,24 @@ HTML_PATH = Path(__file__).parent / "index.html"
 async def run_websocket_server(
     state: DashboardState, node, port: int, ready_callback=None
 ):
-    """Minimal HTTP + WebSocket server using only the stdlib + asyncio.
+    """@brief Minimal HTTP + WebSocket server using only the stdlib + asyncio.
 
-    `node` must have .publish_mission(str) and .get_logger().info(str).
-    `ready_callback` is called (no args) once the server is listening.
+    Serves the dashboard HTML page and handles WebSocket connections for
+    real-time telemetry broadcast and command reception.
+
+    @param state Shared DashboardState for telemetry snapshots.
+    @param node ROS node with publish_mission(), publish_state_cmd(), and get_logger().
+    @param port TCP port to listen on.
+    @param ready_callback Optional callable invoked (no args) once the server is listening.
     """
     clients: set[asyncio.StreamWriter] = set()
 
     async def ws_accept(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
+        """@brief Handle new TCP connections: serve HTML or upgrade to WebSocket.
+
+        @param reader Async stream reader for the client connection.
+        @param writer Async stream writer for the client connection.
+        """
         # Read HTTP request
         request = b""
         while True:
@@ -88,7 +98,15 @@ async def run_websocket_server(
         await writer.wait_closed()
 
     async def handle_ws(reader, writer, state, node):
-        """Handle incoming WebSocket frames (commands from browser)."""
+        """@brief Handle incoming WebSocket frames (commands from browser).
+
+        Reads and decodes WebSocket frames, dispatching text frames as JSON commands.
+
+        @param reader Async stream reader for the WebSocket connection.
+        @param writer Async stream writer for the WebSocket connection.
+        @param state Shared DashboardState instance.
+        @param node ROS node for publishing commands.
+        """
         while True:
             try:
                 header = await reader.readexactly(2)
@@ -124,6 +142,14 @@ async def run_websocket_server(
                     pass
 
     def handle_command(cmd: dict, state, node):
+        """@brief Dispatch a JSON command received from the browser.
+
+        Supports actions: set_mission, set_state, manual_control.
+
+        @param cmd Parsed JSON dict with an "action" key.
+        @param state Shared DashboardState instance.
+        @param node ROS node for publishing commands.
+        """
         action = cmd.get("action")
         if action == "set_mission":
             mission = cmd.get("mission", "manual")
@@ -148,6 +174,12 @@ async def run_websocket_server(
                 )
 
     def ws_send(writer: asyncio.StreamWriter, data: bytes, opcode=0x1):
+        """@brief Send a WebSocket frame to a single client.
+
+        @param writer Target client's stream writer.
+        @param data Payload bytes to send.
+        @param opcode WebSocket opcode (0x1=text, 0x2=binary, 0xA=pong).
+        """
         nonlocal clients
         frame = bytearray()
         frame.append(0x80 | opcode)
@@ -166,6 +198,7 @@ async def run_websocket_server(
             clients.discard(writer)
 
     async def broadcast_loop():
+        """@brief Periodically broadcast telemetry JSON (10 Hz) and HUD JPEG (~3.3 Hz) to all clients."""
         nonlocal clients
         frame_counter = 0
         while True:

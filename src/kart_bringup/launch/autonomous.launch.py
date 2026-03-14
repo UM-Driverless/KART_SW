@@ -8,6 +8,7 @@ from launch.actions import (
     IncludeLaunchDescription,
     SetEnvironmentVariable,
 )
+from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
@@ -22,6 +23,13 @@ def generate_launch_description():
         "Lower values reduce oversteering. Default 0.5 (was 1.0).",
     )
     steering_gain = LaunchConfiguration("steering_gain")
+
+    use_zed_od_arg = DeclareLaunchArgument(
+        "use_zed_od",
+        default_value="true",
+        description="Use ZED SDK built-in object detection (true) or custom YOLO node (false).",
+    )
+    use_zed_od = LaunchConfiguration("use_zed_od")
 
     # System CUDA libs must precede pip NVIDIA libs to avoid cuBLAS version mismatch
     # (pip installs cuBLAS 12.9 which is incompatible with Jetson's CUDA 12.6)
@@ -47,25 +55,51 @@ def generate_launch_description():
         output="log",
     )
 
-    zed_camera = IncludeLaunchDescription(
+    bringup_share = get_package_share_directory("kart_bringup")
+    perception_share = get_package_share_directory("kart_perception")
+    zed_share = get_package_share_directory("zed_wrapper")
+
+    zed_overrides = os.path.join(bringup_share, "config", "zed_overrides.yaml")
+    zed_overrides_od = os.path.join(bringup_share, "config", "zed_overrides_od.yaml")
+
+    # ZED camera with built-in object detection
+    zed_camera_with_od = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
-            os.path.join(
-                get_package_share_directory("zed_wrapper"),
-                "launch",
-                "zed_camera.launch.py",
-            )
+            os.path.join(zed_share, "launch", "zed_camera.launch.py")
         ),
-        launch_arguments={"camera_model": "zed2"}.items(),
+        launch_arguments={
+            "camera_model": "zed2",
+            "ros_params_override_path": zed_overrides_od,
+        }.items(),
+        condition=IfCondition(use_zed_od),
     )
 
-    perception_launch = IncludeLaunchDescription(
+    # ZED camera without object detection (custom YOLO path)
+    zed_camera_no_od = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
-            os.path.join(
-                get_package_share_directory("kart_perception"),
-                "launch",
-                "perception_3d.launch.py",
-            )
-        )
+            os.path.join(zed_share, "launch", "zed_camera.launch.py")
+        ),
+        launch_arguments={
+            "camera_model": "zed2",
+            "ros_params_override_path": zed_overrides,
+        }.items(),
+        condition=UnlessCondition(use_zed_od),
+    )
+
+    # ZED SDK OD path: bridge node converts ObjectsStamped → Detection2D/3DArray
+    perception_zed_od = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(perception_share, "launch", "perception_zed_od.launch.py")
+        ),
+        condition=IfCondition(use_zed_od),
+    )
+
+    # Custom YOLO path: our yolo_detector + cone_depth_localizer
+    perception_custom = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(perception_share, "launch", "perception_3d.launch.py")
+        ),
+        condition=UnlessCondition(use_zed_od),
     )
 
     cone_follower = Node(
@@ -110,21 +144,38 @@ def generate_launch_description():
         output="screen",
     )
 
-    steering_hud = Node(
+    # With ZED OD there's no YOLO annotated image — use raw ZED RGB as HUD canvas
+    steering_hud_zed = Node(
         package="kart_perception",
         executable="steering_hud",
         name="steering_hud",
         output="screen",
+        parameters=[
+            {"annotated_topic": "/zed/zed_node/rgb/image_rect_color"}
+        ],
+        condition=IfCondition(use_zed_od),
+    )
+
+    steering_hud_custom = Node(
+        package="kart_perception",
+        executable="steering_hud",
+        name="steering_hud",
+        output="screen",
+        condition=UnlessCondition(use_zed_od),
     )
 
     return LaunchDescription(
         [
             steering_gain_arg,
+            use_zed_od_arg,
             set_ld_path,
             cleanup_gui,
-            zed_camera,
-            perception_launch,
-            steering_hud,
+            zed_camera_with_od,
+            zed_camera_no_od,
+            perception_zed_od,
+            perception_custom,
+            steering_hud_zed,
+            steering_hud_custom,
             cone_follower,
             state_machine,
             cmd_vel_bridge,

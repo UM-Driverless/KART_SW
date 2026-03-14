@@ -173,20 +173,20 @@ class TestCmdVelEdgeCases(unittest.TestCase):
         self.assertAlmostEqual(b, 1.0)
 
 
-class TestCmdVelProtobufRoundtrip(unittest.TestCase):
-    """Full encode→decode roundtrip through protobuf."""
+class TestCmdVelBinaryRoundtrip(unittest.TestCase):
+    """Full encode→decode roundtrip through int32 binary encoding."""
 
     def test_throttle_roundtrip(self):
         t, b, s = cmd_vel_to_efforts(2.5, 0.3, 5.0, 0.5)
-        self.assertAlmostEqual(decode_throttle(encode_throttle(t)), t, places=5)
-        self.assertAlmostEqual(decode_braking(encode_braking(b)), b, places=5)
-        self.assertAlmostEqual(decode_steering(encode_steering(s)), s, places=5)
+        self.assertAlmostEqual(decode_throttle(encode_throttle(t)), t, delta=0.004)
+        self.assertAlmostEqual(decode_braking(encode_braking(b)), b, delta=0.004)
+        self.assertAlmostEqual(decode_steering(encode_steering(s)), s, delta=0.001)
 
     def test_brake_roundtrip(self):
         t, b, s = cmd_vel_to_efforts(-3.0, -0.2, 5.0, 0.5)
-        self.assertAlmostEqual(decode_throttle(encode_throttle(t)), t, places=5)
-        self.assertAlmostEqual(decode_braking(encode_braking(b)), b, places=5)
-        self.assertAlmostEqual(decode_steering(encode_steering(s)), s, places=5)
+        self.assertAlmostEqual(decode_throttle(encode_throttle(t)), t, delta=0.004)
+        self.assertAlmostEqual(decode_braking(encode_braking(b)), b, delta=0.004)
+        self.assertAlmostEqual(decode_steering(encode_steering(s)), s, delta=0.001)
 
 
 # ===================================================================
@@ -293,29 +293,29 @@ class TestSimTelemetryRoundtrip(unittest.TestCase):
         raw = 2048 + int(angle * 650)
         payload = encode_act_steering(angle, raw)
         decoded_angle = decode_steering(payload)
-        self.assertAlmostEqual(decoded_angle, angle, places=5)
+        self.assertAlmostEqual(decoded_angle, angle, delta=0.001)
 
     def test_speed(self):
         payload = encode_act_speed(3.5)
-        self.assertAlmostEqual(decode_speed(payload), 3.5, places=5)
+        self.assertAlmostEqual(decode_speed(payload), 3.5, delta=0.001)
 
     def test_accel(self):
         payload = encode_act_accel(1.2, -0.8)
         lat, lon = decode_accel(payload)
-        self.assertAlmostEqual(lat, 1.2, places=5)
-        self.assertAlmostEqual(lon, -0.8, places=5)
+        self.assertAlmostEqual(lat, 1.2, delta=0.001)
+        self.assertAlmostEqual(lon, -0.8, delta=0.001)
 
     def test_throttle(self):
         payload = encode_act_throttle(0.7)
-        self.assertAlmostEqual(decode_throttle(payload), 0.7, places=5)
+        self.assertAlmostEqual(decode_throttle(payload), 0.7, delta=0.004)
 
     def test_braking(self):
         payload = encode_act_braking(0.3)
-        self.assertAlmostEqual(decode_braking(payload), 0.3, places=5)
+        self.assertAlmostEqual(decode_braking(payload), 0.3, delta=0.004)
 
     def test_negative_speed(self):
         payload = encode_act_speed(-2.0)
-        self.assertAlmostEqual(decode_speed(payload), -2.0, places=5)
+        self.assertAlmostEqual(decode_speed(payload), -2.0, delta=0.001)
 
     def test_zero_everything(self):
         self.assertAlmostEqual(decode_speed(encode_act_speed(0.0)), 0.0)

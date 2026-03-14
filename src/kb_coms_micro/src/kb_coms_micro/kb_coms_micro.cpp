@@ -29,7 +29,9 @@ KB_coms_micro::KB_coms_micro() : Node("kb_coms_micro_node") {
 
     esp_shutdown_pub_ = create_publisher<kb_interfaces::msg::Frame>("/esp32/shutdown", 10);
 
-    esp_health_pub_ = create_publisher<kb_interfaces::msg::Frame>("/esp32/health", 10);
+    esp_health_flags_pub_ = create_publisher<kb_interfaces::msg::Frame>("/esp32/health/flags", 10);
+
+    esp_health_data_pub_ = create_publisher<kb_interfaces::msg::Frame>("/esp32/health/data", 10);
 
     // Create Subscriptors
     orin_throttle_sub_ = create_subscription<kb_interfaces::msg::Frame>(
@@ -69,7 +71,7 @@ KB_coms_micro::~KB_coms_micro() { serial_->stop(); }
 void KB_coms_micro::kb_coms_OrinHeartbeat(void) {
 
     uint8_t type = static_cast<uint8_t>(message_type_t::ORIN_HEARTBEAT);
-    std::vector<uint8_t> payload;
+    std::vector<int32_t> payload;
 
     serial_->send(type, payload);
 }
@@ -77,8 +79,6 @@ void KB_coms_micro::kb_coms_OrinHeartbeat(void) {
 // Callback de mensajes de la ESP
 void KB_coms_micro::kb_coms_RXcallback(const SerialDriver::Frame &frame_esp) {
     RCLCPP_DEBUG(this->get_logger(), "Se ha recibido un msg: %d", frame_esp.type);
-
-    // TODO: Procesar los payloads
 
     switch(frame_esp.type) {
     case kb_interfaces::msg::Frame::ESP_ACT_SPEED: {
@@ -170,10 +170,31 @@ void KB_coms_micro::kb_coms_RXcallback(const SerialDriver::Frame &frame_esp) {
     }
 
     case kb_interfaces::msg::Frame::ESP_HEALTH_STATUS: {
-        kb_interfaces::msg::Frame health_msg;
-        health_msg.type = frame_esp.type;
-        health_msg.payload = frame_esp.payload;
-        esp_health_pub_->publish(health_msg);
+        kb_interfaces::msg::Frame health_flags_msg;
+        kb_interfaces::msg::Frame health_data_msg;
+        health_flags_msg.type = frame_esp.type;
+        health_data_msg.type = frame_esp.type;
+
+        health_flags_msg.payload[0] = frame_esp.payload[0];
+        health_flags_msg.payload[1] = frame_esp.payload[1];
+        health_flags_msg.payload[2] = frame_esp.payload[2];
+        esp_health_flags_pub_->publish(health_flags_msg);
+
+        health_data_msg.payload[0] = frame_esp.payload[3];
+        health_data_msg.payload[1] = frame_esp.payload[4];
+        health_data_msg.payload[2] = frame_esp.payload[5];
+        health_data_msg.payload[3] = frame_esp.payload[6];
+
+        esp_health_data_pub_->publish(health_data_msg);
+        break;
+    }
+
+    case kb_interfaces::msg::Frame::ESP_DIAG_STEERING: {
+        kb_interfaces::msg::Frame diag_steering_msg;
+        diag_steering_msg.type = frame_esp.type;
+        diag_steering_msg.payload = frame_esp.payload;
+        esp_diag_steering_pub_->publish(diag_steering_msg);
+
         break;
     }
 

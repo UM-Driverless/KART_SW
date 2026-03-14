@@ -20,7 +20,14 @@ from sensor_msgs.msg import Image
 
 
 class FrameCaptureNode(Node):
+    """@brief Capture RGB and depth frames from Gazebo camera topics to disk.
+
+    Saves a configurable number of frames as PNG files, skipping initial
+    frames to allow the renderer to stabilize. Exits when done.
+    """
+
     def __init__(self):
+        """@brief Initialize with capture parameters, output directories, and image subscribers."""
         super().__init__("frame_capture")
 
         self.declare_parameter("image_topic", "/zed/zed_node/rgb/image_rect_color")
@@ -58,6 +65,10 @@ class FrameCaptureNode(Node):
         )
 
     def _on_rgb(self, msg: Image):
+        """@brief Callback for RGB image messages. Saves frame as PNG after skipping initial frames.
+
+        @param msg Image message in BGR8 encoding.
+        """
         # Skip initial frames (rendering may not be ready)
         if self.rgb_skip < self.skip_initial:
             self.rgb_skip += 1
@@ -75,6 +86,10 @@ class FrameCaptureNode(Node):
         self._check_done()
 
     def _on_depth(self, msg: Image):
+        """@brief Callback for depth image messages. Saves as 16-bit PNG (millimeters).
+
+        @param msg Image message in 32FC1 encoding (meters).
+        """
         if self.depth_skip < self.skip_initial:
             self.depth_skip += 1
             return
@@ -93,6 +108,7 @@ class FrameCaptureNode(Node):
         self._check_done()
 
     def _check_done(self):
+        """@brief Check if all frames have been captured and exit if so."""
         if self.rgb_count >= self.num_frames and self.depth_count >= self.num_frames:
             self.get_logger().info(
                 f"Done! Captured {self.rgb_count} RGB + {self.depth_count} depth frames "
@@ -102,6 +118,7 @@ class FrameCaptureNode(Node):
 
 
 def main():
+    """@brief Entrypoint for the frame capture node."""
     rclpy.init()
     node = FrameCaptureNode()
     try:

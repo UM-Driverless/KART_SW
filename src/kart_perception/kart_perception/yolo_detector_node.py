@@ -36,7 +36,11 @@ _REPO_ROOT = pathlib.Path(__file__).resolve().parents[4]  # .../src/kart_percept
 
 
 def _repo_relative(path_str: str) -> pathlib.Path:
-    """Resolve a path relative to the kart_brain repo root if not absolute."""
+    """@brief Resolve a path relative to the kart_brain repo root if not absolute.
+
+    @param path_str Path string, either absolute or relative to repo root.
+    @return Resolved absolute path.
+    """
     p = pathlib.Path(path_str)
     if p.is_absolute():
         return p
@@ -48,7 +52,20 @@ def _repo_relative(path_str: str) -> pathlib.Path:
 
 
 class YoloDetectorNode(Node):
+    """@brief ROS2 node that runs YOLO inference on camera images and publishes 2D cone detections.
+
+    Uses ultralytics (YOLOv8/v11) backend, supporting .pt and .engine (TensorRT) weights.
+    Inference runs on a dedicated thread to decouple ROS callbacks from GPU work.
+    Optionally publishes annotated debug images with bounding boxes.
+    """
+
     def __init__(self) -> None:
+        """@brief Initialize the YOLO detector node.
+
+        Declares parameters for topics, model weights, confidence/IOU thresholds,
+        image size, and device selection. Loads the YOLO model and starts the
+        inference thread.
+        """
         super().__init__("yolo_detector")
 
         self.declare_parameter("image_topic", "/image_raw")
@@ -60,6 +77,7 @@ class YoloDetectorNode(Node):
         self.declare_parameter("imgsz", 640)
         self.declare_parameter("device", "")
         self.declare_parameter("publish_debug_image", True)
+        self.declare_parameter("crop_top_ratio", 0.0)
 
         self.image_topic = str(self.get_parameter("image_topic").value)
         self.detections_topic = str(self.get_parameter("detections_topic").value)
@@ -70,6 +88,7 @@ class YoloDetectorNode(Node):
         self.imgsz = int(self.get_parameter("imgsz").value)
         self.device = str(self.get_parameter("device").value)
         self.publish_debug_image = bool(self.get_parameter("publish_debug_image").value)
+        self.crop_top_ratio = float(self.get_parameter("crop_top_ratio").value)
 
         self.bridge = CvBridge()
         self.publisher = self.create_publisher(Detection2DArray, self.detections_topic, 10)
@@ -79,13 +98,12 @@ class YoloDetectorNode(Node):
             Image, self.image_topic, self._on_image, 1
         )
 
-        self._use_ultralytics = False
         self._device = "cpu"
         self.model = self._load_model()
         self.class_names = self._get_class_names()
 
-        # Threading: ROS callback stores latest frame, inference thread processes it
-        self._latest_frame = None  # (header, frame_bgr)
+        # Threading: ROS callback stores latest raw msg, inference thread decodes + infers
+        self._latest_msg = None
         self._frame_lock = threading.Lock()
         self._frame_event = threading.Event()
         self._shutdown = False
@@ -98,6 +116,10 @@ class YoloDetectorNode(Node):
         self._fps_time = time.monotonic()
 
     def _resolve_device(self) -> str:
+        """@brief Determine the compute device for inference.
+
+        @return Device string (e.g. "cuda:0" or "cpu").
+        """
         device = self.device
         if not device:
             import torch
@@ -105,6 +127,10 @@ class YoloDetectorNode(Node):
         return device
 
     def _load_model(self):
+        """@brief Load the YOLO model via ultralytics (.pt or .engine).
+
+        @return Loaded model object, or None on failure.
+        """
         if not self.weights_path.exists():
             self.get_logger().error(f"Weights not found: {self.weights_path}")
             return None
@@ -113,28 +139,11 @@ class YoloDetectorNode(Node):
         device = self._resolve_device()
         self.get_logger().info(f"Loading YOLO weights: {self.weights_path} on {device}")
 
-        # Try ultralytics (YOLOv8/v11) first, fall back to torch.hub (YOLOv5)
         try:
             from ultralytics import YOLO
             model = YOLO(str(self.weights_path))
             self._device = device
-            self._use_ultralytics = True
-            self.get_logger().info(f"Loaded model via ultralytics API (will use device: {device})")
-            return model
-        except Exception as exc:
-            self.get_logger().warn(f"ultralytics load failed ({exc}), trying torch.hub YOLOv5...")
-
-        try:
-            import torch
-            model = torch.hub.load(
-                "ultralytics/yolov5", "custom", path=str(self.weights_path)
-            )
-            model.conf = self.conf_threshold
-            model.iou = self.iou_threshold
-            model.imgsz = self.imgsz
-            model.to(device)
-            self._use_ultralytics = False
-            self.get_logger().info(f"Loaded model via torch.hub YOLOv5 (device: {device})")
+            self.get_logger().info(f"Loaded model via ultralytics API (device: {device})")
             return model
         except Exception as exc:
             self.get_logger().error(f"Failed to load YOLO model: {exc}")
@@ -149,6 +158,12 @@ class YoloDetectorNode(Node):
     }
 
     def _get_class_names(self):
+        """@brief Retrieve and validate class names from the loaded model.
+
+        Overrides model names with canonical cone class names if they don't match.
+
+        @return Dictionary mapping class index to class name, or None if no model.
+        """
         if self.model is None:
             return None
         names = self.model.names
@@ -161,35 +176,55 @@ class YoloDetectorNode(Node):
         return names
 
     def _on_image(self, msg: Image) -> None:
-        """ROS callback — just grab the frame and signal the inference thread."""
+        """@brief ROS callback for incoming camera images.
+
+        Stores the raw message and signals the inference thread. No decoding here
+        to keep the callback lightweight.
+
+        @param msg Raw camera image message.
+        """
         if self.model is None:
             return
-        frame_bgr = self.bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
         with self._frame_lock:
-            self._latest_frame = (msg.header, frame_bgr)
+            self._latest_msg = msg
         self._frame_event.set()
 
     def _inference_loop(self) -> None:
-        """Dedicated thread: grab latest frame, run inference, publish results."""
+        """@brief Dedicated inference thread loop.
+
+        Waits for new frames, decodes them, runs YOLO inference, publishes
+        detections and optional debug images, and tracks FPS.
+        """
         while not self._shutdown:
             # Wait for a new frame (with timeout so we can check shutdown)
             if not self._frame_event.wait(timeout=1.0):
                 continue
             self._frame_event.clear()
 
-            # Grab the latest frame
+            # Grab the latest raw message and decode in this thread
             with self._frame_lock:
-                data = self._latest_frame
-                self._latest_frame = None
-            if data is None:
+                msg = self._latest_msg
+                self._latest_msg = None
+            if msg is None:
                 continue
 
-            header, frame_bgr = data
+            header = msg.header
+            frame_bgr = self.bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
+            want_debug = (
+                self.publish_debug_image
+                and self.debug_publisher.get_subscription_count() > 0
+            )
 
-            if self._use_ultralytics:
-                self._infer_ultralytics(header, frame_bgr)
+            # Crop top of image (sky removal) to speed up inference
+            crop_y = int(frame_bgr.shape[0] * self.crop_top_ratio)
+            if crop_y > 0:
+                cropped = frame_bgr[crop_y:]
             else:
-                self._infer_yolov5(header, frame_bgr)
+                cropped = frame_bgr
+
+            t0 = time.monotonic()
+            self._infer(header, cropped, want_debug, frame_bgr, crop_y)
+            t_total = time.monotonic() - t0
 
             # FPS logging + publish
             self._fps_count += 1
@@ -197,14 +232,25 @@ class YoloDetectorNode(Node):
             elapsed = now - self._fps_time
             if elapsed >= 2.0:
                 fps = self._fps_count / elapsed
-                self.get_logger().info(f"YOLO inference: {fps:.1f} Hz")
+                self.get_logger().info(
+                    f"YOLO inference: {fps:.1f} Hz  (last frame: {t_total*1000:.1f}ms)"
+                )
                 self.fps_publisher.publish(Float32(data=fps))
                 self._fps_count = 0
                 self._fps_time = now
 
-    def _infer_ultralytics(self, header, frame_bgr) -> None:
+    def _infer(self, header, cropped_bgr, want_debug: bool,
+               full_bgr=None, crop_y: int = 0) -> None:
+        """@brief Run YOLO inference and publish detections and optional debug image.
+
+        @param header ROS message header to stamp output messages.
+        @param cropped_bgr Cropped BGR image fed to YOLO.
+        @param want_debug If True, draw bounding boxes and publish debug image.
+        @param full_bgr Original full-size BGR image for debug drawing.
+        @param crop_y Number of pixels cropped from the top.
+        """
         results = self.model(
-            frame_bgr,
+            cropped_bgr,
             imgsz=self.imgsz,
             conf=self.conf_threshold,
             iou=self.iou_threshold,
@@ -213,11 +259,13 @@ class YoloDetectorNode(Node):
         )
         detections = Detection2DArray()
         detections.header = header
-        parsed = []
 
         for r in results:
             for box in r.boxes:
                 x1, y1, x2, y2 = box.xyxy[0].tolist()
+                # Offset y-coordinates back to full-image space
+                y1 += crop_y
+                y2 += crop_y
                 conf = float(box.conf[0])
                 cls_id = int(box.cls[0])
                 name = self.class_names[cls_id] if self.class_names else str(cls_id)
@@ -238,77 +286,26 @@ class YoloDetectorNode(Node):
                 detection.results.append(hypothesis)
                 detections.detections.append(detection)
 
-                color = CLASS_COLORS.get(name, DEFAULT_COLOR)
-                p1, p2 = (int(x1), int(y1)), (int(x2), int(y2))
-                parsed.append((p1, p2, color, name, conf))
+                if want_debug:
+                    color = CLASS_COLORS.get(name, DEFAULT_COLOR)
+                    p1, p2 = (int(x1), int(y1)), (int(x2), int(y2))
+                    cv2.rectangle(full_bgr, p1, p2, color, 3)
+                    label = f"{name.replace('_cone', '')} {conf:.0%}"
+                    (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)
+                    cv2.rectangle(full_bgr, (p1[0], p1[1] - th - 8), (p1[0] + tw + 6, p1[1]), color, -1)
+                    cv2.putText(full_bgr, label, (p1[0] + 3, p1[1] - 5),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 2, cv2.LINE_AA)
 
         self.publisher.publish(detections)
 
-        if self.publish_debug_image:
-            debug_img = frame_bgr.copy()
-            for p1, p2, color, name, conf in parsed:
-                cv2.rectangle(debug_img, p1, p2, color, 3)
-            for p1, _, color, name, conf in parsed:
-                label = f"{name.replace('_cone', '')} {conf:.0%}"
-                (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)
-                cv2.rectangle(debug_img, (p1[0], p1[1] - th - 8), (p1[0] + tw + 6, p1[1]), color, -1)
-                cv2.putText(debug_img, label, (p1[0] + 3, p1[1] - 5),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 2, cv2.LINE_AA)
-            debug_msg = self.bridge.cv2_to_imgmsg(debug_img, encoding="bgr8")
-            debug_msg.header = header
-            self.debug_publisher.publish(debug_msg)
-
-    def _infer_yolov5(self, header, frame_bgr) -> None:
-        frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
-        results = self.model(frame_rgb)
-        detections = Detection2DArray()
-        detections.header = header
-
-        for det in results.xyxy[0].tolist():
-            x1, y1, x2, y2, conf, cls_id = det
-            bbox = BoundingBox2D()
-            bbox.center.position.x = (x1 + x2) / 2.0
-            bbox.center.position.y = (y1 + y2) / 2.0
-            bbox.center.theta = 0.0
-            bbox.size_x = max(0.0, x2 - x1)
-            bbox.size_y = max(0.0, y2 - y1)
-
-            hypothesis = ObjectHypothesisWithPose()
-            if self.class_names is not None:
-                hypothesis.hypothesis.class_id = str(self.class_names[int(cls_id)])
-            else:
-                hypothesis.hypothesis.class_id = str(int(cls_id))
-            hypothesis.hypothesis.score = float(conf)
-
-            detection = Detection2D()
-            detection.bbox = bbox
-            detection.results.append(hypothesis)
-            detections.detections.append(detection)
-
-        self.publisher.publish(detections)
-
-        if self.publish_debug_image:
-            debug_img = frame_bgr.copy()
-            parsed = []
-            for det in results.xyxy[0].tolist():
-                x1, y1, x2, y2, conf, cls_id = det
-                name = str(self.class_names[int(cls_id)]) if self.class_names else str(int(cls_id))
-                color = CLASS_COLORS.get(name, DEFAULT_COLOR)
-                p1, p2 = (int(x1), int(y1)), (int(x2), int(y2))
-                parsed.append((p1, p2, color, name, conf))
-                cv2.rectangle(debug_img, p1, p2, color, 3)
-            for p1, _, color, name, conf in parsed:
-                label = f"{name.replace('_cone', '')} {conf:.0%}"
-                (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)
-                cv2.rectangle(debug_img, (p1[0], p1[1] - th - 8), (p1[0] + tw + 6, p1[1]), color, -1)
-                cv2.putText(debug_img, label, (p1[0] + 3, p1[1] - 5),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 2, cv2.LINE_AA)
-            debug_msg = self.bridge.cv2_to_imgmsg(debug_img, encoding="bgr8")
+        if want_debug:
+            debug_msg = self.bridge.cv2_to_imgmsg(full_bgr, encoding="bgr8")
             debug_msg.header = header
             self.debug_publisher.publish(debug_msg)
 
 
 def main() -> None:
+    """@brief Entry point for the YOLO detector node."""
     rclpy.init()
     node = YoloDetectorNode()
     try:

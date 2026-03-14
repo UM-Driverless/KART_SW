@@ -16,6 +16,7 @@ setup(
             [
                 "launch/perception_test.launch.py",
                 "launch/perception_3d.launch.py",
+                "launch/perception_zed_od.launch.py",
             ],
         ),
     ],

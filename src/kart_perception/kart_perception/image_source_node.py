@@ -14,7 +14,19 @@ VIDEO_EXTS = {".mp4", ".avi", ".mov", ".mkv", ".webm"}
 
 
 class ImageSourceNode(Node):
+    """@brief ROS2 node that publishes images from various sources at a fixed rate.
+
+    Supports single images, image directories, video files, and webcam/device
+    inputs. Optionally crops stereo side-by-side images to left half.
+    """
+
     def __init__(self) -> None:
+        """@brief Initialize the image source node.
+
+        Declares parameters for source path, publish rate, looping behavior,
+        frame ID, output topic, and stereo crop mode. Detects source type
+        (webcam, device, directory, image, video) and sets up accordingly.
+        """
         super().__init__("image_source")
 
         self.declare_parameter(
@@ -75,6 +87,12 @@ class ImageSourceNode(Node):
         self.timer = self.create_timer(1.0 / publish_rate, self._on_timer)
 
     def _publish_image(self, frame) -> None:
+        """@brief Convert a BGR frame to a ROS Image message and publish it.
+
+        Applies stereo crop (left half) if enabled.
+
+        @param frame BGR image as numpy array.
+        """
         if self._stereo_crop:
             frame = frame[:, :frame.shape[1] // 2]
         msg = self.bridge.cv2_to_imgmsg(frame, encoding="bgr8")
@@ -83,6 +101,12 @@ class ImageSourceNode(Node):
         self.publisher.publish(msg)
 
     def _next_image(self):
+        """@brief Load and return the next image from the image list.
+
+        Advances the index and optionally loops back to the start.
+
+        @return BGR image as numpy array, or None if no images or read failure.
+        """
         if not self._image_paths:
             return None
         path = self._image_paths[self._image_index]
@@ -99,6 +123,12 @@ class ImageSourceNode(Node):
         return frame
 
     def _next_video_frame(self):
+        """@brief Read the next frame from the video capture.
+
+        Reopens the video if looping is enabled and the end is reached.
+
+        @return BGR frame as numpy array, or None if no frame available.
+        """
         if self._video_capture is None:
             return None
         ok, frame = self._video_capture.read()
@@ -112,6 +142,7 @@ class ImageSourceNode(Node):
         return None
 
     def _on_timer(self) -> None:
+        """@brief Timer callback that grabs the next frame and publishes it."""
         frame = None
         if self._video_capture is not None:
             frame = self._next_video_frame()
@@ -122,6 +153,7 @@ class ImageSourceNode(Node):
 
 
 def main() -> None:
+    """@brief Entry point for the image source node."""
     rclpy.init()
     node = ImageSourceNode()
     rclpy.spin(node)

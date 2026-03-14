@@ -35,7 +35,14 @@ AUTONOMOUS_MISSIONS = {"acceleration", "skidpad", "autocross", "trackdrive", "eb
 
 
 class StateMachineNode(Node):
+    """@brief State machine node that gates cmd_vel based on mission and AS state.
+
+    Implements Formula Student AS state transitions and muxes autonomous/manual
+    cmd_vel to /kart/cmd_vel_muxed at 100 Hz. Publishes state heartbeat at 10 Hz.
+    """
+
     def __init__(self):
+        """@brief Initialize the state machine in AS_OFF with subscriptions, publishers, and timers."""
         super().__init__("state_machine")
 
         self._state = AS_OFF
@@ -65,6 +72,10 @@ class StateMachineNode(Node):
     # ── Subscriptions ──────────────────────────────────────────────────
 
     def _on_mission(self, msg: String):
+        """@brief Callback for mission selection from the dashboard. Triggers state transitions.
+
+        @param msg String message with the mission name.
+        """
         old = self._mission
         self._mission = msg.data
         if old == self._mission:
@@ -80,6 +91,10 @@ class StateMachineNode(Node):
             self._set_state(AS_OFF)
 
     def _on_state_cmd(self, msg: String):
+        """@brief Callback for state commands (start, stop, ebs, finish, reset).
+
+        @param msg String message with the command.
+        """
         cmd = msg.data
         s = self._state
 
@@ -97,14 +112,20 @@ class StateMachineNode(Node):
             self.get_logger().warn(f"Ignored cmd '{cmd}' in state {STATE_NAMES[s]}")
 
     def _on_auto_cmd(self, msg: Twist):
+        """@brief Callback for autonomous cmd_vel. Stores latest command for muxing."""
         self._last_auto_cmd = msg
 
     def _on_manual_cmd(self, msg: Twist):
+        """@brief Callback for manual (remote control) cmd_vel. Stores latest command for muxing."""
         self._last_manual_cmd = msg
 
     # ── State transitions ──────────────────────────────────────────────
 
     def _set_state(self, new_state: int):
+        """@brief Transition to a new AS state, logging and publishing the change.
+
+        @param new_state Target AS state constant (AS_OFF, AS_READY, etc.).
+        """
         old = self._state
         self._state = new_state
         self.get_logger().info(f"State: {STATE_NAMES[old]} → {STATE_NAMES[new_state]}")
@@ -114,6 +135,7 @@ class StateMachineNode(Node):
     # ── Muxing (100 Hz) ───────────────────────────────────────────────
 
     def _mux_tick(self):
+        """@brief Timer callback (100 Hz): mux autonomous or manual cmd_vel based on mission and state."""
         out = Twist()
 
         if self._mission == "remote_control":
@@ -128,17 +150,20 @@ class StateMachineNode(Node):
     # ── Publishers ─────────────────────────────────────────────────────
 
     def _publish_state(self):
+        """@brief Publish current AS state name to /kart/state as a String."""
         msg = String()
         msg.data = STATE_NAMES[self._state]
         self._state_pub.publish(msg)
 
     def _publish_state_frame(self):
+        """@brief Publish current AS state as a Frame to /orin/machine_state for the ESP32."""
         frame = Frame()
         frame.type = Frame.ORIN_MACHINE_STATE
         frame.payload = [self._state]
         self._machine_state_pub.publish(frame)
 
     def _publish_mission_frame(self):
+        """@brief Publish current mission ID as a Frame to /orin/mission for the ESP32."""
         from kb_dashboard.protocol import MISSIONS
         mission_id = MISSIONS.get(self._mission, 0)
         frame = Frame()
@@ -148,6 +173,7 @@ class StateMachineNode(Node):
 
 
 def main():
+    """@brief Entrypoint for the state machine node."""
     rclpy.init()
     node = StateMachineNode()
     rclpy.spin(node)
