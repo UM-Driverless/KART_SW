@@ -60,7 +60,7 @@ def generate_launch_description():
     zed_share = get_package_share_directory("zed_wrapper")
 
     zed_overrides = os.path.join(bringup_share, "config", "zed_overrides.yaml")
-    zed_custom_od_config = os.path.join(bringup_share, "config", "zed_custom_od.yaml")
+    zed_overrides_od = os.path.join(bringup_share, "config", "zed_overrides_od.yaml")
 
     # ZED camera with built-in object detection
     zed_camera_with_od = IncludeLaunchDescription(
@@ -69,8 +69,7 @@ def generate_launch_description():
         ),
         launch_arguments={
             "camera_model": "zed2",
-            "ros_params_override_path": zed_overrides,
-            "custom_object_detection_config_path": zed_custom_od_config,
+            "ros_params_override_path": zed_overrides_od,
         }.items(),
         condition=IfCondition(use_zed_od),
     )
