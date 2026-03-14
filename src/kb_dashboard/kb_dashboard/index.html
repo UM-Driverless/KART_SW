@@ -160,8 +160,11 @@ function initJoystick() {
   });
 
   jsManager.on('move', (evt, data) => {
-    const steer = -data.vector.x; // negate: nipplejs left=negative, our convention positive=left
-    const drive = data.vector.y;
+    const rawSteer = -data.vector.x; // negate: nipplejs left=negative, our convention positive=left
+    const rawDrive = data.vector.y;
+    // Dead zone: ignore cross-axis bleed below 0.15
+    const steer = Math.abs(rawSteer) > 0.15 ? rawSteer : 0;
+    const drive = Math.abs(rawDrive) > 0.15 ? rawDrive : 0;
     $('jsSteerVal').textContent = steer.toFixed(2);
     $('jsThrottleVal').textContent = drive.toFixed(2);
     wsSend({
