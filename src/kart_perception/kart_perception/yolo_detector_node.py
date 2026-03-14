@@ -36,7 +36,11 @@ _REPO_ROOT = pathlib.Path(__file__).resolve().parents[4]  # .../src/kart_percept
 
 
 def _repo_relative(path_str: str) -> pathlib.Path:
-    """Resolve a path relative to the kart_brain repo root if not absolute."""
+    """@brief Resolve a path relative to the kart_brain repo root if not absolute.
+
+    @param path_str Path string, either absolute or relative to repo root.
+    @return Resolved absolute path.
+    """
     p = pathlib.Path(path_str)
     if p.is_absolute():
         return p
@@ -48,7 +52,20 @@ def _repo_relative(path_str: str) -> pathlib.Path:
 
 
 class YoloDetectorNode(Node):
+    """@brief ROS2 node that runs YOLO inference on camera images and publishes 2D cone detections.
+
+    Supports both ultralytics (YOLOv8/v11) and torch.hub (YOLOv5) backends.
+    Inference runs on a dedicated thread to decouple ROS callbacks from GPU work.
+    Optionally publishes annotated debug images with bounding boxes.
+    """
+
     def __init__(self) -> None:
+        """@brief Initialize the YOLO detector node.
+
+        Declares parameters for topics, model weights, confidence/IOU thresholds,
+        image size, and device selection. Loads the YOLO model and starts the
+        inference thread.
+        """
         super().__init__("yolo_detector")
 
         self.declare_parameter("image_topic", "/image_raw")
@@ -98,6 +115,10 @@ class YoloDetectorNode(Node):
         self._fps_time = time.monotonic()
 
     def _resolve_device(self) -> str:
+        """@brief Determine the compute device for inference.
+
+        @return Device string (e.g. "cuda:0" or "cpu").
+        """
         device = self.device
         if not device:
             import torch
@@ -105,6 +126,10 @@ class YoloDetectorNode(Node):
         return device
 
     def _load_model(self):
+        """@brief Load the YOLO model, trying ultralytics first then torch.hub YOLOv5.
+
+        @return Loaded model object, or None on failure.
+        """
         if not self.weights_path.exists():
             self.get_logger().error(f"Weights not found: {self.weights_path}")
             return None
@@ -149,6 +174,12 @@ class YoloDetectorNode(Node):
     }
 
     def _get_class_names(self):
+        """@brief Retrieve and validate class names from the loaded model.
+
+        Overrides model names with canonical cone class names if they don't match.
+
+        @return Dictionary mapping class index to class name, or None if no model.
+        """
         if self.model is None:
             return None
         names = self.model.names
@@ -161,7 +192,13 @@ class YoloDetectorNode(Node):
         return names
 
     def _on_image(self, msg: Image) -> None:
-        """ROS callback — store raw msg and signal inference thread. No decoding here."""
+        """@brief ROS callback for incoming camera images.
+
+        Stores the raw message and signals the inference thread. No decoding here
+        to keep the callback lightweight.
+
+        @param msg Raw camera image message.
+        """
         if self.model is None:
             return
         with self._frame_lock:
@@ -169,7 +206,11 @@ class YoloDetectorNode(Node):
         self._frame_event.set()
 
     def _inference_loop(self) -> None:
-        """Dedicated thread: grab latest frame, run inference, publish results."""
+        """@brief Dedicated inference thread loop.
+
+        Waits for new frames, decodes them, runs YOLO inference, publishes
+        detections and optional debug images, and tracks FPS.
+        """
         while not self._shutdown:
             # Wait for a new frame (with timeout so we can check shutdown)
             if not self._frame_event.wait(timeout=1.0):
@@ -211,6 +252,12 @@ class YoloDetectorNode(Node):
                 self._fps_time = now
 
     def _infer_ultralytics(self, header, frame_bgr, want_debug: bool) -> None:
+        """@brief Run inference using the ultralytics YOLO API and publish results.
+
+        @param header ROS message header to stamp output messages.
+        @param frame_bgr BGR image as numpy array.
+        @param want_debug If True, draw bounding boxes and publish debug image.
+        """
         results = self.model(
             frame_bgr,
             imgsz=self.imgsz,
@@ -263,6 +310,12 @@ class YoloDetectorNode(Node):
             self.debug_publisher.publish(debug_msg)
 
     def _infer_yolov5(self, header, frame_bgr, want_debug: bool) -> None:
+        """@brief Run inference using the torch.hub YOLOv5 API and publish results.
+
+        @param header ROS message header to stamp output messages.
+        @param frame_bgr BGR image as numpy array.
+        @param want_debug If True, draw bounding boxes and publish debug image.
+        """
         frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
         results = self.model(frame_rgb)
         detections = Detection2DArray()
@@ -309,6 +362,7 @@ class YoloDetectorNode(Node):
 
 
 def main() -> None:
+    """@brief Entry point for the YOLO detector node."""
     rclpy.init()
     node = YoloDetectorNode()
     try:

@@ -8,6 +8,11 @@ from vision_msgs.msg import Detection3DArray
 
 
 def class_color(class_id: str) -> Tuple[float, float, float]:
+    """@brief Map a cone class name to an RGB color tuple for RViz markers.
+
+    @param class_id Cone class name (e.g. "blue_cone", "yellow_cone").
+    @return RGB color as floats in [0, 1].
+    """
     if class_id == "blue_cone":
         return (0.1, 0.3, 1.0)
     if class_id == "yellow_cone":
@@ -20,7 +25,18 @@ def class_color(class_id: str) -> Tuple[float, float, float]:
 
 
 class ConeMarkerViz3DNode(Node):
+    """@brief ROS2 node that converts 3D cone detections into RViz MarkerArray visualizations.
+
+    Creates colored sphere markers at 3D positions and text labels with class name
+    and confidence score.
+    """
+
     def __init__(self) -> None:
+        """@brief Initialize the 3D cone marker visualization node.
+
+        Declares parameters for input/output topics, reference frame, and cone
+        marker scale in meters.
+        """
         super().__init__("cone_marker_viz_3d")
 
         self.declare_parameter("detections_topic", "/perception/cones_3d")
@@ -39,6 +55,10 @@ class ConeMarkerViz3DNode(Node):
         )
 
     def _on_detections(self, msg: Detection3DArray) -> None:
+        """@brief Callback for 3D detections. Creates sphere and text markers for each cone.
+
+        @param msg Array of 3D cone detections from the depth localizer.
+        """
         markers = MarkerArray()
         header = msg.header
         if not header.frame_id:
@@ -96,6 +116,7 @@ class ConeMarkerViz3DNode(Node):
 
 
 def main() -> None:
+    """@brief Entry point for the 3D cone marker visualization node."""
     rclpy.init()
     node = ConeMarkerViz3DNode()
     rclpy.spin(node)

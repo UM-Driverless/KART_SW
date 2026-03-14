@@ -21,7 +21,14 @@ MAX_ANGULAR_ACCEL = 2.0  # rad/s²
 
 
 class AckermannToVel(Node):
+    """@brief Convert Ackermann steering commands to velocity commands for Gazebo.
+
+    Subscribes to /kart/cmd_vel (steer angle) and publishes /kart/vel_cmd (yaw rate),
+    applying acceleration limits to approximate real-kart dynamics.
+    """
+
     def __init__(self):
+        """@brief Initialize with subscriber, publisher, and acceleration state."""
         super().__init__("ackermann_to_vel")
         self.sub = self.create_subscription(
             Twist, "/kart/cmd_vel", self._on_cmd, 10
@@ -35,6 +42,10 @@ class AckermannToVel(Node):
         self.get_logger().info("AckermannToVel: steer→yaw + accel limits active")
 
     def _on_cmd(self, msg: Twist):
+        """@brief Callback for cmd_vel. Converts steer angle to yaw rate and applies accel limits.
+
+        @param msg Twist with linear.x as speed (m/s) and angular.z as steer angle (rad).
+        """
         now = time.monotonic()
         dt = now - self._last_time
         self._last_time = now
@@ -66,6 +77,7 @@ class AckermannToVel(Node):
 
 
 def main():
+    """@brief Entrypoint for the Ackermann-to-velocity converter node."""
     rclpy.init()
     node = AckermannToVel()
     rclpy.spin(node)

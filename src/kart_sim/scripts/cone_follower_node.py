@@ -30,7 +30,14 @@ from vision_msgs.msg import Detection3DArray
 
 
 class ConeFollowerNode(Node):
+    """@brief Cone-following controller node.
+
+    Supports geometric, neural (v1), and neural_v2 controller types. Receives
+    Detection3DArray in camera optical frame and publishes Twist on /kart/cmd_vel.
+    """
+
     def __init__(self):
+        """@brief Initialize the controller with parameters, neural weights (if applicable), and ROS plumbing."""
         super().__init__("cone_follower")
 
         # --- common params ---
@@ -98,6 +105,7 @@ class ConeFollowerNode(Node):
         self.get_logger().info(f"Controller type: {self.controller_type}")
 
     def _on_odom(self, msg: Odometry):
+        """@brief Callback for odometry. Extracts current speed for neural_v2 speed feedback."""
         vx = msg.twist.twist.linear.x
         vy = msg.twist.twist.linear.y
         self._actual_speed = math.sqrt(vx * vx + vy * vy)
@@ -105,6 +113,7 @@ class ConeFollowerNode(Node):
     # ── neural net loading ────────────────────────────────────────────
 
     def _load_neural_weights(self):
+        """@brief Load neural network weights from a JSON file specified by the weights_json parameter."""
         path = str(self.get_parameter("weights_json").value)
         if not path:
             self.get_logger().error(
@@ -144,6 +153,10 @@ class ConeFollowerNode(Node):
     # ── detection callback ────────────────────────────────────────────
 
     def _on_detections(self, msg: Detection3DArray):
+        """@brief Callback for 3D cone detections. Filters cones by FOV/range and runs the active controller.
+
+        @param msg Detection3DArray in camera optical frame (Z=forward, X=right, Y=down).
+        """
         self.last_detection_time = self.get_clock().now()
 
         # Parse detections into (class_id, fwd, left) in camera_link frame.
@@ -186,6 +199,11 @@ class ConeFollowerNode(Node):
     # ── geometric controller ──────────────────────────────────────────
 
     def _control_geometric(self, cones):
+        """@brief Geometric controller: steer toward nearest blue/yellow midpoint.
+
+        @param cones List of (class_id, fwd, left) tuples in camera_link frame.
+        @return Tuple of (steer_rad, speed_mps).
+        """
         nearest_blue = None
         nearest_yellow = None
         min_bd = float("inf")
@@ -231,6 +249,11 @@ class ConeFollowerNode(Node):
     # ── neural net controller ─────────────────────────────────────────
 
     def _control_neural(self, cones):
+        """@brief Neural net controller: feed-forward network produces steer and speed.
+
+        @param cones List of (class_id, fwd, left) tuples in camera_link frame.
+        @return Tuple of (steer_rad, speed_mps).
+        """
         blues = []
         yellows = []
         for cls, fwd, left in cones:
@@ -273,6 +296,7 @@ class ConeFollowerNode(Node):
     # ── safety timeout ────────────────────────────────────────────────
 
     def _safety_check(self):
+        """@brief Timer callback: publish zero-velocity if no detections received within timeout."""
         elapsed = (self.get_clock().now() - self.last_detection_time).nanoseconds / 1e9
         if elapsed > self.no_cone_timeout:
             cmd = Twist()
@@ -282,6 +306,7 @@ class ConeFollowerNode(Node):
 
 
 def main():
+    """@brief Entrypoint for the cone follower node."""
     rclpy.init()
     node = ConeFollowerNode()
     rclpy.spin(node)

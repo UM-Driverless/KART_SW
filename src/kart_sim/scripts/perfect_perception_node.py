@@ -34,7 +34,11 @@ CONE_CLASSES = {
 
 
 def _class_from_name(name: str) -> str:
-    """Determine cone class_id from model name prefix."""
+    """@brief Determine cone class_id from model name prefix.
+
+    @param name SDF model name (e.g. "blue_rs_0", "yellow_ls_3").
+    @return Class ID string (e.g. "blue_cone") or empty string if unrecognized.
+    """
     if name.startswith("blue"):
         return "blue_cone"
     elif name.startswith("yellow"):
@@ -45,9 +49,12 @@ def _class_from_name(name: str) -> str:
 
 
 def parse_cones_from_sdf(sdf_path: str) -> List[Dict]:
-    """Parse cone model positions and colors from the world SDF file.
+    """@brief Parse cone model positions and colors from the world SDF file.
 
     Supports both inline <model> definitions and <include> tags.
+
+    @param sdf_path Path to the SDF world file.
+    @return List of dicts with keys: name, x, y, z, class_id.
     """
     cones = []
     with open(sdf_path, "r") as f:
@@ -83,7 +90,15 @@ def parse_cones_from_sdf(sdf_path: str) -> List[Dict]:
 
 
 class PerfectPerceptionNode(Node):
+    """@brief Perfect perception node for Gazebo simulation.
+
+    Reads cone positions from the SDF world file and publishes them as
+    Detection3DArray relative to the kart's camera frame. Bypasses YOLO
+    entirely for testing the control loop.
+    """
+
     def __init__(self):
+        """@brief Initialize with world SDF parsing, camera parameters, and ROS plumbing."""
         super().__init__("perfect_perception")
 
         self.declare_parameter("world_sdf", "")
@@ -151,6 +166,10 @@ class PerfectPerceptionNode(Node):
         self.timer = self.create_timer(1.0 / publish_rate, self._publish)
 
     def _on_odom(self, msg: Odometry):
+        """@brief Callback for ground-truth odometry. Extracts kart position and yaw.
+
+        @param msg Odometry message with pose in world frame.
+        """
         # Ground-truth odom is already in world frame
         self.kart_x = msg.pose.pose.position.x
         self.kart_y = msg.pose.pose.position.y
@@ -161,6 +180,7 @@ class PerfectPerceptionNode(Node):
         self.got_odom = True
 
     def _publish(self):
+        """@brief Timer callback: transform cones to camera optical frame and publish Detection3DArray + TF."""
         if not self.got_odom or not self.cones:
             self.get_logger().info(
                 f"Skipping: got_odom={self.got_odom} cones={len(self.cones)}",
@@ -263,6 +283,7 @@ class PerfectPerceptionNode(Node):
 
 
 def main():
+    """@brief Entrypoint for the perfect perception node."""
     rclpy.init()
     node = PerfectPerceptionNode()
     rclpy.spin(node)

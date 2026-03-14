@@ -17,7 +17,14 @@ from sensor_msgs.msg import CameraInfo
 
 
 class CameraInfoFixNode(Node):
+    """@brief Fix incorrect CameraInfo intrinsics from Gazebo Fortress.
+
+    Recomputes FX, FY, CX, CY from the known HFOV and actual image dimensions,
+    overriding the K and P matrices before republishing. Sim-only node.
+    """
+
     def __init__(self):
+        """@brief Initialize with HFOV parameter, subscriber, and publisher."""
         super().__init__("camera_info_fix")
 
         self.declare_parameter("hfov", 1.396)  # 80 degrees in radians
@@ -35,6 +42,10 @@ class CameraInfoFixNode(Node):
         self._logged = False
 
     def _on_camera_info(self, msg: CameraInfo):
+        """@brief Callback for raw CameraInfo. Recomputes intrinsics from HFOV and republishes.
+
+        @param msg Raw CameraInfo message from the Gazebo camera sensor.
+        """
         width = msg.width
         height = msg.height
 
@@ -70,6 +81,7 @@ class CameraInfoFixNode(Node):
 
 
 def main():
+    """@brief Entrypoint for the CameraInfo fix node."""
     rclpy.init()
     node = CameraInfoFixNode()
     rclpy.spin(node)

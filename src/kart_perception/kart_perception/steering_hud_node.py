@@ -34,7 +34,19 @@ DARK_BG = (30, 30, 30)
 
 
 class SteeringHudNode(Node):
+    """@brief ROS2 node that composites a steering HUD overlay onto YOLO-annotated images.
+
+    Draws nearest cone highlights, midpoint crosshair, steering arrow, steering gauge,
+    text overlay (steering angle, speed, FPS), and cone detection status indicator.
+    """
+
     def __init__(self):
+        """@brief Initialize the steering HUD node.
+
+        Declares parameters for input/output topics, half track width, lookahead
+        distance, and cone staleness timeout. Subscribes to annotated images,
+        3D cones, cmd_vel, and camera info.
+        """
         super().__init__("steering_hud")
 
         self.declare_parameter("annotated_topic", "/perception/yolo/annotated")
@@ -96,13 +108,25 @@ class SteeringHudNode(Node):
     # ---- Callbacks ----
 
     def _on_cmd_vel(self, msg: Twist):
+        """@brief Cache the latest velocity command for HUD display.
+
+        @param msg Twist message with linear.x (speed) and angular.z (steering).
+        """
         self.latest_cmd = msg
 
     def _on_cones(self, msg: Detection3DArray):
+        """@brief Cache the latest 3D cone detections and record arrival time.
+
+        @param msg Array of 3D cone detections.
+        """
         self.latest_cones = msg
         self.latest_cones_time = time.monotonic()
 
     def _on_camera_info(self, msg: CameraInfo):
+        """@brief Extract and cache camera intrinsics from camera info (once).
+
+        @param msg Camera info message containing the intrinsic matrix K.
+        """
         if not self.camera_info_ready:
             K = msg.k
             self.fx, self.fy = K[0], K[4]
@@ -114,6 +138,13 @@ class SteeringHudNode(Node):
             )
 
     def _on_image(self, img_msg: Image):
+        """@brief Main callback triggered by each annotated YOLO image.
+
+        Computes HUD overlays (cone highlights, midpoint, steering arrow, gauge,
+        text, status) and publishes the composited image.
+
+        @param img_msg Annotated image from the YOLO detector.
+        """
         # FPS (EMA)
         now = time.monotonic()
         dt = now - self._fps_prev_time
@@ -181,6 +212,13 @@ class SteeringHudNode(Node):
     # ---- Logic ----
 
     def _find_nearest_cones(self, cones_msg):
+        """@brief Find the nearest blue and yellow cones from 3D detections.
+
+        Filters out cones behind the kart or beyond lookahead distance.
+
+        @param cones_msg Detection3DArray with 3D cone positions.
+        @return Tuple of (nearest_blue, nearest_yellow), each as (x, y, z, dist) or None.
+        """
         nearest_blue = None
         nearest_yellow = None
         min_blue_dist = float("inf")
@@ -210,11 +248,25 @@ class SteeringHudNode(Node):
     # ---- Drawing helpers ----
 
     def _project(self, x, y, z):
+        """@brief Project a 3D point in camera frame to 2D pixel coordinates.
+
+        @param x X coordinate in camera optical frame.
+        @param y Y coordinate in camera optical frame.
+        @param z Z coordinate (depth) in camera optical frame.
+        @return Tuple (u, v) pixel coordinates.
+        """
         u = self.fx * x / z + self.cx
         v = self.fy * y / z + self.cy
         return u, v
 
     def _draw_cone(self, img, cone_data, color, label):
+        """@brief Draw a cone highlight circle and distance label on the image.
+
+        @param img BGR image to draw on (modified in place).
+        @param cone_data Tuple (x, y, z, dist) of the cone in camera frame.
+        @param color BGR color tuple for the circle and text.
+        @param label Short label prefix (e.g. "B" for blue, "Y" for yellow).
+        """
         x, y, z, dist = cone_data
         if z <= 0 or not self.camera_info_ready:
             return
@@ -228,6 +280,11 @@ class SteeringHudNode(Node):
                         0.5, color, 2, cv2.LINE_AA)
 
     def _draw_gauge(self, img, steer_rad):
+        """@brief Draw a horizontal steering gauge bar at the bottom of the image.
+
+        @param img BGR image to draw on (modified in place).
+        @param steer_rad Steering angle in radians.
+        """
         h, w = img.shape[:2]
         gauge_y = h - 12
         gauge_w = min(300, w - 40)
@@ -243,6 +300,11 @@ class SteeringHudNode(Node):
         cv2.circle(img, (ind_x, gauge_y), 7, WHITE, 1)
 
     def _draw_text_overlay(self, img, cmd: Twist):
+        """@brief Draw steering angle, speed, and FPS text in the top-left corner.
+
+        @param img BGR image to draw on (modified in place).
+        @param cmd Current velocity command with steering and speed values.
+        """
         steer_deg = math.degrees(cmd.angular.z)
         speed = cmd.linear.x
         lines = [
@@ -259,6 +321,11 @@ class SteeringHudNode(Node):
                         0.55, WHITE, 2, cv2.LINE_AA)
 
     def _draw_status(self, img, status):
+        """@brief Draw the cone detection status indicator in the bottom-left corner.
+
+        @param img BGR image to draw on (modified in place).
+        @param status Status string (e.g. "BLUE + YLW", "NO CONES", "STALE").
+        """
         h = img.shape[0]
         y = h - 20
         (tw, th), _ = cv2.getTextSize(status, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 2)
@@ -269,6 +336,7 @@ class SteeringHudNode(Node):
 
 
 def main():
+    """@brief Entry point for the steering HUD node."""
     rclpy.init()
     node = SteeringHudNode()
     rclpy.spin(node)

@@ -21,7 +21,14 @@ from kb_dashboard.protocol import (
 
 
 class Esp32SimNode(Node):
+    """@brief Simulated ESP32 node for Gazebo.
+
+    Replaces kb_coms_micro in simulation: reads Gazebo odometry and cmd_vel,
+    then publishes the same /esp32/* Frame topics that the real ESP32 would produce.
+    """
+
     def __init__(self):
+        """@brief Initialize publishers, subscribers, and periodic telemetry timers."""
         super().__init__("esp32_sim")
 
         # Publishers (same as kb_coms_micro)
@@ -52,6 +59,10 @@ class Esp32SimNode(Node):
         self.get_logger().info("ESP32 sim node started (fake telemetry from Gazebo)")
 
     def _on_odom(self, msg: Odometry):
+        """@brief Callback for Gazebo odometry. Computes speed and acceleration from odom deltas.
+
+        @param msg Odometry message from the Gazebo simulation.
+        """
         now = self.get_clock().now()
         dt = (now - self._prev_time).nanoseconds / 1e9
         speed = msg.twist.twist.linear.x
@@ -67,6 +78,10 @@ class Esp32SimNode(Node):
         self._prev_time = now
 
     def _on_cmd_vel(self, msg: Twist):
+        """@brief Callback for cmd_vel. Extracts steering, throttle, and brake from Twist.
+
+        @param msg Twist with linear.x as speed command and angular.z as steering angle.
+        """
         self._steer_angle = msg.angular.z  # steer angle in radians
         speed = msg.linear.x
         if speed > 0.1:
@@ -80,12 +95,14 @@ class Esp32SimNode(Node):
             self._brake = 0.0
 
     def _publish_heartbeat(self):
+        """@brief Timer callback (1 Hz): publish a simulated heartbeat frame."""
         msg = Frame()
         msg.type = Frame.ESP_HEARTBEAT
         msg.payload = encode_heartbeat()
         self.pub_heartbeat.publish(msg)
 
     def _publish_telemetry(self):
+        """@brief Timer callback (20 Hz): publish simulated steering, speed, accel, throttle, and braking frames."""
         speed = getattr(self, "_speed", 0.0)
         accel_lat = getattr(self, "_accel_lat", 0.0)
         accel_lon = getattr(self, "_accel_lon", 0.0)
@@ -122,6 +139,7 @@ class Esp32SimNode(Node):
         self.pub_braking.publish(brake_msg)
 
     def _publish_health(self):
+        """@brief Timer callback (0.5 Hz): publish simulated health status (all-OK)."""
         msg = Frame()
         msg.type = 0x0B  # ESP_HEALTH_STATUS
         msg.payload = encode_health(
@@ -132,6 +150,7 @@ class Esp32SimNode(Node):
 
 
 def main():
+    """@brief Entrypoint for the ESP32 simulation node."""
     rclpy.init()
     node = Esp32SimNode()
     rclpy.spin(node)

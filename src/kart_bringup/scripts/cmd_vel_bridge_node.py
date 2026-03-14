@@ -16,7 +16,15 @@ from kb_dashboard.protocol import encode_steering, encode_throttle, encode_braki
 
 
 class CmdVelBridgeNode(Node):
+    """@brief Bridge from Twist commands to ESP32 Frame messages.
+
+    Converts /kart/cmd_vel_muxed Twist into throttle, brake, and steering
+    Frame messages on /orin/* topics for kb_coms_micro to relay to the ESP32.
+    Publishes at a configurable rate (default 100 Hz).
+    """
+
     def __init__(self):
+        """@brief Initialize the bridge with parameters, publishers, and subscriber."""
         super().__init__("cmd_vel_bridge")
 
         self.declare_parameter("input_topic", "/kart/cmd_vel_muxed")
@@ -44,6 +52,10 @@ class CmdVelBridgeNode(Node):
         self.get_logger().info(f"CmdVelBridge: {in_topic} @ {rate} Hz")
 
     def _on_cmd(self, msg: Twist):
+        """@brief Callback for incoming Twist commands. Splits into throttle/brake and clamps steering.
+
+        @param msg Twist with linear.x as speed (m/s) and angular.z as steering (rad).
+        """
         speed = msg.linear.x
         steer = msg.angular.z
 
@@ -59,6 +71,7 @@ class CmdVelBridgeNode(Node):
         self._steer_rad = max(-self.max_steer, min(self.max_steer, steer))
 
     def _send_frames(self):
+        """@brief Timer callback: publish current throttle, brake, and steering as Frame messages."""
         throttle_frame = Frame()
         throttle_frame.type = Frame.ORIN_TARG_THROTTLE
         throttle_frame.payload = encode_throttle(self._throttle_effort)
@@ -77,6 +90,7 @@ class CmdVelBridgeNode(Node):
 
 
 def main():
+    """@brief Entrypoint for the cmd_vel bridge node."""
     rclpy.init()
     node = CmdVelBridgeNode()
     rclpy.spin(node)

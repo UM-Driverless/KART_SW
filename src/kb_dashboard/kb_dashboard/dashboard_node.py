@@ -37,7 +37,18 @@ from kb_dashboard.server import run_websocket_server
 
 
 class DashboardNode(Node):
+    """@brief ROS2 node that bridges kart telemetry to a WebSocket-based dashboard.
+
+    Subscribes to ESP32 telemetry, ZED IMU, YOLO FPS, HUD images, and state
+    machine feedback, forwarding them to the dashboard web UI via DashboardState.
+    Also publishes mission and manual control commands from the dashboard.
+    """
+
     def __init__(self, state: DashboardState):
+        """@brief Initialize the dashboard node with subscriptions and publishers.
+
+        @param state Shared DashboardState instance for thread-safe telemetry exchange.
+        """
         super().__init__("kb_dashboard")
         self.state = state
         self.declare_parameter("port", 8080)
@@ -112,9 +123,11 @@ class DashboardNode(Node):
         self.get_logger().info(f"Dashboard node started, web UI on port {self.port}")
 
     def _on_heartbeat(self, msg: Frame):
+        """@brief Callback for ESP32 heartbeat frames. Updates heartbeat timestamp."""
         self.state.heartbeat()
 
     def _on_esp_steering(self, msg: Frame):
+        """@brief Callback for ESP32 steering frames. Decodes angle and raw encoder value."""
         p = list(msg.payload)
         angle_rad, raw_encoder = decode_steering_raw(p)
         self.state.update("esp32_steering_rad", angle_rad)
@@ -122,10 +135,12 @@ class DashboardNode(Node):
             self.state.update("esp32_steering_raw", raw_encoder)
 
     def _on_esp_speed(self, msg: Frame):
+        """@brief Callback for ESP32 speed frames. Decodes speed in m/s."""
         if msg.payload:
             self.state.update("esp32_speed", decode_speed(list(msg.payload)))
 
     def _on_esp_accel(self, msg: Frame):
+        """@brief Callback for ESP32 acceleration frames. Decodes lateral and longitudinal acceleration."""
         p = list(msg.payload)
         if p:
             lat, lon = decode_accel(p)
@@ -133,12 +148,15 @@ class DashboardNode(Node):
             self.state.update("esp32_accel_lon", lon)
 
     def _on_esp_throttle(self, msg: Frame):
+        """@brief Callback for ESP32 throttle frames. Decodes throttle effort 0.0-1.0."""
         self.state.update("esp32_throttle", decode_throttle(list(msg.payload)))
 
     def _on_esp_braking(self, msg: Frame):
+        """@brief Callback for ESP32 braking frames. Decodes braking effort 0.0-1.0."""
         self.state.update("esp32_braking", decode_braking(list(msg.payload)))
 
     def _on_zed_imu(self, msg: Imu):
+        """@brief Callback for ZED2 IMU data. Extracts linear acceleration (REP-103 convention)."""
         # ZED2 ROS2 wrapper uses REP-103: x=forward, y=left, z=up
         self.state.update("esp32_accel_lon", msg.linear_acceleration.x)
         self.state.update(
@@ -146,20 +164,25 @@ class DashboardNode(Node):
         )  # flip: y=left → positive=right
 
     def _on_esp_health(self, msg: Frame):
+        """@brief Callback for ESP32 health status frames. Updates magnet, I2C, heap fields."""
         fields = decode_health(list(msg.payload))
         for k, v in fields.items():
             self.state.update(k, v)
 
     def _on_orin_throttle(self, msg: Frame):
+        """@brief Callback for Orin-to-ESP32 throttle command echo."""
         self.state.update("orin_cmd_throttle", decode_throttle(list(msg.payload)))
 
     def _on_orin_brake(self, msg: Frame):
+        """@brief Callback for Orin-to-ESP32 brake command echo."""
         self.state.update("orin_cmd_brake", decode_throttle(list(msg.payload)))
 
     def _on_orin_steering(self, msg: Frame):
+        """@brief Callback for Orin-to-ESP32 steering command echo."""
         self.state.update("orin_cmd_steering_rad", decode_steering(list(msg.payload)))
 
     def _on_kart_state(self, msg: String):
+        """@brief Callback for AS state machine updates. Maps AS states to dashboard state names."""
         # Map AS state names to dashboard state names for the UI
         as_to_dash = {
             "AS_OFF": "idle",
@@ -172,23 +195,37 @@ class DashboardNode(Node):
         self.state.update("as_state", msg.data)
 
     def _on_yolo_fps(self, msg: Float32):
+        """@brief Callback for YOLO inference FPS updates."""
         self.state.update("yolo_fps", round(msg.data, 1))
 
     def _on_hud_image(self, msg: Image):
+        """@brief Callback for HUD image. Converts to JPEG for WebSocket binary broadcast."""
         img = self._bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
         _, buf = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 60])
         self._hud_jpeg = buf.tobytes()
 
     def get_hud_jpeg(self) -> bytes | None:
+        """@brief Get the latest HUD JPEG frame for WebSocket broadcast.
+
+        @return JPEG bytes or None if no HUD image has been received yet.
+        """
         return self._hud_jpeg
 
     def publish_mission(self, mission: str):
+        """@brief Publish a mission selection to /dashboard/mission.
+
+        @param mission Mission name (e.g. "manual", "trackdrive").
+        """
         msg = String()
         msg.data = mission
         self.mission_pub.publish(msg)
         self.get_logger().info(f"Mission set: {mission}")
 
     def publish_state_cmd(self, cmd: str):
+        """@brief Publish a state command to /dashboard/state_cmd.
+
+        @param cmd Command string (e.g. "start", "stop", "ebs").
+        """
         msg = String()
         msg.data = cmd
         self.state_cmd_pub.publish(msg)
@@ -197,7 +234,13 @@ class DashboardNode(Node):
     def publish_manual_control(
         self, steer: float, steer_type: str, throttle: float, brake: float
     ):
-        """Publish remote control from the dashboard."""
+        """@brief Publish remote control commands from the dashboard joystick.
+
+        @param steer Steering input, -1.0 (left) to 1.0 (right).
+        @param steer_type Steering mode string (e.g. "angle", "pwm").
+        @param throttle Throttle input, 0.0 to 1.0.
+        @param brake Brake input, 0.0 to 1.0.
+        """
         # Optional: Print/log if they chose PWM, since Twist doesn't natively support it.
         # But we can map "steer" straight to cmd.angular.z for now.
         cmd = Twist()
@@ -240,6 +283,7 @@ class DashboardNode(Node):
 
 
 def main(args=None):
+    """@brief Entrypoint: spins ROS in a background thread and runs the async web server."""
     rclpy.init(args=args)
     state = DashboardState()
     node = DashboardNode(state)
