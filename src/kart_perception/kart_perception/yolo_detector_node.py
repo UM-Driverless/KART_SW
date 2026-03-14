@@ -209,7 +209,10 @@ class YoloDetectorNode(Node):
                 continue
 
             header = msg.header
+            t_decode = time.monotonic()
             frame_bgr = self.bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
+            t_decode = time.monotonic() - t_decode
+
             want_debug = (
                 self.publish_debug_image
                 and self.debug_publisher.get_subscription_count() > 0
@@ -224,7 +227,7 @@ class YoloDetectorNode(Node):
 
             t0 = time.monotonic()
             self._infer(header, cropped, want_debug, frame_bgr, crop_y)
-            t_total = time.monotonic() - t0
+            t_infer = time.monotonic() - t0
 
             # FPS logging + publish
             self._fps_count += 1
@@ -233,7 +236,8 @@ class YoloDetectorNode(Node):
             if elapsed >= 2.0:
                 fps = self._fps_count / elapsed
                 self.get_logger().info(
-                    f"YOLO inference: {fps:.1f} Hz  (last frame: {t_total*1000:.1f}ms)"
+                    f"YOLO: {fps:.1f} Hz  decode={t_decode*1000:.1f}ms "
+                    f"infer={t_infer*1000:.1f}ms  debug={'Y' if want_debug else 'N'}"
                 )
                 self.fps_publisher.publish(Float32(data=fps))
                 self._fps_count = 0
