@@ -5,7 +5,7 @@ Subscribes to /kart/cmd_vel (Twist) and publishes kb_interfaces/Frame
 messages on /orin/throttle, /orin/brake, /orin/steering — the topics
 that kb_coms_micro subscribes to and relays over UART to the ESP32.
 
-Payload encoding: protobuf (TargThrottle, TargBraking, TargSteering).
+Payload encoding: int32 binary (steering x1000, throttle/brake x255).
 """
 
 import rclpy

@@ -90,32 +90,32 @@ class Esp32SimNode(Node):
         accel_lat = getattr(self, "_accel_lat", 0.0)
         accel_lon = getattr(self, "_accel_lon", 0.0)
 
-        # Steering: protobuf ActSteering with angle + fake raw encoder
+        # Steering: int32 [angle_rad x 1000, raw_encoder]
         steer_msg = Frame()
         steer_msg.type = Frame.ESP_ACT_STEERING
         raw_encoder = 2048 + int(self._steer_angle * 650)  # fake AS5600-like value
         steer_msg.payload = encode_act_steering(self._steer_angle, raw_encoder)
         self.pub_steering.publish(steer_msg)
 
-        # Speed: protobuf ActSpeed
+        # Speed: int32 [speed_mps x 1000]
         speed_msg = Frame()
         speed_msg.type = Frame.ESP_ACT_SPEED
         speed_msg.payload = encode_act_speed(speed)
         self.pub_speed.publish(speed_msg)
 
-        # Acceleration: protobuf ActAcceleration
+        # Acceleration: int32 [lat x 1000, lon x 1000]
         accel_msg = Frame()
         accel_msg.type = Frame.ESP_ACT_ACCELERATION
         accel_msg.payload = encode_act_accel(accel_lat, accel_lon)
         self.pub_accel.publish(accel_msg)
 
-        # Throttle: protobuf TargThrottle (reused for sim feedback)
+        # Throttle: int32 [effort x 255]
         throttle_msg = Frame()
         throttle_msg.type = 0x00  # sim-only: dashboard routes by topic
         throttle_msg.payload = encode_act_throttle(self._throttle)
         self.pub_throttle.publish(throttle_msg)
 
-        # Braking: protobuf ActBraking
+        # Braking: int32 [effort x 255]
         brake_msg = Frame()
         brake_msg.type = Frame.ESP_ACT_BRAKING
         brake_msg.payload = encode_act_braking(self._brake)

@@ -31,4 +31,4 @@ uint8 ORIN_COMPLETE         = 0x27
 # ==========================
 
 uint8 type        # Message type
-uint8[] payload   # Variable length payload
+int32[] payload   # Variable length payload

@@ -75,7 +75,7 @@ public:
     struct Frame
     {
         uint8_t type;                 /**< Message type field */
-        std::vector<uint8_t> payload; /**< Payload data */
+        std::vector<int32_t> payload; /**< Payload data */
     };
 
     /**
@@ -126,7 +126,7 @@ public:
      *
      * @thread_safety Thread-safe.
      */
-    void send(uint8_t type, const std::vector<uint8_t>& payload);
+    void send(uint8_t type, const std::vector<int32_t>& payload);
 
     /**
      * @brief Returns number of successfully received frames.
@@ -246,7 +246,7 @@ private:
      * @return Serialized frame ready for transmission.
      */
     std::vector<uint8_t> build_frame(uint8_t type,
-                                     const std::vector<uint8_t>& payload);
+                                     const std::vector<int32_t>& payload);
 
     /**
      * @brief Computes CRC-8 checksum.
