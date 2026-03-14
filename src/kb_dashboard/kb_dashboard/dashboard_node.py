@@ -128,7 +128,25 @@ class DashboardNode(Node):
         self._pending_state_cmd_count = 0
         self.create_timer(0.01, self._publish_pending)  # 100 Hz
 
+        # One-shot self-test after 2 seconds
+        self._selftest_timer = self.create_timer(2.0, self._selftest)
+
         self.get_logger().info(f"Dashboard node started, web UI on port {self.port}")
+
+    def _selftest(self):
+        """@brief One-shot self-test: log subscriber counts for all publishers."""
+        self._selftest_timer.cancel()
+        pubs = {
+            "/dashboard/mission": self.mission_pub,
+            "/dashboard/state_cmd": self.state_cmd_pub,
+            "/kart/cmd_vel_manual": self.manual_cmd_pub,
+        }
+        for topic, pub in pubs.items():
+            subs = pub.get_subscription_count()
+            if subs == 0:
+                self.get_logger().warn(f"Self-test: {topic} has 0 subscribers")
+            else:
+                self.get_logger().info(f"Self-test: {topic} OK ({subs} subs)")
 
     def _on_heartbeat(self, msg: Frame):
         """@brief Callback for ESP32 heartbeat frames. Updates heartbeat timestamp.
