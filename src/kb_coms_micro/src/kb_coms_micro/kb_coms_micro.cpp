@@ -33,6 +33,8 @@ KB_coms_micro::KB_coms_micro() : Node("kb_coms_micro_node") {
 
     esp_health_data_pub_ = create_publisher<kb_interfaces::msg::Frame>("/esp32/health/data", 10);
 
+    esp_diag_steering_pub_ = create_publisher<kb_interfaces::msg::Frame>("/esp32/diag_steering", 10);
+
     // Create Subscriptors
     orin_throttle_sub_ = create_subscription<kb_interfaces::msg::Frame>(
         "/orin/throttle", 10, std::bind(&KB_coms_micro::kb_coms_TXcallback, this, std::placeholders::_1));
@@ -170,21 +172,30 @@ void KB_coms_micro::kb_coms_RXcallback(const SerialDriver::Frame &frame_esp) {
     }
 
     case kb_interfaces::msg::Frame::ESP_HEALTH_STATUS: {
+        if (frame_esp.payload.size() < 7) {
+            RCLCPP_WARN(this->get_logger(),
+                "ESP_HEALTH_STATUS: expected 7 int32s, got %zu",
+                frame_esp.payload.size());
+            break;
+        }
         kb_interfaces::msg::Frame health_flags_msg;
         kb_interfaces::msg::Frame health_data_msg;
         health_flags_msg.type = frame_esp.type;
         health_data_msg.type = frame_esp.type;
 
-        health_flags_msg.payload[0] = frame_esp.payload[0];
-        health_flags_msg.payload[1] = frame_esp.payload[1];
-        health_flags_msg.payload[2] = frame_esp.payload[2];
+        health_flags_msg.payload = {
+            frame_esp.payload[0],
+            frame_esp.payload[1],
+            frame_esp.payload[2]
+        };
         esp_health_flags_pub_->publish(health_flags_msg);
 
-        health_data_msg.payload[0] = frame_esp.payload[3];
-        health_data_msg.payload[1] = frame_esp.payload[4];
-        health_data_msg.payload[2] = frame_esp.payload[5];
-        health_data_msg.payload[3] = frame_esp.payload[6];
-
+        health_data_msg.payload = {
+            frame_esp.payload[3],
+            frame_esp.payload[4],
+            frame_esp.payload[5],
+            frame_esp.payload[6]
+        };
         esp_health_data_pub_->publish(health_data_msg);
         break;
     }
