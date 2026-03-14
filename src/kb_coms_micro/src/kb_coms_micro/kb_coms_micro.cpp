@@ -172,9 +172,10 @@ void KB_coms_micro::kb_coms_RXcallback(const SerialDriver::Frame &frame_esp) {
     }
 
     case kb_interfaces::msg::Frame::ESP_HEALTH_STATUS: {
-        if (frame_esp.payload.size() < 7) {
+        // ESP32 sends 4 int32s: [flags, agc, heap_kb, i2c_errors]
+        if (frame_esp.payload.size() < 4) {
             RCLCPP_WARN(this->get_logger(),
-                "ESP_HEALTH_STATUS: expected 7 int32s, got %zu",
+                "ESP_HEALTH_STATUS: expected 4 int32s, got %zu",
                 frame_esp.payload.size());
             break;
         }
@@ -183,18 +184,17 @@ void KB_coms_micro::kb_coms_RXcallback(const SerialDriver::Frame &frame_esp) {
         health_flags_msg.type = frame_esp.type;
         health_data_msg.type = frame_esp.type;
 
+        // flags only
         health_flags_msg.payload = {
-            frame_esp.payload[0],
-            frame_esp.payload[1],
-            frame_esp.payload[2]
+            frame_esp.payload[0]
         };
         esp_health_flags_pub_->publish(health_flags_msg);
 
+        // agc, heap_kb, i2c_errors
         health_data_msg.payload = {
-            frame_esp.payload[3],
-            frame_esp.payload[4],
-            frame_esp.payload[5],
-            frame_esp.payload[6]
+            frame_esp.payload[1],
+            frame_esp.payload[2],
+            frame_esp.payload[3]
         };
         esp_health_data_pub_->publish(health_data_msg);
         break;
