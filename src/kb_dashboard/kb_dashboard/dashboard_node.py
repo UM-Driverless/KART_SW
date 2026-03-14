@@ -131,11 +131,16 @@ class DashboardNode(Node):
         self.get_logger().info(f"Dashboard node started, web UI on port {self.port}")
 
     def _on_heartbeat(self, msg: Frame):
-        """@brief Callback for ESP32 heartbeat frames. Updates heartbeat timestamp."""
+        """@brief Callback for ESP32 heartbeat frames. Updates heartbeat timestamp.
+        Also publishes any pending commands — this callback runs on the ROS thread
+        so publish() is guaranteed to work (unlike timers which may not fire).
+        """
         self.state.heartbeat()
+        self._flush_pending()
 
     def _on_esp_steering(self, msg: Frame):
-        """@brief Callback for ESP32 steering frames. Decodes angle and raw encoder value."""
+        """@brief Callback for ESP32 steering frames."""
+        self._flush_pending()
         p = list(msg.payload)
         angle_rad, raw_encoder = decode_steering_raw(p)
         self.state.update("esp32_steering_rad", angle_rad)
@@ -236,11 +241,11 @@ class DashboardNode(Node):
         self.get_logger().info(f"State cmd: {cmd}")
 
     def _publish_pending(self):
-        """@brief Timer callback (100 Hz): publish any pending commands from the ROS thread.
+        """@brief Timer callback (100 Hz): publish pending commands from ROS thread."""
+        self._flush_pending()
 
-        Commands are set by the asyncio thread (WebSocket handlers) and published
-        here on the ROS spin thread to avoid cross-thread publish issues.
-        """
+    def _flush_pending(self):
+        """@brief Publish any pending commands. Safe to call from any ROS callback."""
         cmd = self._pending_manual_cmd
         if cmd is not None:
             self.manual_cmd_pub.publish(cmd)
