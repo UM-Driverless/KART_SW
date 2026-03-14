@@ -74,9 +74,11 @@ body { min-height: 100vh; -webkit-tap-highlight-color: transparent; }
 
 <!-- Touch Joystick Widget (Hidden unless mission is remote_control) -->
 <div id="manualWidgetJoystick" style="display:none;max-width:480px;margin:8px auto;padding:20px;background:#14141f;border:1px solid #2a2a3a;border-radius:12px;text-align:center;">
-    <div style="font-size:11px;font-weight:600;text-transform:uppercase;color:#888;margin-bottom:20px;letter-spacing:1px;">
-        Touch Joystick
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <div style="font-size:11px;font-weight:600;text-transform:uppercase;color:#888;letter-spacing:1px;">Touch Joystick</div>
+      <div id="controlStatus" style="font-size:10px;font-weight:600;padding:4px 10px;border-radius:6px;background:#1a1a2e;color:#888;">--</div>
     </div>
+    <button id="takeControlBtn" onclick="wsSend({action:'take_control'})" style="display:none;width:100%;padding:8px;margin-bottom:12px;background:#e74c3c;color:#fff;border:none;border-radius:6px;font-weight:600;cursor:pointer;font-size:12px;">Take Control</button>
     <div id="joystickZone" style="width:160px;height:160px;background:rgba(0,0,0,0.2);border-radius:50%;border:2px solid #2a2a3a;margin:0 auto;position:relative;touch-action:none;"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:20px;font-family:monospace;">
         <div>
@@ -310,18 +312,51 @@ function connect() {
     }
     try {
       lastData = JSON.parse(e.data);
+      if (lastData.your_id) { myClientId = lastData.your_id; return; }
       if (lastData.mission) { currentMission = lastData.mission; updateJoystickWidget(); }
       // Reflect ESP32 heartbeat in the connection dot (green only when HB alive)
       const d = $('connDot');
       if (d) { if (lastData.esp32_heartbeat) d.classList.add('ok'); else d.classList.remove('ok'); }
       try { SKINS[currentSkin].update(lastData); } catch {}
       try { updateHealth(lastData); } catch {}
+      try { updateControllerStatus(lastData); } catch {}
     } catch {}
   };
 }
 
+let myClientId = null;
+function updateControllerStatus(d) {
+  const ctrl = d.controller; // null or "browser-N"
+  const el = $('controlStatus');
+  const btn = $('takeControlBtn');
+  if (!el) return;
+  // Detect our own ID: if we sent take_control and now controller matches, we know it's us
+  if (ctrl && ctrl === myClientId) {
+    el.textContent = 'YOU CONTROL';
+    el.style.color = '#2ecc71';
+    el.style.background = '#0a2a0a';
+    if (btn) btn.style.display = 'none';
+  } else if (ctrl) {
+    el.textContent = ctrl + ' controls';
+    el.style.color = '#e74c3c';
+    el.style.background = '#2a0a0a';
+    if (btn) btn.style.display = 'block';
+  } else {
+    el.textContent = 'No controller';
+    el.style.color = '#888';
+    el.style.background = '#1a1a2e';
+    if (btn) btn.style.display = 'none';
+  }
+}
+
 function wsSend(obj) {
-  if (ws && ws.readyState === 1) ws.send(JSON.stringify(obj));
+  if (ws && ws.readyState === 1) {
+    // Track our ID when we take control
+    if (obj.action === 'take_control' || obj.action === 'manual_control') {
+      // We'll learn our ID from the server's response in the next broadcast
+    }
+    ws.send(JSON.stringify(obj));
+  }
 }
 
 // Skin selector HTML (shared across all skins)
