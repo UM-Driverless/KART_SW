@@ -261,7 +261,7 @@ class DashboardNode(Node):
         NOMINAL_MAX_STEER = 0.5  # radians
 
         cmd.linear.x = speed_cmd * NOMINAL_MAX_SPEED
-        cmd.angular.z = steer * NOMINAL_MAX_STEER
+        cmd.angular.z = -steer * NOMINAL_MAX_STEER
 
         self.manual_cmd_pub.publish(cmd)
 

@@ -70,7 +70,9 @@ body { min-height: 100vh; -webkit-tap-highlight-color: transparent; }
   <b>YOLO</b> YOLO inference rate (Hz). Green &gt;30, yellow 15-30, red &lt;15
 </div>
 
-<!-- Touch Joystick Widget (Hidden unless mission is manual) -->
+<div id="app"></div>
+
+<!-- Touch Joystick Widget (Hidden unless mission is remote_control) -->
 <div id="manualWidgetJoystick" style="display:none;max-width:480px;margin:8px auto;padding:20px;background:#14141f;border:1px solid #2a2a3a;border-radius:12px;text-align:center;">
     <div style="font-size:11px;font-weight:600;text-transform:uppercase;color:#888;margin-bottom:20px;letter-spacing:1px;">
         Touch Joystick
@@ -88,13 +90,13 @@ body { min-height: 100vh; -webkit-tap-highlight-color: transparent; }
     </div>
 </div>
 
-<!-- Manual Control Widget (Hidden unless mission is manual) -->
+<!-- Gamepad Control Widget (Hidden unless mission is remote_control) -->
 <div id="manualWidget" style="display:none;max-width:480px;margin:8px auto;padding:12px;background:#14141f;border:1px solid #2a2a3a;border-radius:12px;color:#e0e0e8;font-family:'Inter',sans-serif;">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:#888;">
     <span>🎮 Gamepad Control</span>
     <span id="gpStatus" style="color:#e74c3c">Disconnected</span>
   </div>
-  
+
   <div style="display:flex;gap:12px;margin-bottom:12px;align-items:center;">
     <div style="font-size:10px;color:#aaa;">Steer Target:</div>
     <div style="display:flex;background:#0a0a0f;border-radius:6px;overflow:hidden;border:1px solid #2a2a3a;">
@@ -124,8 +126,6 @@ body { min-height: 100vh; -webkit-tap-highlight-color: transparent; }
     </div>
   </div>
 </div>
-
-<div id="app"></div>
 <div style="max-width:480px;margin:4px auto;text-align:center">
   <img id="hudStream" style="width:100%;border-radius:6px" alt="HUD">
 </div>
@@ -441,7 +441,7 @@ body { font-family:'Inter',-apple-system,BlinkMacSystemFont,'SF Pro',system-ui,s
   },
 
   update(d) {
-    $('vSteer').innerHTML = `${deg(d.esp32_steering_rad)} <span class="tu">°</span>` + (d.esp32_steering_raw != null ? ` <span class="tu" style="font-size:.5em;opacity:.6">raw ${d.esp32_steering_raw}</span>` : '');
+    $('vSteer').innerHTML = `${deg(d.esp32_steering_rad)}<span style="font-size:.55em;vertical-align:super">°</span>` + (d.esp32_steering_raw != null ? ` <span class="tu" style="font-size:.5em;opacity:.6">raw ${d.esp32_steering_raw}</span>` : '');
     $('vSpeed').innerHTML = `${(d.esp32_speed*3.6).toFixed(1)} <span class="tu">km/h</span>`;
     const sPct = Math.max(-1, Math.min(1, d.esp32_steering_rad / 0.5));
     const sf = $('steerBarFill');
