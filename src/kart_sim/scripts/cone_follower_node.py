@@ -28,6 +28,13 @@ from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
 from vision_msgs.msg import Detection3DArray
 
+try:
+    from kart_perception.zed_od_utils import HAS_ZED_INTERFACES, zed_objects_to_det3d
+    if HAS_ZED_INTERFACES:
+        from zed_interfaces.msg import ObjectsStamped
+except ImportError:
+    HAS_ZED_INTERFACES = False
+
 
 class ConeFollowerNode(Node):
     """@brief Cone-following controller node.
@@ -88,6 +95,15 @@ class ConeFollowerNode(Node):
         self.sub = self.create_subscription(
             Detection3DArray, det_topic, self._on_detections, 10
         )
+        # Also subscribe to ZED SDK ObjectsStamped for built-in OD mode
+        if HAS_ZED_INTERFACES:
+            self.declare_parameter("zed_objects_topic", "/zed/zed_node/obj_det/objects")
+            self.create_subscription(
+                ObjectsStamped,
+                str(self.get_parameter("zed_objects_topic").value),
+                lambda msg: self._on_detections(zed_objects_to_det3d(msg)),
+                10,
+            )
         # Subscribe to odometry for actual speed feedback
         odom_qos = QoSProfile(
             depth=10,

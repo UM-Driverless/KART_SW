@@ -24,6 +24,10 @@ from geometry_msgs.msg import Twist
 from sensor_msgs.msg import CameraInfo, Image
 from vision_msgs.msg import Detection3DArray
 
+from kart_perception.zed_od_utils import HAS_ZED_INTERFACES, zed_objects_to_det3d
+if HAS_ZED_INTERFACES:
+    from zed_interfaces.msg import ObjectsStamped
+
 # Colors (BGR)
 BLUE_CONE_COLOR = (255, 150, 0)
 YELLOW_CONE_COLOR = (0, 230, 255)
@@ -90,6 +94,14 @@ class SteeringHudNode(Node):
             self._on_cones,
             1,
         )
+        # Also subscribe to ZED SDK ObjectsStamped for built-in OD mode
+        if HAS_ZED_INTERFACES:
+            self.create_subscription(
+                ObjectsStamped,
+                "/zed/zed_node/obj_det/objects",
+                lambda msg: self._on_cones(zed_objects_to_det3d(msg)),
+                1,
+            )
         self.create_subscription(
             Twist,
             str(self.get_parameter("cmd_vel_topic").value),

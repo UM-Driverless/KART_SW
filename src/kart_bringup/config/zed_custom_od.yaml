@@ -1,0 +1,15 @@
+# ZED SDK Custom Object Detection config for cone detection
+# Uses our trained YOLOv11n model via the SDK's built-in inference pipeline.
+# The SDK converts the ONNX model to TensorRT on first run and caches the engine.
+/**:
+    ros__parameters:
+        object_detection:
+            od_enabled: true
+            model: 'CUSTOM_YOLOLIKE_BOX_OBJECTS'
+            allow_reduced_precision_inference: true
+            max_range: 40.0
+            confidence_threshold: 25.0
+            prediction_timeout: 0.2
+            filtering_mode: 'NMS3D_PER_CLASS'
+            custom_onnx_file: '/home/orin/kart_brain/models/perception/yolo/ruben_yolov11n_2026_03.onnx'
+            custom_onnx_input_size: 640

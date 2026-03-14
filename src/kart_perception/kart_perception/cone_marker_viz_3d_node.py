@@ -6,6 +6,10 @@ from rclpy.node import Node
 from visualization_msgs.msg import Marker, MarkerArray
 from vision_msgs.msg import Detection3DArray
 
+from kart_perception.zed_od_utils import HAS_ZED_INTERFACES, zed_objects_to_det3d
+if HAS_ZED_INTERFACES:
+    from zed_interfaces.msg import ObjectsStamped
+
 
 def class_color(class_id: str) -> Tuple[float, float, float]:
     """@brief Map a cone class name to an RGB color tuple for RViz markers.
@@ -53,6 +57,14 @@ class ConeMarkerViz3DNode(Node):
         self.subscription = self.create_subscription(
             Detection3DArray, self.detections_topic, self._on_detections, 10
         )
+        # Also subscribe to ZED SDK ObjectsStamped for built-in OD mode
+        if HAS_ZED_INTERFACES:
+            self.create_subscription(
+                ObjectsStamped,
+                "/zed/zed_node/obj_det/objects",
+                lambda msg: self._on_detections(zed_objects_to_det3d(msg)),
+                10,
+            )
 
     def _on_detections(self, msg: Detection3DArray) -> None:
         """@brief Callback for 3D detections. Creates sphere and text markers for each cone.
