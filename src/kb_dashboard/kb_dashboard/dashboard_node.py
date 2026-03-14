@@ -122,8 +122,6 @@ class DashboardNode(Node):
         self.manual_cmd_pub = self.create_publisher(Twist, "/kart/cmd_vel_manual", 10)
         # Pending commands set from asyncio thread, published by ROS timer
         self._pending_manual_cmd = None
-        self._manual_cmd_stamp = 0.0  # time.monotonic() of last manual_control WS msg
-        self._MANUAL_CMD_TIMEOUT = 0.5  # stop publishing after 500ms of no WS input
         self._pending_mission = None
         self._pending_state_cmd = None
         self.create_timer(0.01, self._publish_pending)  # 100 Hz
@@ -251,10 +249,7 @@ class DashboardNode(Node):
         """
         cmd = self._pending_manual_cmd
         if cmd is not None:
-            if (time.monotonic() - self._manual_cmd_stamp) > self._MANUAL_CMD_TIMEOUT:
-                self._pending_manual_cmd = None  # joystick idle, stop publishing
-            else:
-                self.manual_cmd_pub.publish(cmd)
+            self.manual_cmd_pub.publish(cmd)
         mission = self._pending_mission
         if mission is not None:
             self._pending_mission = None
