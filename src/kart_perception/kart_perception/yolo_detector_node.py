@@ -77,7 +77,7 @@ class YoloDetectorNode(Node):
         self.declare_parameter("imgsz", 320)
         self.declare_parameter("device", "")
         self.declare_parameter("publish_debug_image", True)
-        self.declare_parameter("crop_top_ratio", 0.0)
+        self.declare_parameter("crop_top_ratio", 0.33)
 
         self.image_topic = str(self.get_parameter("image_topic").value)
         self.detections_topic = str(self.get_parameter("detections_topic").value)

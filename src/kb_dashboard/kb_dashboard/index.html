@@ -314,8 +314,8 @@ function connect() {
       // Reflect ESP32 heartbeat in the connection dot (green only when HB alive)
       const d = $('connDot');
       if (d) { if (lastData.esp32_heartbeat) d.classList.add('ok'); else d.classList.remove('ok'); }
-      SKINS[currentSkin].update(lastData);
-      updateHealth(lastData);
+      try { SKINS[currentSkin].update(lastData); } catch {}
+      try { updateHealth(lastData); } catch {}
     } catch {}
   };
 }

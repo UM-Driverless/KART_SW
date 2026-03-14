@@ -22,6 +22,7 @@ from cv_bridge import CvBridge
 from rclpy.node import Node
 from geometry_msgs.msg import Twist
 from sensor_msgs.msg import CameraInfo, Image
+from std_msgs.msg import Float32
 from vision_msgs.msg import Detection3DArray
 
 from kart_perception.zed_od_utils import HAS_ZED_INTERFACES, zed_objects_to_det3d
@@ -74,6 +75,7 @@ class SteeringHudNode(Node):
         self.camera_info_ready = False
         self._fps_prev_time = time.monotonic()
         self._fps = 0.0
+        self._yolo_fps = 0.0  # YOLO inference FPS from /perception/yolo/fps
 
         self.pub = self.create_publisher(
             Image, str(self.get_parameter("output_topic").value), 1
@@ -114,10 +116,20 @@ class SteeringHudNode(Node):
             self._on_camera_info,
             1,
         )
+        self.create_subscription(
+            Float32, "/perception/yolo/fps", self._on_yolo_fps, 10
+        )
 
         self.get_logger().info("SteeringHudNode ready")
 
     # ---- Callbacks ----
+
+    def _on_yolo_fps(self, msg: Float32):
+        """@brief Cache the latest YOLO inference FPS value.
+
+        @param msg Float32 message with YOLO inference rate in Hz.
+        """
+        self._yolo_fps = msg.data
 
     def _on_cmd_vel(self, msg: Twist):
         """@brief Cache the latest velocity command for HUD display.
@@ -322,7 +334,7 @@ class SteeringHudNode(Node):
         lines = [
             f"Steer: {steer_deg:+.1f} deg",
             f"Speed: {speed:.1f} m/s",
-            f"FPS: {self._fps:.1f}",
+            f"YOLO: {self._yolo_fps:.1f} Hz",
         ]
         y0 = 25
         for i, line in enumerate(lines):
