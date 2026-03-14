@@ -9,8 +9,8 @@
 
 ## MEDIUM PRIORITY (Optimization & Infrastructure)
 
+- [ ] **Reduce ZED depth GPU load to speed up YOLO** -- ZED's `NEURAL_LIGHT` depth mode runs a neural net on GPU every frame, competing with YOLO (~45 Hz instead of 72 Hz in isolation). Try: (1) switch to stereo-based depth mode (`ULTRA`/`QUALITY`) which uses CPU instead, freeing GPU for YOLO; (2) reduce depth computation frequency (we don't need depth at 100 Hz); (3) try INT8 quantization for the YOLO TRT engine (~1.5x speedup).
 - [ ] **Benchmark YOLOv10n vs v11n on Orin with TensorRT** -- export both with `yolo export model=yolo10n.pt format=engine half=True imgsz=640 device=0`, run inference on the same image, compare ms/frame. v10 removes NMS which may help.
-- [ ] **Crop sky from camera input** -- cones are always in the lower portion of the frame. Either crop top N% before inference, or use rectangular input (e.g. `imgsz=(384,640)`). Less pixels = faster inference.
 - [ ] Investigate zombie process accumulation on Orin
 - [ ] Create reproducible Orin setup script/guide
 
