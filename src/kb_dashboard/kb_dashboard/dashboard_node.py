@@ -276,7 +276,8 @@ class DashboardNode(Node):
 
         cmd = Twist()
         cmd.linear.x = (throttle - brake) * NOMINAL_MAX_SPEED
-        cmd.angular.z = -steer * NOMINAL_MAX_STEER
+        # No negation: nipplejs left = negative, AS5600 left = negative
+        cmd.angular.z = steer * NOMINAL_MAX_STEER
         self._pending_manual_cmd = cmd
 
 
