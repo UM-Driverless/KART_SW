@@ -86,6 +86,12 @@ Used everywhere — YOLO class names, Detection messages, visualization:
 - **Document every version.** Software versions, SDK versions, wheel sources, compatibility notes — all go in `.agents/orin_environment.md` or the relevant environment file.
 - **Official docs live in kart_docs.** The `.agents/` directory is for AI agent workflow. Official project documentation goes to https://github.com/UM-Driverless/kart_docs.
 
+## Task Management
+- **`TODO.md`** — Human-curated roadmap. High-level goals and priorities. Agents read this for context but do **NOT edit it** unless explicitly asked.
+- **`.agents/tasks.md`** — Agent task board. Concrete, actionable work items derived from TODO.md. Agents pick tasks here, update status, and mark done.
+- When starting work, check `.agents/tasks.md` first. If empty or stale, derive tasks from `TODO.md`.
+- Status markers: `- [ ]` ready, `- [→]` in progress, `- [⏸]` blocked (with reason), `- [x]` done (with date).
+
 ## Commit Protocol
 1. `git status` — check what will be committed
 2. `git diff --cached` — review changes

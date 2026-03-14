@@ -1,5 +1,23 @@
 # Notes
 
+## Autonomous Agent Orchestrator (idea — 2026-03-14)
+
+Run a headless Claude Code loop that picks tasks from `.agents/tasks.md` autonomously:
+
+```bash
+# orchestrator.sh — run in tmux on Mac
+while true; do
+  claude -p "
+    Read .agents/tasks.md. Pick the first Ready task.
+    Move it to In Progress. Do the work. Move to Done or Blocked.
+    Commit if you made code changes.
+  " --allowedTools Edit,Read,Write,Bash,Grep,Glob
+  sleep 300
+done
+```
+
+Could also explore: GitHub Agentic Workflows, `/loop` skill, or a custom MCP-based orchestrator (e.g. AGINEAR, Flux). Key question: how to handle tasks that need human feedback (Blocked state) without stalling the loop.
+
 ## ESP32 ↔ Orin Serial Protocol
 
 ### Frame format
