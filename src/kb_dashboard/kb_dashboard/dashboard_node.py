@@ -217,23 +217,27 @@ class DashboardNode(Node):
         return self._hud_jpeg
 
     def publish_mission(self, mission: str):
-        """@brief Queue a mission selection for publishing by the ROS thread.
+        """@brief Publish a mission selection to /dashboard/mission.
 
         @param mission Mission name (e.g. "manual", "trackdrive").
         """
         msg = String()
         msg.data = mission
-        self._pending_mission = msg
+        # Publish directly — mission changes are infrequent, cross-thread
+        # publish works for single calls even if unreliable at high frequency
+        self.mission_pub.publish(msg)
+        self._pending_mission = msg  # also queue for timer as backup
         self.get_logger().info(f"Mission set: {mission}")
 
     def publish_state_cmd(self, cmd: str):
-        """@brief Queue a state command for publishing by the ROS thread.
+        """@brief Publish a state command to /dashboard/state_cmd.
 
         @param cmd Command string (e.g. "start", "stop", "ebs").
         """
         msg = String()
         msg.data = cmd
-        self._pending_state_cmd = msg
+        self.state_cmd_pub.publish(msg)
+        self._pending_state_cmd = msg  # backup
         self.get_logger().info(f"State cmd: {cmd}")
 
     def _publish_pending(self):
