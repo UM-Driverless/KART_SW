@@ -144,24 +144,11 @@ def generate_launch_description():
         output="screen",
     )
 
-    # With ZED OD there's no YOLO annotated image — use raw ZED RGB as HUD canvas
-    steering_hud_zed = Node(
+    steering_hud = Node(
         package="kart_perception",
         executable="steering_hud",
         name="steering_hud",
         output="screen",
-        parameters=[
-            {"annotated_topic": "/zed/zed_node/rgb/image_rect_color"}
-        ],
-        condition=IfCondition(use_zed_od),
-    )
-
-    steering_hud_custom = Node(
-        package="kart_perception",
-        executable="steering_hud",
-        name="steering_hud",
-        output="screen",
-        condition=UnlessCondition(use_zed_od),
     )
 
     return LaunchDescription(
@@ -174,8 +161,7 @@ def generate_launch_description():
             zed_camera_no_od,
             perception_zed_od,
             perception_custom,
-            steering_hud_zed,
-            steering_hud_custom,
+            steering_hud,
             cone_follower,
             state_machine,
             cmd_vel_bridge,
