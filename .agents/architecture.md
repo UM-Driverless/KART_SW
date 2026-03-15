@@ -44,8 +44,8 @@
 │   └── ThirdParty/
 │
 ├── models/perception/yolo/nava_yolov11_2026_02.pt  YOLO weights (YOLOv11, primary)
-├── test_data/driverless_test_media/      Test images/videos
-├── scripts/                              Workspace utility scripts
+├── tests/test_data/driverless_test_media/ Test images/videos
+├── tools/                                Workspace utility scripts & tools
 ├── build/ install/ log/                  colcon output (gitignored)
 └── pyproject.toml
 ```

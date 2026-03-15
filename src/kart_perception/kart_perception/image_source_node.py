@@ -30,7 +30,7 @@ class ImageSourceNode(Node):
         super().__init__("image_source")
 
         self.declare_parameter(
-            "source", "test_data/driverless_test_media/cones_test.png"
+            "source", "tests/test_data/driverless_test_media/cones_test.png"
         )
         self.declare_parameter("publish_rate", 10.0)
         self.declare_parameter("loop", True)

@@ -23,7 +23,7 @@ See [kart_docs](https://um-driverless.github.io/kart_docs/assembly/) for full ha
 Assumes Ubuntu 22.04 with ROS 2 Humble already installed and sourced.
 
 ```bash
-./scripts/install_deps.sh
+./tools/install_deps.sh
 ```
 
 ## Build
@@ -106,6 +106,41 @@ The target hardware is a Jetson Orin Nano running Ubuntu 22.04 (aarch64). UTM le
 **How do you run the system without the physical kart?**
 The `perception_test.launch.py` file starts an `image_source` node that publishes images or video from local files onto the same ROS topics the ZED camera would use. This lets you test the full perception pipeline (YOLO detection, visualization, even 3D localization with recorded depth data) entirely offline.
 
+## TODO
+See [TODO.md](TODO.md) for open tasks. Done items are removed — check git history if needed.
+
+## AI Automation
+
+Two ways to let Claude Code work autonomously on this repo:
+
+### Autopilot (task runner)
+
+Runs `claude -p` in a loop, picking tasks from `.agents/tasks.md` one at a time. Each invocation reads the task board, moves a Ready task to In Progress, does the work, commits, and marks it Done. Blocked tasks need manual intervention — edit `.agents/tasks.md` to answer the question and move the task back to Ready.
+
+```bash
+./scripts/autopilot.sh
+```
+
+### Autoresearch (experiment loop)
+
+Inspired by [karpathy/autoresearch](https://github.com/karpathy/autoresearch). An autonomous optimization loop for the 2D kart simulator — the agent edits `tools/sim2d/strategy.py`, runs an experiment, logs results to `results.tsv`, and keeps or reverts the commit based on whether loss improved. See `tools/sim2d/program.md` for the full spec.
+
+```bash
+# Start a new autoresearch session (creates a branch, runs experiments in a loop)
+claude -p "$(cat tools/sim2d/program.md)"
+
+# Run a single evaluation with the current strategy
+cd tools/sim2d && python evaluate.py
+
+# Visualize the best controller on a track
+cd tools/sim2d && python visualize.py
+
+# Use the winning controller in Gazebo simulation (see best_geometric.json for params)
+ros2 launch kart_sim simulation.launch.py controller:=geometric track:=autocross
+```
+
+Current best: **Geometric controller** — 28 laps in 60s, loss 8.95 (`tools/sim2d/best_geometric.json`).
+
 ## References
 - Kart Docs: https://github.com/UM-Driverless/kart_docs
 - Kart Docs site: https://um-driverless.github.io/kart_docs/
@@ -114,7 +149,7 @@ The `perception_test.launch.py` file starts an `image_source` node that publishe
 
 ## Test Media
 Pulled from https://github.com/UM-Driverless/driverless and stored locally at
-`test_data/driverless_test_media`.
+`tests/test_data/driverless_test_media`.
 
 ## YOLO Weights
 Pulled from https://github.com/UM-Driverless/driverless and stored locally at
@@ -124,8 +159,8 @@ Pulled from https://github.com/UM-Driverless/driverless and stored locally at
 Run YOLO on a test image or video and save annotated output.
 
 ```bash
-python3 scripts/run_yolo_on_media.py \
-  --source test_data/driverless_test_media/cones_test.png \
+python3 tools/run_yolo_on_media.py \
+  --source tests/test_data/driverless_test_media/cones_test.png \
   --weights models/perception/yolo/best_adri.pt \
   --output outputs/yolo
 ```
@@ -141,6 +176,6 @@ colcon build --packages-select kart_perception
 source install/setup.bash
 
 ros2 launch kart_perception perception_test.launch.py \
-  source:=test_data/driverless_test_media/cones_test.png \
+  source:=tests/test_data/driverless_test_media/cones_test.png \
   weights:=models/perception/yolo/best_adri.pt
 ```

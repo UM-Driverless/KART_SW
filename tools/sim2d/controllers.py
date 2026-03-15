@@ -1,9 +1,10 @@
-"""Controllers: geometric, neural net v1, v2, and v3."""
+"""Controllers: geometric, pure pursuit, neural net v1, v2, and v3."""
 
 import math
 import numpy as np
 
 HALF_TRACK_WIDTH = 1.5  # fixed physical constant (m)
+WHEELBASE = 1.05  # m (must match kart_model.py)
 
 
 # ── Geometric controller ──────────────────────────────────────────────────
@@ -94,6 +95,167 @@ class GeometricController:
         return steer, speed
 
 
+# ── Pure pursuit controller ──────────────────────────────────────────────
+
+class PurePursuitController:
+    """Path planner using all visible cones + pure pursuit steering.
+
+    1. Pairs blue/yellow cones by distance to build track midpoints.
+    2. Sorts midpoints by forward distance → local path.
+    3. Picks a pursuit target at a lookahead distance along the path.
+    4. Computes pure pursuit steering: steer = atan(2*L*sin(alpha) / lookahead).
+    5. Speed = max_speed (grip limit in physics handles cornering).
+
+    Genes (5):
+    0  lookahead_dist  [2.0, 15.0]  m — how far ahead to aim
+    1  max_speed       [5.0, 200.0] m/s — target straight-line speed
+    2  min_speed       [1.0, 10.0]  m/s — fallback when no cones
+    3  path_smoothing  [0.0, 1.0]   — blend between nearest-pair and all-pair midpoints
+    4  speed_lookahead [0.0, 1.0]   — how much upcoming curvature slows speed
+    """
+
+    NUM_GENES = 5
+    INPUT_SIZE = 5
+    MAX_STEER = 0.5
+
+    DEFAULTS = np.array([6.0, 50.0, 2.0, 0.5, 0.3])
+    RANGES = np.array([
+        [2.0, 15.0],
+        [5.0, 200.0],
+        [1.0, 10.0],
+        [0.0, 1.0],
+        [0.0, 1.0],
+    ])
+
+    def __init__(self, genes):
+        g = np.asarray(genes, dtype=np.float64)
+        self.genes = g
+        self.lookahead_dist = float(max(1.0, g[0]))
+        self.max_speed = float(max(1.0, g[1]))
+        self.min_speed = float(max(0.5, g[2]))
+        self.path_smoothing = float(np.clip(g[3], 0.0, 1.0))
+        self.speed_lookahead = float(np.clip(g[4], 0.0, 1.0))
+        self._last_steer = 0.0
+        self._last_speed = 0.0
+
+    def reset(self):
+        self._last_steer = 0.0
+        self._last_speed = 0.0
+
+    def _build_midpoints(self, visible_cones):
+        """Build ordered midpoints from visible cone pairs."""
+        blues = []
+        yellows = []
+        for cls, x, y, _z in visible_cones:
+            if x < 0.3:
+                continue
+            dist = math.hypot(x, y)
+            if cls == "blue_cone":
+                blues.append((x, y, dist))
+            elif cls == "yellow_cone":
+                yellows.append((x, y, dist))
+
+        blues.sort(key=lambda c: c[2])
+        yellows.sort(key=lambda c: c[2])
+
+        midpoints = []
+
+        if blues and yellows:
+            # Pair cones by matching nearest distances
+            used_y = set()
+            for bx, by, bd in blues:
+                best_j = -1
+                best_dd = float('inf')
+                for j, (yx, yy, yd) in enumerate(yellows):
+                    if j in used_y:
+                        continue
+                    dd = abs(bd - yd)
+                    if dd < best_dd:
+                        best_dd = dd
+                        best_j = j
+                if best_j >= 0 and best_dd < 8.0:
+                    yx, yy, _ = yellows[best_j]
+                    used_y.add(best_j)
+                    midpoints.append(((bx + yx) / 2.0, (by + yy) / 2.0))
+                else:
+                    midpoints.append((bx, by - HALF_TRACK_WIDTH))
+
+            # Add unpaired yellows
+            for j, (yx, yy, _) in enumerate(yellows):
+                if j not in used_y:
+                    midpoints.append((yx, yy + HALF_TRACK_WIDTH))
+        elif blues:
+            for bx, by, _ in blues:
+                midpoints.append((bx, by - HALF_TRACK_WIDTH))
+        elif yellows:
+            for yx, yy, _ in yellows:
+                midpoints.append((yx, yy + HALF_TRACK_WIDTH))
+
+        # Sort by forward distance
+        midpoints.sort(key=lambda p: p[0])
+        return midpoints
+
+    def _path_curvature(self, midpoints):
+        """Estimate average curvature from midpoints (inverse turning radius)."""
+        if len(midpoints) < 3:
+            return 0.0
+        total_curv = 0.0
+        n = 0
+        for i in range(len(midpoints) - 2):
+            x0, y0 = midpoints[i]
+            x1, y1 = midpoints[i + 1]
+            x2, y2 = midpoints[i + 2]
+            # Menger curvature: 4*area / (d01 * d12 * d02)
+            area2 = abs((x1 - x0) * (y2 - y0) - (x2 - x0) * (y1 - y0))
+            d01 = math.hypot(x1 - x0, y1 - y0)
+            d12 = math.hypot(x2 - x1, y2 - y1)
+            d02 = math.hypot(x2 - x0, y2 - y0)
+            denom = d01 * d12 * d02
+            if denom > 0.01:
+                total_curv += area2 / denom
+                n += 1
+        return total_curv / n if n > 0 else 0.0
+
+    def control(self, visible_cones, current_speed=None):
+        if current_speed is not None:
+            self._last_speed = current_speed
+
+        midpoints = self._build_midpoints(visible_cones)
+
+        if not midpoints:
+            return self._last_steer, self.min_speed
+
+        # Find pursuit target at lookahead distance along the path
+        # Accumulate path length from origin to find the lookahead point
+        target_x, target_y = midpoints[0]
+        cum_dist = 0.0
+        for i in range(len(midpoints)):
+            if i > 0:
+                dx = midpoints[i][0] - midpoints[i - 1][0]
+                dy = midpoints[i][1] - midpoints[i - 1][1]
+                cum_dist += math.hypot(dx, dy)
+            if cum_dist >= self.lookahead_dist:
+                target_x, target_y = midpoints[i]
+                break
+            target_x, target_y = midpoints[i]
+
+        # Pure pursuit: steer = atan(2 * L * sin(alpha) / ld)
+        alpha = math.atan2(target_y, target_x)
+        ld = math.hypot(target_x, target_y)
+        if ld < 0.5:
+            ld = 0.5
+        steer = math.atan2(2.0 * WHEELBASE * math.sin(alpha), ld)
+        steer = max(-self.MAX_STEER, min(self.MAX_STEER, steer))
+        self._last_steer = steer
+
+        # Speed: max_speed reduced by upcoming curvature
+        curvature = self._path_curvature(midpoints)
+        speed = self.max_speed / (1.0 + self.speed_lookahead * curvature * self.max_speed)
+        speed = max(self.min_speed, min(self.max_speed, speed))
+
+        return steer, speed
+
+
 # ── Neural-net controller ─────────────────────────────────────────────────
 
 class NeuralNetController:
@@ -115,7 +277,7 @@ class NeuralNetController:
                  + HIDDEN_SIZE * OUTPUT_SIZE + OUTPUT_SIZE)  # 90
 
     MAX_STEER = 0.5
-    MAX_SPEED = 10.0
+    MAX_SPEED = 50.0
 
     def __init__(self, genes):
         g = np.asarray(genes, dtype=np.float64)
@@ -189,7 +351,7 @@ class NeuralNetV2Controller:
                  + HIDDEN_SIZE * OUTPUT_SIZE + OUTPUT_SIZE)  # 322
 
     MAX_STEER = 0.5
-    MAX_SPEED = 10.0
+    MAX_SPEED = 50.0
 
     def __init__(self, genes):
         g = np.asarray(genes, dtype=np.float64)
@@ -276,7 +438,7 @@ class NeuralNetV3Controller:
                  + HIDDEN2_SIZE * OUTPUT_SIZE + OUTPUT_SIZE)  # 806
 
     MAX_STEER = 0.5
-    MAX_SPEED = 10.0
+    MAX_SPEED = 50.0
 
     def __init__(self, genes):
         g = np.asarray(genes, dtype=np.float64)
