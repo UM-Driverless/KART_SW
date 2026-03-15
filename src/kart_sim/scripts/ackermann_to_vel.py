@@ -18,6 +18,9 @@ WHEELBASE = 1.05  # metres (from model.sdf)
 MAX_LINEAR_ACCEL = 2.0  # m/s²
 MAX_LINEAR_DECEL = 3.0  # m/s²
 MAX_ANGULAR_ACCEL = 2.0  # rad/s²
+TIRE_MU = 1.2  # tire friction coefficient
+GRAVITY = 9.81  # m/s²
+MAX_LATERAL_ACCEL = TIRE_MU * GRAVITY  # ~11.8 m/s² — tire grip limit
 
 
 class AckermannToVel(Node):
@@ -51,10 +54,16 @@ class AckermannToVel(Node):
         self._last_time = now
         dt = max(0.001, min(dt, 0.5))
 
-        # Target velocities
+        # Cornering speed limit: v_max = sqrt(mu * g * R), R = wheelbase / tan(steer)
+        steer_angle = msg.angular.z
         target_linear = msg.linear.x
-        if abs(msg.linear.x) > 0.01:
-            target_angular = msg.linear.x * math.tan(msg.angular.z) / WHEELBASE
+        if abs(steer_angle) > 0.01:
+            turn_radius = abs(WHEELBASE / math.tan(steer_angle))
+            max_cornering_speed = math.sqrt(MAX_LATERAL_ACCEL * turn_radius)
+            target_linear = min(target_linear, max_cornering_speed)
+
+        if abs(target_linear) > 0.01:
+            target_angular = target_linear * math.tan(steer_angle) / WHEELBASE
         else:
             target_angular = 0.0
 

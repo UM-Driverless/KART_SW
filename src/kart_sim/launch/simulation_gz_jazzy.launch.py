@@ -177,13 +177,13 @@ def _launch_setup(context):
                 "cmd_vel_topic": "/kart/cmd_vel",
                 "controller_type": controller_type,
                 "weights_json": weights_json,
-                "max_speed": 10.0,
-                "min_speed": 0.5,
-                "steering_gain": 1.0,
-                "max_steer": 0.5,
-                "lookahead_max": 15.0,
+                "max_speed": float(context.launch_configurations.get("max_speed", "1000000.0")),
+                "min_speed": float(context.launch_configurations.get("min_speed", "0.5")),
+                "steering_gain": float(context.launch_configurations.get("steering_gain", "2.0")),
+                "max_steer": float(context.launch_configurations.get("max_steer", "0.5")),
+                "lookahead_max": float(context.launch_configurations.get("lookahead_max", "15.0")),
                 "half_track_width": 1.5,
-                "speed_curve_factor": 1.0,
+                "speed_curve_factor": float(context.launch_configurations.get("speed_curve_factor", "0.3")),
             }
         ],
     )
@@ -259,6 +259,12 @@ def generate_launch_description():
                 ),
                 description="Path to neural-net weights JSON (from sim2d GA trainer).",
             ),
+            DeclareLaunchArgument("max_speed", default_value="1000000.0"),
+            DeclareLaunchArgument("min_speed", default_value="0.5"),
+            DeclareLaunchArgument("steering_gain", default_value="2.0"),
+            DeclareLaunchArgument("max_steer", default_value="0.5"),
+            DeclareLaunchArgument("lookahead_max", default_value="15.0"),
+            DeclareLaunchArgument("speed_curve_factor", default_value="0.3"),
             OpaqueFunction(function=_launch_setup),
         ]
     )
