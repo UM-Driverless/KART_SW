@@ -101,9 +101,20 @@ Used everywhere — YOLO class names, Detection messages, visualization:
 
 ## Task Management
 - **`TODO.md`** — Human-curated roadmap. High-level goals and priorities. Agents read this for context but do **NOT edit it** unless explicitly asked.
-- **`.agents/tasks.md`** — Agent task board. Concrete, actionable work items derived from TODO.md. Agents pick tasks here, update status, and mark done.
+- **`.agents/tasks.md`** — Agent task board. Concrete, actionable work items derived from TODO.md.
 - When starting work, check `.agents/tasks.md` first. If empty or stale, derive tasks from `TODO.md`.
 - Status markers: `- [ ]` ready, `- [→]` in progress, `- [⏸]` blocked (with reason), `- [x]` done (with date).
+
+### Subagent Task Protocol
+When the user says "work on tasks" (or similar), launch subagents to execute tasks from `.agents/tasks.md`:
+
+1. **Pick** the first `- [ ]` (Ready) task. Each subagent picks a different task.
+2. **Claim** it: edit `.agents/tasks.md`, move it to In Progress (`- [→]`).
+3. **Do the work.** Read relevant `.agents/` docs first. Follow all project conventions.
+4. **If blocked** (needs user input, hardware access, unclear requirements): move to Blocked (`- [⏸] ... — reason: <specific question>`), then stop and return the question.
+5. **If done**: commit the changes, move to Done (`- [x] ... (YYYY-MM-DD)`), then return a summary.
+6. **Independent tasks can run in parallel** — launch multiple subagents simultaneously. Tasks that touch the same files must run sequentially.
+7. **Never skip steps** — always update `tasks.md` status before and after work.
 
 ## Commit Protocol
 1. `git status` — check what will be committed

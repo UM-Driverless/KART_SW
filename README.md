@@ -111,11 +111,15 @@ See [TODO.md](TODO.md) for open tasks. Done items are removed — check git hist
 
 ## AI Automation
 
-Two ways to let Claude Code work autonomously on this repo:
+Three ways to let Claude Code work autonomously on this repo:
 
-### Autopilot (task runner)
+### `/tasks` skill (interactive, recommended)
 
-Runs `claude -p` in a loop, picking tasks from `.agents/tasks.md` one at a time. Each invocation reads the task board, moves a Ready task to In Progress, does the work, commits, and marks it Done. Blocked tasks need manual intervention — edit `.agents/tasks.md` to answer the question and move the task back to Ready.
+From inside a Claude Code session, run `/tasks` (or `/tasks 3` for 3 in parallel). Claude launches subagents that pick tasks from `.agents/tasks.md`, update status, do the work, and commit — while you stay in the loop to unblock and steer. Also: `/tasks list` to check status, `/tasks add <description>` to add new tasks.
+
+### Autopilot (unattended)
+
+Same task board, but fully headless — runs `claude -p` in a loop from the terminal. Walk away and come back to commits. Blocked tasks need manual intervention (edit `.agents/tasks.md` to answer and move back to Ready).
 
 ```bash
 ./scripts/autopilot.sh
