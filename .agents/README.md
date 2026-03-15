@@ -24,7 +24,7 @@ LLMs have no persistent memory between sessions. Every conversation starts fresh
 
 | File | Purpose |
 |---|---|
-| `../scripts/` | Workspace-level utility scripts |
+| `../tools/` | Workspace-level utility scripts & tools |
 
 ## Workflow
 

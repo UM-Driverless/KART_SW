@@ -33,8 +33,8 @@ Claude Code runs on the Mac. The Gazebo simulator runs on the UTM VM (Ubuntu 22.
 
 ### What's done
 - **New autocross track created** — ~80x60m field, mix of left/right turns, S-chicane, long straights
-- `scripts/sim2d/track.py` — `AUTOCROSS_TRACK` with 70 blue + 70 yellow + 4 orange cones
-- `scripts/sim2d/generate_sdf.py` — generates SDF from track.py (keeps 2D sim and Gazebo in sync)
+- `tools/sim2d/track.py` — `AUTOCROSS_TRACK` with 70 blue + 70 yellow + 4 orange cones
+- `tools/sim2d/generate_sdf.py` — generates SDF from track.py (keeps 2D sim and Gazebo in sync)
 - `src/kart_sim/worlds/autocross_track.sdf` — generated, deployed to VM
 - `src/kart_sim/launch/simulation.launch.py` — `autocross` entry added to `_TRACKS`
 - **2D sim validated** — track plot viewed, smooth curves, no self-intersections

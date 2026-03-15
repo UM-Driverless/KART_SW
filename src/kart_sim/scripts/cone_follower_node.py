@@ -51,7 +51,7 @@ class ConeFollowerNode(Node):
         self.declare_parameter("detections_topic", "/perception/cones_3d")
         self.declare_parameter("cmd_vel_topic", "/kart/cmd_vel")
         self.declare_parameter("no_cone_timeout", 1.0)
-        self.declare_parameter("controller_type", "geometric")  # geometric|neural|neural_v2
+        self.declare_parameter("controller_type", "geometric")  # geometric|pure_pursuit|neural|neural_v2
         self.declare_parameter("weights_json", "")               # path for neural
 
         # --- geometric params ---
@@ -198,6 +198,8 @@ class ConeFollowerNode(Node):
 
         if self.controller_type in ("neural", "neural_v2"):
             steer, speed = self._control_neural(cones)
+        elif self.controller_type == "pure_pursuit":
+            steer, speed = self._control_pure_pursuit(cones)
         else:
             steer, speed = self._control_geometric(cones)
 
@@ -259,6 +261,96 @@ class ConeFollowerNode(Node):
         self.get_logger().info(
             f"[geo] angle={math.degrees(angle):.1f}° steer={steer:.3f} "
             f"speed={speed:.1f} blue={nearest_blue} yellow={nearest_yellow}"
+        )
+        return steer, speed
+
+    # ── pure pursuit controller ─────────────────────────────────────────
+
+    def _control_pure_pursuit(self, cones):
+        """@brief Pure pursuit: build path from all cone pairs, follow with lookahead.
+
+        @param cones List of (class_id, fwd, left) tuples in camera_link frame.
+        @return Tuple of (steer_rad, speed_mps).
+        """
+        WHEELBASE = 1.05
+
+        blues = []
+        yellows = []
+        for cls, fwd, left in cones:
+            if fwd < 0.3:
+                continue
+            dist = math.hypot(fwd, left)
+            if cls == "blue_cone":
+                blues.append((fwd, left, dist))
+            elif cls == "yellow_cone":
+                yellows.append((fwd, left, dist))
+
+        blues.sort(key=lambda c: c[2])
+        yellows.sort(key=lambda c: c[2])
+
+        # Build midpoints by pairing blue/yellow cones
+        midpoints = []
+        if blues and yellows:
+            used_y = set()
+            for bx, by, bd in blues:
+                best_j, best_dd = -1, float('inf')
+                for j, (yx, yy, yd) in enumerate(yellows):
+                    if j in used_y:
+                        continue
+                    dd = abs(bd - yd)
+                    if dd < best_dd:
+                        best_dd = dd
+                        best_j = j
+                if best_j >= 0 and best_dd < 8.0:
+                    yx, yy, _ = yellows[best_j]
+                    used_y.add(best_j)
+                    midpoints.append(((bx + yx) / 2.0, (by + yy) / 2.0))
+                else:
+                    midpoints.append((bx, by - self.half_track_width))
+            for j, (yx, yy, _) in enumerate(yellows):
+                if j not in used_y:
+                    midpoints.append((yx, yy + self.half_track_width))
+        elif blues:
+            for bx, by, _ in blues:
+                midpoints.append((bx, by - self.half_track_width))
+        elif yellows:
+            for yx, yy, _ in yellows:
+                midpoints.append((yx, yy + self.half_track_width))
+
+        if not midpoints:
+            return self._last_steer, self.min_speed
+
+        midpoints.sort(key=lambda p: p[0])
+
+        # Find pursuit target at lookahead distance along the path
+        target_x, target_y = midpoints[0]
+        cum_dist = 0.0
+        for i in range(len(midpoints)):
+            if i > 0:
+                dx = midpoints[i][0] - midpoints[i - 1][0]
+                dy = midpoints[i][1] - midpoints[i - 1][1]
+                cum_dist += math.hypot(dx, dy)
+            if cum_dist >= self.lookahead_max:
+                target_x, target_y = midpoints[i]
+                break
+            target_x, target_y = midpoints[i]
+
+        # Pure pursuit steering
+        alpha = math.atan2(target_y, target_x)
+        ld = math.hypot(target_x, target_y)
+        if ld < 0.5:
+            ld = 0.5
+        steer = math.atan2(2.0 * WHEELBASE * math.sin(alpha), ld)
+        steer = max(-self.max_steer, min(self.max_steer, steer))
+        self._last_steer = steer
+
+        # Speed: max_speed reduced by curvature
+        speed = self.max_speed * (1.0 - self.speed_curve_factor * abs(steer))
+        speed = max(self.min_speed, min(self.max_speed, speed))
+
+        self.get_logger().info(
+            f"[pp] target=({target_x:.1f},{target_y:.1f}) steer={steer:.3f} "
+            f"speed={speed:.1f} midpoints={len(midpoints)}"
         )
         return steer, speed
 

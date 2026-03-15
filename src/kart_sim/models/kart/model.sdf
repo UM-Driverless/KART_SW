@@ -131,7 +131,7 @@
         </geometry>
         <surface>
           <friction>
-            <ode><mu>1.2</mu><mu2>0.8</mu2><fdir1>0 0 1</fdir1></ode>
+            <ode><mu>1.2</mu><mu2>0.8</mu2><fdir1>1 0 0</fdir1></ode>
           </friction>
         </surface>
       </collision>
@@ -163,7 +163,7 @@
         </geometry>
         <surface>
           <friction>
-            <ode><mu>1.2</mu><mu2>0.8</mu2><fdir1>0 0 1</fdir1></ode>
+            <ode><mu>1.2</mu><mu2>0.8</mu2><fdir1>1 0 0</fdir1></ode>
           </friction>
         </surface>
       </collision>
@@ -195,7 +195,7 @@
         </geometry>
         <surface>
           <friction>
-            <ode><mu>1.2</mu><mu2>0.8</mu2><fdir1>0 0 1</fdir1></ode>
+            <ode><mu>1.2</mu><mu2>0.8</mu2><fdir1>1 0 0</fdir1></ode>
           </friction>
         </surface>
       </collision>
@@ -227,7 +227,7 @@
         </geometry>
         <surface>
           <friction>
-            <ode><mu>1.2</mu><mu2>0.8</mu2><fdir1>0 0 1</fdir1></ode>
+            <ode><mu>1.2</mu><mu2>0.8</mu2><fdir1>1 0 0</fdir1></ode>
           </friction>
         </surface>
       </collision>
@@ -311,18 +311,18 @@
 
     <!-- Ground-truth odometry (from actual sim pose, no drift) -->
     <plugin
-      filename="ignition-gazebo-odometry-publisher-system"
-      name="ignition::gazebo::systems::OdometryPublisher">
+      filename="gz-sim-odometry-publisher-system"
+      name="gz::sim::systems::OdometryPublisher">
       <odom_topic>model/kart/odom_gt</odom_topic>
       <odom_frame>world</odom_frame>
       <robot_base_frame>kart/chassis</robot_base_frame>
       <dimensions>3</dimensions>
     </plugin>
 
-    <!-- Velocity control: directly sets chassis velocity (no wheel friction needed) -->
+    <!-- Velocity control with physics-based limits in ackermann_to_vel node -->
     <plugin
-      filename="ignition-gazebo-velocity-control-system"
-      name="ignition::gazebo::systems::VelocityControl">
+      filename="gz-sim-velocity-control-system"
+      name="gz::sim::systems::VelocityControl">
       <topic>kart/vel_cmd</topic>
     </plugin>
 

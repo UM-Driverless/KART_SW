@@ -207,7 +207,7 @@ def _launch_setup(context):
     except Exception:
         marker_viz = ExecuteProcess(cmd=["true"], output="log")
 
-    # --- 6. Ackermann-to-velocity converter (steer angle → yaw rate) ---
+    # Ackermann-to-velocity converter (steer angle → yaw rate)
     ackermann_to_vel = Node(
         package="kart_sim",
         executable="ackermann_to_vel.py",

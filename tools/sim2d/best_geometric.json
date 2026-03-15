@@ -1,0 +1,18 @@
+{
+  "controller_type": "geometric",
+  "sim2d_result": {
+    "peak_laps": 87,
+    "peak_loss": 3.04,
+    "peak_avg_speed_ms": 70.0,
+    "note": "DE optimizer finds degenerate gene combos (negative max_speed × negative speed_curve_factor). Valid in 2D sim but not directly transferable."
+  },
+  "gazebo_recommended": {
+    "steering_gain": 2.0,
+    "max_steer": 0.5,
+    "max_speed": 5.0,
+    "min_speed": 1.0,
+    "lookahead_max": 15.0,
+    "speed_curve_factor": 0.5,
+    "note": "Conservative starting params for Gazebo — tune up from here"
+  }
+}

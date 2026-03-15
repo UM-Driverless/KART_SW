@@ -7,7 +7,7 @@ from launch_ros.actions import Node
 def generate_launch_description():
     source_arg = DeclareLaunchArgument(
         "source",
-        default_value="test_data/driverless_test_media/image1.png",
+        default_value="tests/test_data/driverless_test_media/image1.png",
         description="Image, video, or directory path for replay.",
     )
     weights_arg = DeclareLaunchArgument(

@@ -54,7 +54,8 @@ class AckermannToVel(Node):
         self._last_time = now
         dt = max(0.001, min(dt, 0.5))
 
-        # Cornering speed limit: v_max = sqrt(mu * g * R), R = wheelbase / tan(steer)
+        # Cornering speed limit: v_max = sqrt(mu * g * R)
+        # R = wheelbase / tan(steer_angle)
         steer_angle = msg.angular.z
         target_linear = msg.linear.x
         if abs(steer_angle) > 0.01:

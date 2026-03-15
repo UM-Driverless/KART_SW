@@ -1,0 +1,11 @@
+---
+laps:             25
+lap_time:         10.000000
+distance:         5011.45
+avg_speed:        19.937
+avg_cte:          0.0767
+max_cte:          0.4466
+min_boundary:     1.0500
+on_track:         True
+train_time:       64.2
+loss:             10.038346

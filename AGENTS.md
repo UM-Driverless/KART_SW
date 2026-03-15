@@ -1,14 +1,27 @@
 # Agent Quick Reference
 
-## Key Files (Read Before Working)
-**These `.agents/` files are the source of truth for this project.** Always consult them before answering technical questions or making changes — they are version-controlled and stay in sync with the code. Never rely on auto-memory or prior conversation context for project-specific technical state (architecture, protocols, hardware, conventions), as memory can go stale after commits.
+<!-- Keep this file under ~150 lines. It is a routing layer with essential inline context. -->
 
-Before making any changes to the kart_brain workspace, consult:
-1. **`.agents/architecture.md`** — System architecture, packages, topic map, message types
-2. **`.agents/error_log.md`** — Past errors and added preventions
-3. **Environment-specific guide:**
-   - Working on **real hardware (Orin)?** → `.agents/orin_environment.md`
-   - Working on **simulation (VM)?** → `.agents/simulation.md` + `.agents/vm_environment.md`
+## .agents/ File System
+
+**These files are the source of truth.** Always consult them before answering technical questions or making changes. Never rely on auto-memory for project-specific technical state.
+
+**Read in full** before working (keep concise, < 150 lines):
+- **`README.md`** — System overview and file relationships.
+- **`tasks.md`** — Current work items and status.
+
+**Consult selectively** (search/grep — these grow over time):
+- **`error_log.md`** — Append-only log of past mistakes and preventions.
+- **`notes.md`** — Design decisions and rationale.
+- **`scratchpad.md`** — Permanent scratchpad. Random notes, no cleanup needed.
+
+**Reference** (read when relevant):
+- **`architecture.md`** — System architecture, packages, topic map, message types.
+- **`orin_environment.md`** — Jetson Orin hardware setup and versions.
+- **`vm_environment.md`** — UTM VM setup.
+- **`simulation.md`** — Gazebo Fortress simulation details.
+- **`adding_messages.md`** — How to add new ROS message types.
+- **`orin_flash_guide.md`** — Flashing the Jetson Orin.
 
 ## Environments
 
