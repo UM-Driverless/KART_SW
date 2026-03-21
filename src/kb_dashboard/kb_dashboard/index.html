@@ -131,6 +131,13 @@ body { min-height: 100vh; -webkit-tap-highlight-color: transparent; }
 <div style="max-width:480px;margin:4px auto;text-align:center">
   <img id="hudStream" style="width:100%;border-radius:6px" alt="HUD">
 </div>
+<div id="dbgConsole" style="max-width:480px;margin:4px auto">
+  <div id="dbgToggle" onclick="toggleDbg()" style="display:flex;align-items:center;justify-content:space-between;background:#1a1a2e;border:1px solid #333;border-radius:6px;padding:4px 10px;cursor:pointer;user-select:none;font:12px monospace;color:#888">
+    <span><span id="dbgArrow" style="display:inline-block;transition:transform .2s">&#9654;</span> Debug Console</span>
+    <span id="dbgBadge" style="display:none;background:#e74c3c;color:#fff;font:bold 10px sans-serif;padding:1px 6px;border-radius:8px;min-width:14px;text-align:center"></span>
+  </div>
+  <div id="dbgBody" style="display:none;background:#0d0d1a;border:1px solid #333;border-top:none;border-radius:0 0 6px 6px;color:#0f0;font:12px monospace;padding:6px;max-height:150px;overflow:auto;white-space:pre-wrap"></div>
+</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/nipplejs/0.10.1/nipplejs.min.js"></script>
 <script>
@@ -1489,14 +1496,26 @@ function applySkin(id) {
   if (lastData) skin.update(lastData);
 }
 
-// Debug overlay
-const dbg = document.createElement('div');
-dbg.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:#000c;color:#0f0;font:12px monospace;padding:6px;z-index:9999;max-height:120px;overflow:auto';
-document.body.appendChild(dbg);
-function dbgLog(s) { dbg.textContent = s + '\n' + dbg.textContent; }
-window.onerror = (m,s,l,c,e) => dbgLog('ERR: '+m+' @'+l+':'+c);
-try { applySkin(currentSkin); dbgLog('applySkin OK'); } catch(e) { dbgLog('applySkin FAIL: '+e.message); }
-try { connect(); dbgLog('connect() called, WS_URL='+WS_URL); } catch(e) { dbgLog('connect FAIL: '+e.message); }
+// Debug console (collapsible, in-flow)
+let dbgOpen = false, dbgErrCount = 0;
+const dbgBody = $('dbgBody'), dbgArrow = $('dbgArrow'), dbgBadge = $('dbgBadge');
+function toggleDbg() {
+  dbgOpen = !dbgOpen;
+  dbgBody.style.display = dbgOpen ? 'block' : 'none';
+  dbgArrow.style.transform = dbgOpen ? 'rotate(90deg)' : '';
+  const t = $('dbgToggle');
+  t.style.borderRadius = dbgOpen ? '6px 6px 0 0' : '6px';
+}
+function dbgLog(s) { dbgBody.textContent = s + '\n' + dbgBody.textContent; }
+function dbgErr(s) {
+  dbgErrCount++;
+  dbgBadge.style.display = 'inline-block';
+  dbgBadge.textContent = dbgErrCount;
+  dbgLog(s);
+}
+window.onerror = (m,s,l,c,e) => dbgErr('ERR: '+m+' @'+l+':'+c);
+try { applySkin(currentSkin); dbgLog('applySkin OK'); } catch(e) { dbgErr('applySkin FAIL: '+e.message); }
+try { connect(); dbgLog('connect() called, WS_URL='+WS_URL); } catch(e) { dbgErr('connect FAIL: '+e.message); }
 </script>
 </body>
 </html>
