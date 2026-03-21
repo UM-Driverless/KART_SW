@@ -31,7 +31,7 @@ STATE_NAMES = {
 }
 
 # Missions that count as "autonomous"
-AUTONOMOUS_MISSIONS = {"acceleration", "skidpad", "autocross", "trackdrive", "ebs_test", "inspection"}
+AUTONOMOUS_MISSIONS = {"acceleration", "skidpad", "autocross", "trackdrive", "ebs_test", "inspection", "throttle_test"}
 
 
 class StateMachineNode(Node):
@@ -140,6 +140,9 @@ class StateMachineNode(Node):
 
         if self._mission == "remote_control":
             out = self._last_manual_cmd
+        elif self._mission == "throttle_test":
+            # Fixed 10% throttle for hardware debugging — no perception needed
+            out.linear.x = 2.5  # 2.5 / max_speed(5.0) = 50% throttle
         elif self._mission in AUTONOMOUS_MISSIONS:
             if self._state == AS_DRIVING:
                 out = self._last_auto_cmd

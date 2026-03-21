@@ -235,3 +235,9 @@ echo "0" | sudo -S bash -c "echo 0 > /sys/bus/usb/devices/2-3.2/authorized && sl
 **Prevention added:**
 - Rule: **Always export TensorRT engines with `half=True`** for FP16. Command: `m.export(format='engine', imgsz=320, half=True)`. Never omit `half=True`.
 - Updated kart_docs orin-setup.md with warning.
+
+## 2026-03-21 - symlink-install doesn't reload running Python nodes
+**What happened:** Changed `state_machine_node.py` on disk (via scp), assumed the running node would pick it up because of `--symlink-install`. The node kept running the old code. Throttle stayed at 10% instead of 50%. Spent time debugging hardware when the issue was that the code change wasn't live.
+**Root cause:** `--symlink-install` means the file in `install/` is a symlink to `src/`, so the **on-disk** code is always current. But a **running Python process** loads the module into memory at startup and never re-reads the file. Only a process restart loads the new code.
+**Prevention added:**
+- Rule: **After changing a Python script or launch file, always restart the affected nodes.** `--symlink-install` saves you from `colcon build`, not from restarting. C++ nodes need both a rebuild AND a restart.
