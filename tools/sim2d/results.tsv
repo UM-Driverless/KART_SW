@@ -1,0 +1,5 @@
+commit	loss	laps	lap_time	status	description
+039cede	10.040738	25	10.000000	keep	baseline: grip physics + PurePursuit vs Geometric race
+6199bc4	10.038346	25	10.000000	keep	exp3: 67/33 split, max_steps=2000
+03c6126	9.640530	26	9.615385	keep	exp6: seed from optimized genes (sg=1.0, lookahead=5, min_speed=6)
+24fd5e5	8.952187	28	8.928571	keep	exp7: full 60s Geometric — peak 28 laps, median 26

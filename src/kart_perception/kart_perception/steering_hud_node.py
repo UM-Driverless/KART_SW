@@ -22,7 +22,8 @@ from cv_bridge import CvBridge
 from rclpy.node import Node
 from geometry_msgs.msg import Twist
 from sensor_msgs.msg import CameraInfo, Image
-from vision_msgs.msg import Detection3DArray
+from std_msgs.msg import Float32
+from vision_msgs.msg import Detection2DArray, Detection3DArray
 
 from kart_perception.zed_od_utils import HAS_ZED_INTERFACES, zed_objects_to_det3d
 if HAS_ZED_INTERFACES:
@@ -34,7 +35,18 @@ YELLOW_CONE_COLOR = (0, 230, 255)
 GREEN = (0, 255, 0)
 WHITE = (255, 255, 255)
 RED = (0, 0, 255)
+ORANGE_CONE_COLOR = (0, 140, 255)
+LARGE_ORANGE_COLOR = (0, 100, 255)
 DARK_BG = (30, 30, 30)
+DEFAULT_BOX_COLOR = (200, 200, 200)
+
+# Map class name to BGR color for 2D bounding box drawing
+BOX_COLORS = {
+    "blue_cone": BLUE_CONE_COLOR,
+    "yellow_cone": YELLOW_CONE_COLOR,
+    "orange_cone": ORANGE_CONE_COLOR,
+    "large_orange_cone": LARGE_ORANGE_COLOR,
+}
 
 
 class SteeringHudNode(Node):
@@ -53,7 +65,8 @@ class SteeringHudNode(Node):
         """
         super().__init__("steering_hud")
 
-        self.declare_parameter("annotated_topic", "/perception/yolo/annotated")
+        self.declare_parameter("image_topic", "/zed/zed_node/rgb/image_rect_color")
+        self.declare_parameter("cones_2d_topic", "/perception/cones_2d")
         self.declare_parameter("cones_3d_topic", "/perception/cones_3d")
         self.declare_parameter("cmd_vel_topic", "/kart/cmd_vel")
         self.declare_parameter("camera_info_topic", "/zed/zed_node/rgb/camera_info")
@@ -74,20 +87,30 @@ class SteeringHudNode(Node):
         self.camera_info_ready = False
         self._fps_prev_time = time.monotonic()
         self._fps = 0.0
+        self._yolo_fps = 0.0  # YOLO inference FPS from /perception/yolo/fps
+        self.latest_2d = None  # cached 2D detections for drawing bounding boxes
 
         self.pub = self.create_publisher(
             Image, str(self.get_parameter("output_topic").value), 1
         )
 
-        # Main driver: every annotated frame gets HUD overlays
+        # Main driver: every camera frame gets HUD overlays
         self.create_subscription(
             Image,
-            str(self.get_parameter("annotated_topic").value),
+            str(self.get_parameter("image_topic").value),
             self._on_image,
             1,
         )
 
-        # Cache latest cones, cmd_vel, camera_info
+        # Cache 2D detections for bounding box drawing
+        self.create_subscription(
+            Detection2DArray,
+            str(self.get_parameter("cones_2d_topic").value),
+            self._on_cones_2d,
+            1,
+        )
+
+        # Cache latest 3D cones for steering overlays
         self.create_subscription(
             Detection3DArray,
             str(self.get_parameter("cones_3d_topic").value),
@@ -114,10 +137,26 @@ class SteeringHudNode(Node):
             self._on_camera_info,
             1,
         )
+        self.create_subscription(
+            Float32, "/perception/yolo/fps", self._on_yolo_fps, 10
+        )
+
+        self._hud_frame_skip = 0
 
         self.get_logger().info("SteeringHudNode ready")
 
     # ---- Callbacks ----
+
+    def _on_yolo_fps(self, msg: Float32):
+        """@brief Cache the latest YOLO inference FPS value.
+
+        @param msg Float32 message with YOLO inference rate in Hz.
+        """
+        self._yolo_fps = msg.data
+
+    def _on_cones_2d(self, msg: Detection2DArray):
+        """@brief Cache the latest 2D cone detections for bounding box drawing."""
+        self.latest_2d = msg
 
     def _on_cmd_vel(self, msg: Twist):
         """@brief Cache the latest velocity command for HUD display.
@@ -153,10 +192,15 @@ class SteeringHudNode(Node):
         """@brief Main callback triggered by each annotated YOLO image.
 
         Computes HUD overlays (cone highlights, midpoint, steering arrow, gauge,
-        text, status) and publishes the composited image.
+        text, status) and publishes the composited image.  Throttled to ~20 Hz
+        (processes every 5th frame at 100 Hz input).
 
         @param img_msg Annotated image from the YOLO detector.
         """
+        self._hud_frame_skip += 1
+        if self._hud_frame_skip % 5 != 0:
+            return
+
         # FPS (EMA)
         now = time.monotonic()
         dt = now - self._fps_prev_time
@@ -166,6 +210,27 @@ class SteeringHudNode(Node):
 
         img = self.bridge.imgmsg_to_cv2(img_msg, desired_encoding="bgr8")
         h, w = img.shape[:2]
+
+        # Draw 2D bounding boxes from YOLO detections
+        if self.latest_2d is not None:
+            for det in self.latest_2d.detections:
+                if not det.results:
+                    continue
+                name = det.results[0].hypothesis.class_id
+                conf = det.results[0].hypothesis.score
+                cx = det.bbox.center.position.x
+                cy = det.bbox.center.position.y
+                bw = det.bbox.size_x
+                bh = det.bbox.size_y
+                x1, y1 = int(cx - bw / 2), int(cy - bh / 2)
+                x2, y2 = int(cx + bw / 2), int(cy + bh / 2)
+                color = BOX_COLORS.get(name, DEFAULT_BOX_COLOR)
+                cv2.rectangle(img, (x1, y1), (x2, y2), color, 3)
+                label = f"{name.replace('_cone', '')} {conf:.0%}"
+                (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)
+                cv2.rectangle(img, (x1, y1 - th - 8), (x1 + tw + 6, y1), color, -1)
+                cv2.putText(img, label, (x1 + 3, y1 - 5),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 2, cv2.LINE_AA)
 
         # Use cached cones if fresh
         cones_fresh = (now - self.latest_cones_time) < self.cone_staleness
@@ -322,7 +387,7 @@ class SteeringHudNode(Node):
         lines = [
             f"Steer: {steer_deg:+.1f} deg",
             f"Speed: {speed:.1f} m/s",
-            f"FPS: {self._fps:.1f}",
+            f"YOLO: {self._yolo_fps:.1f} Hz",
         ]
         y0 = 25
         for i, line in enumerate(lines):

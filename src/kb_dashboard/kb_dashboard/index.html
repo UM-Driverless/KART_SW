@@ -70,11 +70,15 @@ body { min-height: 100vh; -webkit-tap-highlight-color: transparent; }
   <b>YOLO</b> YOLO inference rate (Hz). Green &gt;30, yellow 15-30, red &lt;15
 </div>
 
-<!-- Touch Joystick Widget (Hidden unless mission is manual) -->
+<div id="app"></div>
+
+<!-- Touch Joystick Widget (Hidden unless mission is remote_control) -->
 <div id="manualWidgetJoystick" style="display:none;max-width:480px;margin:8px auto;padding:20px;background:#14141f;border:1px solid #2a2a3a;border-radius:12px;text-align:center;">
-    <div style="font-size:11px;font-weight:600;text-transform:uppercase;color:#888;margin-bottom:20px;letter-spacing:1px;">
-        Touch Joystick
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <div style="font-size:11px;font-weight:600;text-transform:uppercase;color:#888;letter-spacing:1px;">Touch Joystick</div>
+      <div id="controlStatus" style="font-size:10px;font-weight:600;padding:4px 10px;border-radius:6px;background:#1a1a2e;color:#888;">--</div>
     </div>
+    <button id="takeControlBtn" onclick="wsSend({action:'take_control'})" style="display:none;width:100%;padding:8px;margin-bottom:12px;background:#e74c3c;color:#fff;border:none;border-radius:6px;font-weight:600;cursor:pointer;font-size:12px;">Take Control</button>
     <div id="joystickZone" style="width:160px;height:160px;background:rgba(0,0,0,0.2);border-radius:50%;border:2px solid #2a2a3a;margin:0 auto;position:relative;touch-action:none;"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:20px;font-family:monospace;">
         <div>
@@ -88,13 +92,13 @@ body { min-height: 100vh; -webkit-tap-highlight-color: transparent; }
     </div>
 </div>
 
-<!-- Manual Control Widget (Hidden unless mission is manual) -->
+<!-- Gamepad Control Widget (Hidden unless mission is remote_control) -->
 <div id="manualWidget" style="display:none;max-width:480px;margin:8px auto;padding:12px;background:#14141f;border:1px solid #2a2a3a;border-radius:12px;color:#e0e0e8;font-family:'Inter',sans-serif;">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:#888;">
     <span>🎮 Gamepad Control</span>
     <span id="gpStatus" style="color:#e74c3c">Disconnected</span>
   </div>
-  
+
   <div style="display:flex;gap:12px;margin-bottom:12px;align-items:center;">
     <div style="font-size:10px;color:#aaa;">Steer Target:</div>
     <div style="display:flex;background:#0a0a0f;border-radius:6px;overflow:hidden;border:1px solid #2a2a3a;">
@@ -124,10 +128,15 @@ body { min-height: 100vh; -webkit-tap-highlight-color: transparent; }
     </div>
   </div>
 </div>
-
-<div id="app"></div>
 <div style="max-width:480px;margin:4px auto;text-align:center">
   <img id="hudStream" style="width:100%;border-radius:6px" alt="HUD">
+</div>
+<div id="dbgConsole" style="max-width:480px;margin:4px auto">
+  <div id="dbgToggle" onclick="toggleDbg()" style="display:flex;align-items:center;justify-content:space-between;background:#1a1a2e;border:1px solid #333;border-radius:6px;padding:4px 10px;cursor:pointer;user-select:none;font:12px monospace;color:#888">
+    <span><span id="dbgArrow" style="display:inline-block;transition:transform .2s">&#9654;</span> Debug Console</span>
+    <span id="dbgBadge" style="display:none;background:#e74c3c;color:#fff;font:bold 10px sans-serif;padding:1px 6px;border-radius:8px;min-width:14px;text-align:center"></span>
+  </div>
+  <div id="dbgBody" style="display:none;background:#0d0d1a;border:1px solid #333;border-top:none;border-radius:0 0 6px 6px;color:#0f0;font:12px monospace;padding:6px;max-height:150px;overflow:auto;white-space:pre-wrap"></div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/nipplejs/0.10.1/nipplejs.min.js"></script>
@@ -158,8 +167,12 @@ function initJoystick() {
   });
 
   jsManager.on('move', (evt, data) => {
-    const steer = data.vector.x;
-    const drive = data.vector.y;
+    const rawSteer = -data.vector.x; // negate: nipplejs left=negative, our convention positive=left
+    const rawDrive = data.vector.y;
+    // Axis-dominant: if mostly horizontal → steer only, if mostly vertical → throttle only
+    const horizontal = Math.abs(rawSteer) >= Math.abs(rawDrive);
+    const steer = horizontal ? rawSteer : 0;
+    const drive = horizontal ? 0 : rawDrive;
     $('jsSteerVal').textContent = steer.toFixed(2);
     $('jsThrottleVal').textContent = drive.toFixed(2);
     wsSend({
@@ -310,18 +323,51 @@ function connect() {
     }
     try {
       lastData = JSON.parse(e.data);
+      if (lastData.your_id) { myClientId = lastData.your_id; return; }
       if (lastData.mission) { currentMission = lastData.mission; updateJoystickWidget(); }
       // Reflect ESP32 heartbeat in the connection dot (green only when HB alive)
       const d = $('connDot');
       if (d) { if (lastData.esp32_heartbeat) d.classList.add('ok'); else d.classList.remove('ok'); }
-      SKINS[currentSkin].update(lastData);
-      updateHealth(lastData);
+      try { SKINS[currentSkin].update(lastData); } catch {}
+      try { updateHealth(lastData); } catch {}
+      try { updateControllerStatus(lastData); } catch {}
     } catch {}
   };
 }
 
+let myClientId = null;
+function updateControllerStatus(d) {
+  const ctrl = d.controller; // null or "browser-N"
+  const el = $('controlStatus');
+  const btn = $('takeControlBtn');
+  if (!el) return;
+  // Detect our own ID: if we sent take_control and now controller matches, we know it's us
+  if (ctrl && ctrl === myClientId) {
+    el.textContent = 'YOU CONTROL';
+    el.style.color = '#2ecc71';
+    el.style.background = '#0a2a0a';
+    if (btn) btn.style.display = 'none';
+  } else if (ctrl) {
+    el.textContent = ctrl + ' controls';
+    el.style.color = '#e74c3c';
+    el.style.background = '#2a0a0a';
+    if (btn) btn.style.display = 'block';
+  } else {
+    el.textContent = 'No controller';
+    el.style.color = '#888';
+    el.style.background = '#1a1a2e';
+    if (btn) btn.style.display = 'none';
+  }
+}
+
 function wsSend(obj) {
-  if (ws && ws.readyState === 1) ws.send(JSON.stringify(obj));
+  if (ws && ws.readyState === 1) {
+    // Track our ID when we take control
+    if (obj.action === 'take_control' || obj.action === 'manual_control') {
+      // We'll learn our ID from the server's response in the next broadcast
+    }
+    ws.send(JSON.stringify(obj));
+  }
 }
 
 // Skin selector HTML (shared across all skins)
@@ -422,12 +468,18 @@ body { font-family:'Inter',-apple-system,BlinkMacSystemFont,'SF Pro',system-ui,s
   </div>
   <div class="card"><div class="card-t">Kart State</div>
     <div class="tg"><div class="ti"><div class="tl">Steering</div><div class="tv" id="vSteer">0.0 <span class="tu">°</span></div><div class="ti-bar"><div class="ti-bar-fill" id="steerBarFill" style="width:0%;background:#4a9eff"></div></div></div>
-    <div class="ti"><div class="tl">Speed</div><div class="tv" id="vSpeed">0.0 <span class="tu">km/h</span></div><div class="ti-bar"><div class="ti-bar-fill" id="speedBarFill" style="width:0%;background:#2ecc71"></div></div></div></div>
+    <!-- Speed: no sensor yet
+    <div class="ti"><div class="tl">Speed</div><div class="tv" id="vSpeed">0.0 <span class="tu">km/h</span></div><div class="ti-bar"><div class="ti-bar-fill" id="speedBarFill" style="width:0%;background:#2ecc71"></div></div></div>
+    --></div>
     <div class="gg-row"><div class="gg-wrap"><canvas class="gg-canvas" id="ggCanvas" width="140" height="140"></canvas></div>
     <div class="gg-labels"><div><div class="gg-vl">Lateral</div><div class="gg-v" id="vALat">0.00 g</div></div><div><div class="gg-vl">Longitudinal</div><div class="gg-v" id="vALon">0.00 g</div></div><div><div class="gg-vl">Total</div><div class="gg-v" id="vATotal">0.00 g</div></div></div></div>
     <div class="ped-row"><div class="ped-item"><div class="ped-lbl">Throttle <span id="vThr">0%</span></div><div class="ped-track"><div class="ped-fill thr" id="thrFill" style="width:0%"></div></div></div>
     <div class="ped-item"><div class="ped-lbl">Brake <span id="vBrk">0%</span></div><div class="ped-track"><div class="ped-fill brk" id="brkFill" style="width:0%"></div></div></div></div>
   </div>
+  <div class="card"><div class="card-t">Actuations</div><div class="trg-grid">
+    <div class="trg-item"><div class="trg-lbl">Steering PWM</div><div class="trg-val" id="aPwm">0%</div></div>
+    <div class="trg-item"><div class="trg-lbl">Throttle DAC</div><div class="trg-val" id="aThr">0%</div></div>
+    <div class="trg-item"><div class="trg-lbl">Brake DAC</div><div class="trg-val" id="aBrk">0%</div></div></div></div>
   <div class="card"><div class="card-t">Targets</div><div class="trg-grid">
     <div class="trg-item"><div class="trg-lbl">Steering</div><div class="trg-val" id="cSteer">0.0°</div></div>
     <div class="trg-item"><div class="trg-lbl">Throttle</div><div class="trg-val" id="cThr">0%</div></div>
@@ -441,19 +493,24 @@ body { font-family:'Inter',-apple-system,BlinkMacSystemFont,'SF Pro',system-ui,s
   },
 
   update(d) {
-    $('vSteer').innerHTML = `${deg(d.esp32_steering_rad)} <span class="tu">°</span>` + (d.esp32_steering_raw != null ? ` <span class="tu" style="font-size:.5em;opacity:.6">raw ${d.esp32_steering_raw}</span>` : '');
-    $('vSpeed').innerHTML = `${(d.esp32_speed*3.6).toFixed(1)} <span class="tu">km/h</span>`;
+    $('vSteer').innerHTML = `${deg(d.esp32_steering_rad)}<span style="font-size:.55em;vertical-align:super">°</span>` + (d.esp32_steering_raw != null ? ` <span class="tu" style="font-size:.5em;opacity:.6">raw ${d.esp32_steering_raw}</span>` : '');
+    // Speed: no sensor yet
+    // $('vSpeed').innerHTML = `${(d.esp32_speed*3.6).toFixed(1)} <span class="tu">km/h</span>`;
     const sPct = Math.max(-1, Math.min(1, d.esp32_steering_rad / 0.5));
     const sf = $('steerBarFill');
     if (sPct >= 0) { sf.style.left='50%'; sf.style.width=(sPct*50)+'%'; }
     else { sf.style.width=(-sPct*50)+'%'; sf.style.left=(50+sPct*50)+'%'; }
-    $('speedBarFill').style.width = Math.min(d.esp32_speed/30*100,100)+'%';
+    // $('speedBarFill').style.width = Math.min(d.esp32_speed/30*100,100)+'%';
     const latG = d.esp32_accel_lat/9.81, lonG = d.esp32_accel_lon/9.81;
     drawGG(latG, lonG, '#2a2a3a', '#6a6a7a40', '#4a9eff', 8);
     $('vALat').textContent = latG.toFixed(2)+' g';
     $('vALon').textContent = lonG.toFixed(2)+' g';
     $('vATotal').textContent = Math.sqrt(latG*latG+lonG*lonG).toFixed(2)+' g';
     updatePedals(d); updateTargets(d); updatePills(d); updateMissions(d);
+    // Actuations
+    $('aPwm').textContent = (Math.abs(d.esp32_steering_pwm || 0) * 100).toFixed(0) + '%';
+    $('aThr').textContent = ((d.esp32_throttle || 0) * 100).toFixed(0) + '%';
+    $('aBrk').textContent = ((d.esp32_braking || 0) * 100).toFixed(0) + '%';
   }
 };
 
@@ -763,8 +820,10 @@ body::after {
     </div>
     <div class="k-tc on" id="tc-tele">
       <div class="s-grid">
+        <!-- Speed/RPM: no sensor yet
         <div class="sc"><div class="sc-lbl">SPEED</div><div class="sc-val" id="speedVal">0.0</div><div class="sc-unit">M / S</div><div class="sc-segs" id="speedSegs"></div></div>
         <div class="sc"><div class="sc-lbl">MOTOR RPM</div><div class="sc-val" id="rpmVal">0.0</div><div class="sc-unit">KRPM</div><div class="sc-segs" id="rpmSegs"></div></div>
+        -->
         <div class="sc"><div class="sc-lbl">THROTTLE OUT</div><div class="sc-val" id="thoVal">000</div><div class="sc-unit">%</div><div class="sc-segs" id="thoSegs"></div></div>
         <div class="sc"><div class="sc-lbl">STEERING OUT</div><div class="sc-val" id="stoVal">0.0°</div><div class="sc-unit">DEG</div><div class="sc-segs" id="stoSegs"></div></div>
       </div>
@@ -854,7 +913,7 @@ body::after {
       for (let i = 0; i < n; i++) el.appendChild(document.createElement('span'));
     };
     ['steerSegs','driveSegs'].forEach(id => mkSegs(id, 20));
-    ['speedSegs','rpmSegs','thoSegs','stoSegs'].forEach(id => mkSegs(id, 16));
+    ['thoSegs','stoSegs'].forEach(id => mkSegs(id, 16)); // Speed/RPM segs removed (no sensor)
 
     // HELPERS
     window.litSegs = (id, norm, centered) => {
@@ -938,13 +997,12 @@ body::after {
       else { s.textContent = d.state.toUpperCase(); s.className = 'status-pill'; }
     }
     
-    $('speedVal').textContent = d.esp32_speed.toFixed(1);
-    litSmall('speedSegs', Math.min(1, Math.abs(d.esp32_speed)/10));
-    
-    // RPM Simulation or data if available
-    const rpm = d.esp32_rpm !== undefined ? d.esp32_rpm : (Math.abs(d.esp32_speed) * 0.5);
-    $('rpmVal').textContent = rpm.toFixed(1);
-    litSmall('rpmSegs', Math.min(1, rpm/5));
+    // Speed/RPM: no sensor yet
+    // $('speedVal').textContent = d.esp32_speed.toFixed(1);
+    // litSmall('speedSegs', Math.min(1, Math.abs(d.esp32_speed)/10));
+    // const rpm = d.esp32_rpm !== undefined ? d.esp32_rpm : (Math.abs(d.esp32_speed) * 0.5);
+    // $('rpmVal').textContent = rpm.toFixed(1);
+    // litSmall('rpmSegs', Math.min(1, rpm/5));
     
     $('thoVal').textContent = Math.round(d.esp32_throttle * 100);
     litSmall('thoSegs', d.esp32_throttle);
@@ -1045,7 +1103,8 @@ body { font-family:'Inter',sans-serif; background:#0a0a0a; color:#f5f5f5; }
       </svg>
     </div>
     <div class="t-car-stats">
-      <div class="t-car-stat"><div class="t-big-val" id="tBigSpeed">0.0</div><div class="t-big-unit">km/h</div></div>
+      <!-- Speed: no sensor yet -->
+      <div class="t-car-stat"><div class="t-big-val" id="tBigSpeed">--</div><div class="t-big-unit">km/h</div></div>
       <div class="t-car-stat"><div class="t-big-val" id="tBigSteer">0.0</div><div class="t-big-unit">°</div></div>
       <div class="t-car-stat"><div class="t-big-val" id="tBigAccel">0.0</div><div class="t-big-unit">m/s²</div></div>
     </div>
@@ -1063,7 +1122,9 @@ body { font-family:'Inter',sans-serif; background:#0a0a0a; color:#f5f5f5; }
   <div class="t-sec-label">Sensors</div>
   <div class="t-grid2">
     <div class="t-card"><div class="t-card-label">Steering</div><div class="t-card-val" id="tsSteer">0.0</div><div class="t-card-unit">°</div><div class="t-card-bar"><div class="t-card-bar-fill" id="tbSteer" style="background:#1e88e5"></div></div></div>
+    <!-- Speed: no sensor yet
     <div class="t-card"><div class="t-card-label">Speed</div><div class="t-card-val" id="tsSpeed">0.0</div><div class="t-card-unit">km/h</div><div class="t-card-bar"><div class="t-card-bar-fill" id="tbSpeed" style="background:#43a047"></div></div></div>
+    -->
     <div class="t-card"><div class="t-card-label">Throttle</div><div class="t-card-val" id="tsThr">0</div><div class="t-card-unit">%</div><div class="t-card-bar"><div class="t-card-bar-fill" id="tbThr" style="background:#fb8c00"></div></div></div>
     <div class="t-card"><div class="t-card-label">Braking</div><div class="t-card-val" id="tsBrk">0</div><div class="t-card-unit">%</div><div class="t-card-bar"><div class="t-card-bar-fill" id="tbBrk" style="background:#e53935"></div></div></div>
   </div>
@@ -1081,23 +1142,24 @@ body { font-family:'Inter',sans-serif; background:#0a0a0a; color:#f5f5f5; }
   },
 
   update(d) {
-    const spd = d.esp32_speed*3.6;
+    // Speed: no sensor yet
+    // const spd = d.esp32_speed*3.6;
     const accelTotal = Math.sqrt(d.esp32_accel_lat**2 + d.esp32_accel_lon**2);
-    $('tBigSpeed').textContent = spd.toFixed(1);
+    // $('tBigSpeed').textContent = spd.toFixed(1);
     $('tBigSteer').textContent = deg(d.esp32_steering_rad);
     $('tBigAccel').textContent = accelTotal.toFixed(1);
 
     $('tsSteer').textContent = deg(d.esp32_steering_rad);
-    $('tsSpeed').textContent = (d.esp32_speed*3.6).toFixed(1);
+    // $('tsSpeed').textContent = (d.esp32_speed*3.6).toFixed(1);
     $('tsThr').textContent = Math.round(d.esp32_throttle*100);
     $('tsBrk').textContent = Math.round(d.esp32_braking*100);
     $('tbSteer').style.width = Math.min(Math.abs(d.esp32_steering_rad)/1*100,100)+'%';
-    $('tbSpeed').style.width = Math.min(d.esp32_speed/30*100,100)+'%';
+    // $('tbSpeed').style.width = Math.min(d.esp32_speed/30*100,100)+'%';
     $('tbThr').style.width = (d.esp32_throttle*100)+'%';
     $('tbBrk').style.width = (d.esp32_braking*100)+'%';
 
-    $('tcThr').textContent = Math.round(d.orin_cmd_throttle/255*100)+'%';
-    $('tcBrk').textContent = Math.round(d.orin_cmd_brake/255*100)+'%';
+    $('tcThr').textContent = Math.round(d.orin_cmd_throttle*100)+'%';
+    $('tcBrk').textContent = Math.round(d.orin_cmd_brake*100)+'%';
     $('tcStr').textContent = deg(d.orin_cmd_steering_rad)+'°';
 
     // Status pill
@@ -1213,7 +1275,9 @@ body::before { content:''; position:fixed; inset:0; pointer-events:none; backgro
     <div class="h-sec-title"><div class="h-sec-dot" style="background:#00b4ff;box-shadow:0 0 6px #00b4ff"></div>ESP32 SENSORS</div>
     <div class="h-sg">
       <div class="h-metric"><div class="h-metric-line" style="background:linear-gradient(90deg,transparent,#00b4ff,transparent)"></div><div class="h-metric-label">STEERING</div><div class="h-metric-row"><span class="h-metric-val" id="hsSteer">0.0</span><span class="h-metric-unit" style="color:#00b4ff">°</span></div><div class="h-metric-bar"><div class="h-metric-bar-fill" id="hbSteer" style="background:linear-gradient(90deg,#00b4ff88,#00b4ff);box-shadow:0 0 8px #00b4ff;width:0%"></div></div></div>
+      <!-- Speed: no sensor yet
       <div class="h-metric"><div class="h-metric-line" style="background:linear-gradient(90deg,transparent,#39ff14,transparent)"></div><div class="h-metric-label">SPEED</div><div class="h-metric-row"><span class="h-metric-val" id="hsSpeed">0.0</span><span class="h-metric-unit" style="color:#39ff14">km/h</span></div><div class="h-metric-bar"><div class="h-metric-bar-fill" id="hbSpeed" style="background:linear-gradient(90deg,#39ff1488,#39ff14);box-shadow:0 0 8px #39ff14;width:0%"></div></div></div>
+      -->
       <div class="h-metric"><div class="h-metric-line" style="background:linear-gradient(90deg,transparent,#ff9500,transparent)"></div><div class="h-metric-label">THROTTLE</div><div class="h-metric-row"><span class="h-metric-val" id="hsThr">0</span><span class="h-metric-unit" style="color:#ff9500">%</span></div><div class="h-metric-bar"><div class="h-metric-bar-fill" id="hbThr" style="background:linear-gradient(90deg,#ff950088,#ff9500);box-shadow:0 0 8px #ff9500;width:0%"></div></div></div>
       <div class="h-metric"><div class="h-metric-line" style="background:linear-gradient(90deg,transparent,#ff3060,transparent)"></div><div class="h-metric-label">BRAKING</div><div class="h-metric-row"><span class="h-metric-val" id="hsBrk">0</span><span class="h-metric-unit" style="color:#ff3060">%</span></div><div class="h-metric-bar"><div class="h-metric-bar-fill" id="hbBrk" style="background:linear-gradient(90deg,#ff306088,#ff3060);box-shadow:0 0 8px #ff3060;width:0%"></div></div></div>
     </div>
@@ -1274,11 +1338,11 @@ body::before { content:''; position:fixed; inset:0; pointer-events:none; backgro
 
   update(d) {
     $('hsSteer').textContent = deg(d.esp32_steering_rad);
-    $('hsSpeed').textContent = (d.esp32_speed*3.6).toFixed(1);
+    // $('hsSpeed').textContent = (d.esp32_speed*3.6).toFixed(1); // no sensor yet
     $('hsThr').textContent = Math.round(d.esp32_throttle*100);
     $('hsBrk').textContent = Math.round(d.esp32_braking*100);
     $('hbSteer').style.width = Math.min(Math.abs(d.esp32_steering_rad)/1*100,100)+'%';
-    $('hbSpeed').style.width = Math.min(d.esp32_speed/30*100,100)+'%';
+    // $('hbSpeed').style.width = Math.min(d.esp32_speed/30*100,100)+'%'; // no sensor yet
     $('hbThr').style.width = (d.esp32_throttle*100)+'%';
     $('hbBrk').style.width = (d.esp32_braking*100)+'%';
 
@@ -1288,8 +1352,8 @@ body::before { content:''; position:fixed; inset:0; pointer-events:none; backgro
     $('hALon').textContent = lonG.toFixed(2)+' g';
     $('hATotal').textContent = Math.sqrt(latG*latG+lonG*lonG).toFixed(2)+' g';
 
-    $('hcThr').textContent = Math.round(d.orin_cmd_throttle/255*100)+'%';
-    $('hcBrk').textContent = Math.round(d.orin_cmd_brake/255*100)+'%';
+    $('hcThr').textContent = Math.round(d.orin_cmd_throttle*100)+'%';
+    $('hcBrk').textContent = Math.round(d.orin_cmd_brake*100)+'%';
     $('hcStr').textContent = deg(d.orin_cmd_steering_rad)+'°';
 
     // Status pill
@@ -1340,8 +1404,8 @@ function updatePedals(d) {
 
 function updateTargets(d) {
   $('cSteer').textContent = deg(d.orin_cmd_steering_rad)+'°';
-  $('cThr').textContent = Math.round(d.orin_cmd_throttle/255*100)+'%';
-  $('cBrk').textContent = Math.round(d.orin_cmd_brake/255*100)+'%';
+  $('cThr').textContent = Math.round(d.orin_cmd_throttle*100)+'%';
+  $('cBrk').textContent = Math.round(d.orin_cmd_brake*100)+'%';
 }
 
 function updatePills(d) {
@@ -1440,14 +1504,26 @@ function applySkin(id) {
   if (lastData) skin.update(lastData);
 }
 
-// Debug overlay
-const dbg = document.createElement('div');
-dbg.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:#000c;color:#0f0;font:12px monospace;padding:6px;z-index:9999;max-height:120px;overflow:auto';
-document.body.appendChild(dbg);
-function dbgLog(s) { dbg.textContent = s + '\n' + dbg.textContent; }
-window.onerror = (m,s,l,c,e) => dbgLog('ERR: '+m+' @'+l+':'+c);
-try { applySkin(currentSkin); dbgLog('applySkin OK'); } catch(e) { dbgLog('applySkin FAIL: '+e.message); }
-try { connect(); dbgLog('connect() called, WS_URL='+WS_URL); } catch(e) { dbgLog('connect FAIL: '+e.message); }
+// Debug console (collapsible, in-flow)
+let dbgOpen = false, dbgErrCount = 0;
+const dbgBody = $('dbgBody'), dbgArrow = $('dbgArrow'), dbgBadge = $('dbgBadge');
+function toggleDbg() {
+  dbgOpen = !dbgOpen;
+  dbgBody.style.display = dbgOpen ? 'block' : 'none';
+  dbgArrow.style.transform = dbgOpen ? 'rotate(90deg)' : '';
+  const t = $('dbgToggle');
+  t.style.borderRadius = dbgOpen ? '6px 6px 0 0' : '6px';
+}
+function dbgLog(s) { dbgBody.textContent = s + '\n' + dbgBody.textContent; }
+function dbgErr(s) {
+  dbgErrCount++;
+  dbgBadge.style.display = 'inline-block';
+  dbgBadge.textContent = dbgErrCount;
+  dbgLog(s);
+}
+window.onerror = (m,s,l,c,e) => dbgErr('ERR: '+m+' @'+l+':'+c);
+try { applySkin(currentSkin); dbgLog('applySkin OK'); } catch(e) { dbgErr('applySkin FAIL: '+e.message); }
+try { connect(); dbgLog('connect() called, WS_URL='+WS_URL); } catch(e) { dbgErr('connect FAIL: '+e.message); }
 </script>
 </body>
 </html>

@@ -1,8 +1,22 @@
-# ZED camera parameter overrides for kart_brain
-# These override the defaults in zed_wrapper/config/common_stereo.yaml
+# ZED camera parameter overrides for kart_brain (YOLO perception path)
+# Minimal config: RGB + depth only, everything else disabled to free GPU for YOLO
+# ZED 2 at VGA@100Hz for low-latency perception
 /**:
     ros__parameters:
         general:
-            pub_frame_rate: 100.0  # Match VGA@100 grab rate (default 30.0)
+            grab_resolution: 'VGA'     # 672x376 (default HD720)
+            grab_frame_rate: 100       # 100 FPS (default 30)
+            pub_frame_rate: 100.0      # Match grab rate
+            pub_resolution: 'NATIVE'   # No downscaling at VGA
         depth:
-            point_cloud_freq: 30.0  # Keep point cloud at 30 Hz to save GPU
+            depth_mode: 'PERFORMANCE'  # Fastest depth mode
+            point_cloud_freq: 0.0      # Disable point cloud publishing
+        pos_tracking:
+            pos_tracking_enabled: false # Disable positional tracking
+            publish_tf: false
+            publish_map_tf: false
+        mapping:
+            mapping_enabled: false
+        sensors:
+            sensors_image_sync: false
+            sensors_pub_rate: 0.0      # Disable sensor publishing

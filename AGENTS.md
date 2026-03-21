@@ -1,19 +1,32 @@
 # Agent Quick Reference
 
-## Key Files (Read Before Working)
-**These `.agents/` files are the source of truth for this project.** Always consult them before answering technical questions or making changes — they are version-controlled and stay in sync with the code. Never rely on auto-memory or prior conversation context for project-specific technical state (architecture, protocols, hardware, conventions), as memory can go stale after commits.
+<!-- Keep this file under ~150 lines. It is a routing layer with essential inline context. -->
 
-Before making any changes to the kart_brain workspace, consult:
-1. **`.agents/architecture.md`** — System architecture, packages, topic map, message types
-2. **`.agents/error_log.md`** — Past errors and added preventions
-3. **Environment-specific guide:**
-   - Working on **real hardware (Orin)?** → `.agents/orin_environment.md`
-   - Working on **simulation (VM)?** → `.agents/simulation.md` + `.agents/vm_environment.md`
+## .agents/ File System
+
+**These files are the source of truth.** Always consult them before answering technical questions or making changes. Never rely on auto-memory for project-specific technical state.
+
+**Read in full** before working (keep concise, < 150 lines):
+- **`README.md`** — System overview and file relationships.
+- **`tasks.md`** — Current work items and status.
+
+**Consult selectively** (search/grep — these grow over time):
+- **`error_log.md`** — Append-only log of past mistakes and preventions.
+- **`notes.md`** — Design decisions and rationale.
+- **`scratchpad.md`** — Permanent scratchpad. Random notes, no cleanup needed.
+
+**Reference** (read when relevant):
+- **`architecture.md`** — System architecture, packages, topic map, message types.
+- **`orin_environment.md`** — Jetson Orin hardware setup and versions.
+- **`vm_environment.md`** — UTM VM setup.
+- **`simulation.md`** — Gazebo Fortress simulation details.
+- **`adding_messages.md`** — How to add new ROS message types.
+- **`orin_flash_guide.md`** — Flashing the Jetson Orin.
 
 ## Environments
 
 ### Jetson Orin (Real Hardware)
-- **Connection:** `ssh orin` (WiFi 10.7.20.142) or AnyDesk
+- **Connection:** `ssh orin-local` (WiFi 10.7.20.142) or `ssh orin-remote` (Cloudflare Tunnel) or AnyDesk
 - **Workspace:** `~/kart_brain`
 - **Camera:** ZED 2 stereo (USB)
 - **sudo password:** `0`
@@ -40,21 +53,23 @@ A change is NOT done until it's **validated on the target machine**:
 
 ## Critical Rules
 - **Environment is in `.bashrc`** — ROS, workspace, and `IGN_GAZEBO_RESOURCE_PATH` are all sourced in `.bashrc` on every machine. **Never tell the user to source or export these manually.**
-- **After creating/modifying files under `src/`, scp them to the VM and rebuild via SSH — don't just tell the user.** Use: `scp <files> utm:~/kart_brain/...` then `ssh utm "source /opt/ros/humble/setup.bash && cd ~/kart_brain && colcon build --packages-select <pkg>"`. Note: `.bashrc` is NOT sourced in non-interactive SSH — always source ROS explicitly.
+- **Always use `--symlink-install`** when building. This symlinks Python scripts and launch files so edits in `src/` take effect immediately without rebuilding. Only C++ changes need a rebuild.
+- **After creating/modifying files under `src/`, scp them to the VM and rebuild via SSH — don't just tell the user.** Use: `scp <files> utm:~/kart_brain/...` then `ssh utm "source /opt/ros/humble/setup.bash && cd ~/kart_brain && colcon build --symlink-install --packages-select <pkg>"`. Note: `.bashrc` is NOT sourced in non-interactive SSH — always source ROS explicitly.
 - **Gazebo Fortress uses `ign` CLI**, not `gz`. Message types are `ignition.msgs.*`, not `gz.msgs.*`.
 - **No `<cone>` geometry** in SDF — use `<cylinder>` instead (Fortress limitation).
 - **Odom is relative to spawn** — always account for the kart's initial world position.
 - **No hardware GPU on the VM** — CPU rendering via llvmpipe (OpenGL 4.5). Gazebo GUI works on `DISPLAY=:0` but headless EGL fails. Keep camera resolution at 640x360.
+- **Kill ROS properly before relaunching.** Never use `killall python3` — it misses orphaned children. Use: `sudo kill -9 $(ps aux | grep -E "ros2|yolo|cone_|steering|cmd_vel|state_machine|dashboard|KB_Coms|component_container|robot_state" | grep -v grep | awk '{print $2}') 2>/dev/null` then verify `0` processes remain, then `rm -rf /dev/shm/fastrtps_*`. Stale processes eat GPU and halve FPS.
 - **Clean up after yourself** — delete temporary files, screenshots, debug artifacts, and tool-generated directories before finishing. Don't leave untracked trash in the repo.
 - When something goes wrong, document it in `.agents/error_log.md`.
 
 ## Build & Run
 ```bash
-# Build everything
-cd ~/kart_brain && colcon build
+# Build everything (always use --symlink-install so Python/launch edits take effect without rebuilding)
+cd ~/kart_brain && colcon build --symlink-install
 
 # Build single package
-colcon build --packages-select kart_perception
+colcon build --symlink-install --packages-select kart_perception
 
 # Live perception on Orin
 ~/kart_brain/run_live.sh
@@ -88,16 +103,27 @@ Used everywhere — YOLO class names, Detection messages, visualization:
 
 ## Task Management
 - **`TODO.md`** — Human-curated roadmap. High-level goals and priorities. Agents read this for context but do **NOT edit it** unless explicitly asked.
-- **`.agents/tasks.md`** — Agent task board. Concrete, actionable work items derived from TODO.md. Agents pick tasks here, update status, and mark done.
+- **`.agents/tasks.md`** — Agent task board. Concrete, actionable work items derived from TODO.md.
 - When starting work, check `.agents/tasks.md` first. If empty or stale, derive tasks from `TODO.md`.
 - Status markers: `- [ ]` ready, `- [→]` in progress, `- [⏸]` blocked (with reason), `- [x]` done (with date).
+
+### Subagent Task Protocol
+When the user says "work on tasks" (or similar), launch subagents to execute tasks from `.agents/tasks.md`:
+
+1. **Pick** the first `- [ ]` (Ready) task. Each subagent picks a different task.
+2. **Claim** it: edit `.agents/tasks.md`, move it to In Progress (`- [→]`).
+3. **Do the work.** Read relevant `.agents/` docs first. Follow all project conventions.
+4. **If blocked** (needs user input, hardware access, unclear requirements): move to Blocked (`- [⏸] ... — reason: <specific question>`), then stop and return the question.
+5. **If done**: commit the changes, move to Done (`- [x] ... (YYYY-MM-DD)`), then return a summary.
+6. **Independent tasks can run in parallel** — launch multiple subagents simultaneously. Tasks that touch the same files must run sequentially.
+7. **Never skip steps** — always update `tasks.md` status before and after work.
 
 ## Commit Protocol
 1. `git status` — check what will be committed
 2. `git diff --cached` — review changes
 3. Build and verify before committing
 4. If a mistake occurred, document it in `.agents/error_log.md`
-5. If recurring, create a postmortem in `.agents/postmortems/`
+5. If recurring, create a detailed write-up in `.agents/errors/`
 
 ## Documentation
 The official documentation for the kart project lives in a separate repo:

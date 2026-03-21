@@ -10,7 +10,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--source",
-        default="test_data/driverless_test_media/cones_test.png",
+        default="tests/test_data/driverless_test_media/cones_test.png",
         help="Path to an image, video, or a directory of media files.",
     )
     parser.add_argument(

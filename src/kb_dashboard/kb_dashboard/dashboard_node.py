@@ -9,6 +9,7 @@ and send commands (mission select, start/stop, EBS).
 
 import asyncio
 import threading
+import time
 
 import cv2
 import numpy as np
@@ -119,20 +120,52 @@ class DashboardNode(Node):
 
         # Publisher for manual remote control (Twist for now)
         self.manual_cmd_pub = self.create_publisher(Twist, "/kart/cmd_vel_manual", 10)
+        # Pending commands set from asyncio thread, published by ROS timer
+        self._pending_manual_cmd = None
+        self._manual_cmd_time = 0.0  # monotonic timestamp of last WS manual_control
+        self._pending_mission = None
+        self._pending_mission_count = 0
+        self._pending_state_cmd = None
+        self._pending_state_cmd_count = 0
+        self.create_timer(0.01, self._publish_pending)  # 100 Hz
+
+        # One-shot self-test after 2 seconds
+        self._selftest_timer = self.create_timer(2.0, self._selftest)
 
         self.get_logger().info(f"Dashboard node started, web UI on port {self.port}")
 
+    def _selftest(self):
+        """@brief One-shot self-test: log subscriber counts for all publishers."""
+        self._selftest_timer.cancel()
+        pubs = {
+            "/dashboard/mission": self.mission_pub,
+            "/dashboard/state_cmd": self.state_cmd_pub,
+            "/kart/cmd_vel_manual": self.manual_cmd_pub,
+        }
+        for topic, pub in pubs.items():
+            subs = pub.get_subscription_count()
+            if subs == 0:
+                self.get_logger().warn(f"Self-test: {topic} has 0 subscribers")
+            else:
+                self.get_logger().info(f"Self-test: {topic} OK ({subs} subs)")
+
     def _on_heartbeat(self, msg: Frame):
-        """@brief Callback for ESP32 heartbeat frames. Updates heartbeat timestamp."""
+        """@brief Callback for ESP32 heartbeat frames. Updates heartbeat timestamp.
+        Also publishes any pending commands — this callback runs on the ROS thread
+        so publish() is guaranteed to work (unlike timers which may not fire).
+        """
         self.state.heartbeat()
+        self._flush_pending()
 
     def _on_esp_steering(self, msg: Frame):
-        """@brief Callback for ESP32 steering frames. Decodes angle and raw encoder value."""
+        """@brief Callback for ESP32 steering frames."""
+        self._flush_pending()
         p = list(msg.payload)
-        angle_rad, raw_encoder = decode_steering_raw(p)
+        angle_rad, raw_encoder, pid_pwm = decode_steering_raw(p)
         self.state.update("esp32_steering_rad", angle_rad)
         if raw_encoder:
             self.state.update("esp32_steering_raw", raw_encoder)
+        self.state.update("esp32_steering_pwm", pid_pwm)
 
     def _on_esp_speed(self, msg: Frame):
         """@brief Callback for ESP32 speed frames. Decodes speed in m/s."""
@@ -212,71 +245,62 @@ class DashboardNode(Node):
         return self._hud_jpeg
 
     def publish_mission(self, mission: str):
-        """@brief Publish a mission selection to /dashboard/mission.
-
-        @param mission Mission name (e.g. "manual", "trackdrive").
-        """
+        """@brief Queue a mission selection for the ROS timer to publish."""
         msg = String()
         msg.data = mission
-        self.mission_pub.publish(msg)
+        self._pending_mission = msg
+        self._pending_mission_count = 100  # publish for 1 second (100 Hz timer)
         self.get_logger().info(f"Mission set: {mission}")
 
     def publish_state_cmd(self, cmd: str):
-        """@brief Publish a state command to /dashboard/state_cmd.
-
-        @param cmd Command string (e.g. "start", "stop", "ebs").
-        """
+        """@brief Queue a state command for the ROS timer to publish."""
         msg = String()
         msg.data = cmd
-        self.state_cmd_pub.publish(msg)
+        self._pending_state_cmd = msg
+        self._pending_state_cmd_count = 100
         self.get_logger().info(f"State cmd: {cmd}")
+
+    def _publish_pending(self):
+        """@brief Timer callback (100 Hz): publish pending commands from ROS thread."""
+        self._flush_pending()
+
+    def _flush_pending(self):
+        """@brief Publish any pending commands. Safe to call from any ROS callback."""
+        cmd = self._pending_manual_cmd
+        if cmd is not None:
+            # If no WS input for 500ms, publish zeros (safe stop)
+            if time.monotonic() - self._manual_cmd_time > 0.5:
+                self._pending_manual_cmd = Twist()  # zero, not None — keep publishing zeros
+            self.manual_cmd_pub.publish(self._pending_manual_cmd)
+        if self._pending_mission is not None and self._pending_mission_count > 0:
+            self.mission_pub.publish(self._pending_mission)
+            self._pending_mission_count -= 1
+        if self._pending_state_cmd is not None and self._pending_state_cmd_count > 0:
+            self.state_cmd_pub.publish(self._pending_state_cmd)
+            self._pending_state_cmd_count -= 1
 
     def publish_manual_control(
         self, steer: float, steer_type: str, throttle: float, brake: float
     ):
-        """@brief Publish remote control commands from the dashboard joystick.
+        """@brief Store remote control command for publishing by the ROS timer.
+
+        Called from the asyncio thread. The actual publish happens in _publish_pending_manual
+        on the ROS spin thread to avoid thread-safety issues.
 
         @param steer Steering input, -1.0 (left) to 1.0 (right).
         @param steer_type Steering mode string (e.g. "angle", "pwm").
         @param throttle Throttle input, 0.0 to 1.0.
         @param brake Brake input, 0.0 to 1.0.
         """
-        # Optional: Print/log if they chose PWM, since Twist doesn't natively support it.
-        # But we can map "steer" straight to cmd.angular.z for now.
-        cmd = Twist()
-
-        # We assume gamepad provides:
-        #   steer: -1.0 (left) to 1.0 (right)
-        #   throttle: 0.0 to 1.0
-        #   brake: 0.0 to 1.0
-
-        # Combine throttle and brake into linear.x
-        # For cmd_vel_bridge, positive is throttle, negative is brake.
-        speed_cmd = throttle - brake
-
-        # Assuming max speed is handled downstream by cmd_vel_bridge.
-        # But we'll scale it to some nominal 'max speed' so it's not strictly 1.0 m/s
-        # In cmd_vel_bridge_node: max_speed default is 5.0
         NOMINAL_MAX_SPEED = 5.0
         NOMINAL_MAX_STEER = 0.5  # radians
 
-        cmd.linear.x = speed_cmd * NOMINAL_MAX_SPEED
-        cmd.angular.z = (
-            -steer * NOMINAL_MAX_STEER
-        )  # Typically left stick left (-1) means positive angular.z
-
-        self.manual_cmd_pub.publish(cmd)
-
-        # Log periodically or only if state changes?
-        now = self.get_clock().now().nanoseconds
-        if (
-            not hasattr(self, "_last_manual_log")
-            or now - self._last_manual_log > 1_000_000_000
-        ):
-            self._last_manual_log = now
-            self.get_logger().info(
-                f"Manual Ctrl: steer={steer:.2f}({steer_type}), thr={throttle:.2f}, brk={brake:.2f}"
-            )
+        cmd = Twist()
+        cmd.linear.x = (throttle - brake) * NOMINAL_MAX_SPEED
+        # steer already positive=left (negated in JS)
+        cmd.angular.z = steer * NOMINAL_MAX_STEER
+        self._pending_manual_cmd = cmd
+        self._manual_cmd_time = time.monotonic()
 
 
 # ── Entrypoint ─────────────────────────────────────────────────────────

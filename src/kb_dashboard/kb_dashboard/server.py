@@ -1,4 +1,10 @@
-"""HTTP + WebSocket server — no ROS dependencies."""
+"""HTTP + WebSocket server — no ROS dependencies.
+
+Features:
+- Single controller token: only one browser can send manual_control at a time.
+  Others see who has control and can "Take Control" to steal it.
+- Non-blocking broadcast: slow clients don't block the event loop.
+"""
 
 import asyncio
 import base64
@@ -14,29 +20,26 @@ HTML_PATH = Path(__file__).parent / "index.html"
 async def run_websocket_server(
     state: DashboardState, node, port: int, ready_callback=None
 ):
-    """@brief Minimal HTTP + WebSocket server using only the stdlib + asyncio.
-
-    Serves the dashboard HTML page and handles WebSocket connections for
-    real-time telemetry broadcast and command reception.
+    """@brief HTTP + WebSocket server for the dashboard.
 
     @param state Shared DashboardState for telemetry snapshots.
-    @param node ROS node with publish_mission(), publish_state_cmd(), and get_logger().
+    @param node ROS node with publish_mission(), publish_state_cmd(), publish_manual_control().
     @param port TCP port to listen on.
-    @param ready_callback Optional callable invoked (no args) once the server is listening.
+    @param ready_callback Optional callable invoked once the server is listening.
     """
-    clients: set[asyncio.StreamWriter] = set()
+    clients: dict[asyncio.StreamWriter, str] = {}  # writer → client_id
+    controller: dict = {"holder": None, "id": None}  # who has manual control
+    _next_id = [0]
+
+    def _make_id():
+        _next_id[0] += 1
+        return f"browser-{_next_id[0]}"
 
     async def ws_accept(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
-        """@brief Handle new TCP connections: serve HTML or upgrade to WebSocket.
-
-        @param reader Async stream reader for the client connection.
-        @param writer Async stream writer for the client connection.
-        """
-        # Read HTTP request
         request = b""
         while True:
             line = await reader.readline()
-            if not line:  # EOF — client disconnected
+            if not line:
                 writer.close()
                 return
             request += line
@@ -47,14 +50,12 @@ async def run_websocket_server(
         first_line = request_str.split("\r\n")[0]
         path = first_line.split(" ")[1] if len(first_line.split(" ")) > 1 else "/"
 
-        # Parse headers
         headers = {}
         for line_str in request_str.split("\r\n")[1:]:
             if ": " in line_str:
                 k, v = line_str.split(": ", 1)
                 headers[k.lower()] = v.strip()
 
-        # WebSocket upgrade
         conn_header = headers.get("connection", "").lower()
         upgrade_header = headers.get("upgrade", "").lower()
         if "upgrade" in conn_header and "websocket" in upgrade_header:
@@ -71,11 +72,20 @@ async def run_websocket_server(
                 f"Sec-WebSocket-Accept: {accept}\r\n\r\n".encode()
             )
             await writer.drain()
-            clients.add(writer)
+            client_id = _make_id()
+            clients[writer] = client_id
+            node.get_logger().info(f"WS connected: {client_id}")
+            # Send welcome with client ID
+            ws_send(writer, json.dumps({"your_id": client_id}).encode())
             try:
-                await handle_ws(reader, writer, state, node)
+                await handle_ws(reader, writer, client_id, state, node)
             finally:
-                clients.discard(writer)
+                clients.pop(writer, None)
+                if controller["holder"] is writer:
+                    controller["holder"] = None
+                    controller["id"] = None
+                    node.get_logger().info(f"Controller released: {client_id} disconnected")
+                node.get_logger().info(f"WS disconnected: {client_id}")
             return
 
         # Serve HTML
@@ -97,16 +107,7 @@ async def run_websocket_server(
         writer.close()
         await writer.wait_closed()
 
-    async def handle_ws(reader, writer, state, node):
-        """@brief Handle incoming WebSocket frames (commands from browser).
-
-        Reads and decodes WebSocket frames, dispatching text frames as JSON commands.
-
-        @param reader Async stream reader for the WebSocket connection.
-        @param writer Async stream writer for the WebSocket connection.
-        @param state Shared DashboardState instance.
-        @param node ROS node for publishing commands.
-        """
+    async def handle_ws(reader, writer, client_id, state, node):
         while True:
             try:
                 header = await reader.readexactly(2)
@@ -137,50 +138,58 @@ async def run_websocket_server(
             if opcode == 0x1:  # text
                 try:
                     cmd = json.loads(data.decode())
-                    handle_command(cmd, state, node)
-                except Exception:
-                    pass
+                    handle_command(cmd, writer, client_id, state, node)
+                except Exception as e:
+                    node.get_logger().warn(f"WS cmd error from {client_id}: {e}")
 
-    def handle_command(cmd: dict, state, node):
-        """@brief Dispatch a JSON command received from the browser.
-
-        Supports actions: set_mission, set_state, manual_control.
-
-        @param cmd Parsed JSON dict with an "action" key.
-        @param state Shared DashboardState instance.
-        @param node ROS node for publishing commands.
-        """
+    def handle_command(cmd: dict, writer, client_id, state, node):
         action = cmd.get("action")
         if action == "set_mission":
             mission = cmd.get("mission", "manual")
             if mission in MISSIONS:
                 state.update("mission", mission)
                 node.publish_mission(mission)
+                # Release control token when switching away from remote_control
+                if mission != "remote_control" and controller["holder"] is writer:
+                    controller["holder"] = None
+                    controller["id"] = None
         elif action == "set_state":
             new_state = cmd.get("state", "idle")
             if new_state in ("idle", "running", "ebs"):
                 state.update("state", new_state)
-                # Map dashboard states to state machine commands
                 cmd_map = {"idle": "stop", "running": "start", "ebs": "ebs"}
                 if hasattr(node, "publish_state_cmd"):
                     node.publish_state_cmd(cmd_map[new_state])
+        elif action == "take_control":
+            old_id = controller["id"]
+            controller["holder"] = writer
+            controller["id"] = client_id
+            if old_id and old_id != client_id:
+                node.get_logger().info(f"Control taken by {client_id} (was {old_id})")
+            else:
+                node.get_logger().info(f"Control acquired by {client_id}")
+        elif action == "release_control":
+            if controller["holder"] is writer:
+                controller["holder"] = None
+                controller["id"] = None
+                node.get_logger().info(f"Control released by {client_id}")
         elif action == "manual_control":
-            if hasattr(node, "publish_manual_control"):
-                node.publish_manual_control(
-                    steer=float(cmd.get("steering", 0.0)),
-                    steer_type=cmd.get("steer_type", "angle"),
-                    throttle=float(cmd.get("throttle", 0.0)),
-                    brake=float(cmd.get("brake", 0.0)),
-                )
+            # Auto-acquire control on first manual_control if nobody has it
+            if controller["holder"] is None:
+                controller["holder"] = writer
+                controller["id"] = client_id
+                node.get_logger().info(f"Control auto-acquired by {client_id}")
+            # Only the controller can send manual commands
+            if controller["holder"] is writer:
+                if hasattr(node, "publish_manual_control"):
+                    node.publish_manual_control(
+                        steer=float(cmd.get("steering", 0.0)),
+                        steer_type=cmd.get("steer_type", "angle"),
+                        throttle=float(cmd.get("throttle", 0.0)),
+                        brake=float(cmd.get("brake", 0.0)),
+                    )
 
     def ws_send(writer: asyncio.StreamWriter, data: bytes, opcode=0x1):
-        """@brief Send a WebSocket frame to a single client.
-
-        @param writer Target client's stream writer.
-        @param data Payload bytes to send.
-        @param opcode WebSocket opcode (0x1=text, 0x2=binary, 0xA=pong).
-        """
-        nonlocal clients
         frame = bytearray()
         frame.append(0x80 | opcode)
         if len(data) < 126:
@@ -195,37 +204,45 @@ async def run_websocket_server(
         try:
             writer.write(bytes(frame))
         except Exception:
-            clients.discard(writer)
+            clients.pop(writer, None)
 
     async def broadcast_loop():
-        """@brief Periodically broadcast telemetry JSON (10 Hz) and HUD JPEG (~3.3 Hz) to all clients."""
-        nonlocal clients
         frame_counter = 0
         while True:
             await asyncio.sleep(0.1)  # 10 Hz
             if not clients:
                 continue
-            # Telemetry JSON (every tick = 10 Hz)
-            snapshot = json.dumps(state.snapshot()).encode()
+
+            # Build snapshot with controller info
+            snap = state.snapshot()
+            snap["controller"] = controller["id"]
+
+            snapshot_bytes = json.dumps(snap).encode()
             dead = set()
             for w in list(clients):
                 try:
-                    ws_send(w, snapshot)
-                    await w.drain()
+                    ws_send(w, snapshot_bytes)
+                    # Non-blocking drain with timeout to prevent slow clients from stalling
+                    await asyncio.wait_for(w.drain(), timeout=0.5)
                 except Exception:
                     dead.add(w)
-            clients -= dead
-            # HUD JPEG binary (every 3rd tick ≈ 3.3 Hz to save bandwidth)
+            for w in dead:
+                clients.pop(w, None)
+                if controller["holder"] is w:
+                    controller["holder"] = None
+                    controller["id"] = None
+
+            # HUD JPEG binary (every 3rd tick ≈ 3.3 Hz)
             frame_counter += 1
             if frame_counter % 3 == 0 and hasattr(node, "get_hud_jpeg"):
                 jpeg = node.get_hud_jpeg()
                 if jpeg:
                     for w in list(clients):
                         try:
-                            ws_send(w, jpeg, opcode=0x2)  # binary frame
-                            await w.drain()
+                            ws_send(w, jpeg, opcode=0x2)
+                            await asyncio.wait_for(w.drain(), timeout=0.5)
                         except Exception:
-                            clients.discard(w)
+                            clients.pop(w, None)
 
     import socket
 
@@ -236,7 +253,6 @@ async def run_websocket_server(
         reuse_address=True,
         start_serving=False,
     )
-    # SO_REUSEADDR is set by reuse_address, but ensure SO_REUSEPORT too
     for s in server.sockets:
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     await server.start_serving()
