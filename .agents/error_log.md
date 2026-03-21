@@ -1,3 +1,4 @@
+<!-- consult selectively — grep, never read in full -->
 # Error Log
 
 Tracks mistakes made during development and the prevention mechanisms added. Every recurring or painful error should be documented here.
@@ -219,3 +220,18 @@ echo "0" | sudo -S bash -c "echo 0 > /sys/bus/usb/devices/2-3.2/authorized && sl
 - Created `/etc/X11/xorg.conf.d/10-virtual-display.conf` with `Option "ConnectedMonitor" "DFP-0"` to force the driver to create a framebuffer on DisplayPort regardless of EDID detection
 - Also set `Option "AllowEmptyInitialConfiguration" "true"` and `Virtual 1920 1080`
 - Documented in kart_docs orin-setup.md
+
+## 2026-03-21 - Stale ROS processes halved YOLO FPS (18 Hz → 32+ Hz)
+**What happened:** After multiple restarts of the autonomous launch, `killall` didn't kill all child processes. Six stale instances of yolo_detector, steering_hud, cone_marker_viz_3d etc. accumulated, consuming GPU and CPU. YOLO ran at ~18 Hz instead of 32+ Hz. The issue was that `killall python3` sometimes fails to catch ROS launch children because `nohup` detaches them.
+**Root cause:** Using `nohup ros2 launch ... &` via SSH creates detached process trees. `killall` by name misses orphaned children because the parent (ros2 launch) dies but children survive.
+**Prevention added:**
+- Rule: **Before launching ROS, always kill by PID list, not by name.** Use: `sudo kill -9 $(ps aux | grep -E "ros2|yolo|cone_|steering|cmd_vel|state_machine|dashboard|KB_Coms|component_container|robot_state" | grep -v grep | awk '{print $2}') 2>/dev/null`
+- Rule: **After killing, verify zero processes remain** before relaunching: `ps aux | grep -E "ros2|yolo" | grep -v grep | wc -l` must be `0`.
+- Rule: **Always clean shared memory** after killing: `rm -rf /dev/shm/fastrtps_*`
+- Updated AGENTS.md with proper cleanup procedure.
+
+## 2026-03-21 - YOLO TensorRT exported as FP32 instead of FP16 (34 Hz → 75 Hz)
+**What happened:** YOLO engine was exported without `half=True`, producing an FP32 engine. Inference ran at ~34 Hz instead of ~75 Hz. The Orin's Ampere GPU has dedicated FP16 tensor cores that double throughput.
+**Prevention added:**
+- Rule: **Always export TensorRT engines with `half=True`** for FP16. Command: `m.export(format='engine', imgsz=320, half=True)`. Never omit `half=True`.
+- Updated kart_docs orin-setup.md with warning.
