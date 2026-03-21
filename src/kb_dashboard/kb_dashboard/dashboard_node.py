@@ -161,10 +161,11 @@ class DashboardNode(Node):
         """@brief Callback for ESP32 steering frames."""
         self._flush_pending()
         p = list(msg.payload)
-        angle_rad, raw_encoder = decode_steering_raw(p)
+        angle_rad, raw_encoder, pid_pwm = decode_steering_raw(p)
         self.state.update("esp32_steering_rad", angle_rad)
         if raw_encoder:
             self.state.update("esp32_steering_raw", raw_encoder)
+        self.state.update("esp32_steering_pwm", pid_pwm)
 
     def _on_esp_speed(self, msg: Frame):
         """@brief Callback for ESP32 speed frames. Decodes speed in m/s."""

@@ -49,18 +49,19 @@ def decode_steering(payload) -> float:
 
 
 def decode_steering_raw(payload) -> tuple:
-    """@brief Decode steering payload to (angle_rad, raw_encoder).
+    """@brief Decode steering payload to (angle_rad, raw_encoder, pid_pwm).
 
-    Payload: [angle_rad x 1000, raw_encoder].
+    Payload: [angle_rad x 1000, raw_encoder, pid_out x 1000].
 
     @param payload List of int32 values from the Frame.
-    @return Tuple of (angle in radians, raw AS5600 encoder value).
+    @return Tuple of (angle in radians, raw AS5600 encoder value, PID output -1.0 to 1.0).
     """
     if len(payload) < 1:
-        return 0.0, 0
+        return 0.0, 0, 0.0
     angle_rad = payload[0] / 1000.0
     raw_encoder = payload[1] if len(payload) >= 2 else 0
-    return angle_rad, raw_encoder
+    pid_pwm = payload[2] / 1000.0 if len(payload) >= 3 else 0.0
+    return angle_rad, raw_encoder, pid_pwm
 
 
 def decode_speed(payload) -> float:

@@ -476,6 +476,10 @@ body { font-family:'Inter',-apple-system,BlinkMacSystemFont,'SF Pro',system-ui,s
     <div class="ped-row"><div class="ped-item"><div class="ped-lbl">Throttle <span id="vThr">0%</span></div><div class="ped-track"><div class="ped-fill thr" id="thrFill" style="width:0%"></div></div></div>
     <div class="ped-item"><div class="ped-lbl">Brake <span id="vBrk">0%</span></div><div class="ped-track"><div class="ped-fill brk" id="brkFill" style="width:0%"></div></div></div></div>
   </div>
+  <div class="card"><div class="card-t">Actuations</div><div class="trg-grid">
+    <div class="trg-item"><div class="trg-lbl">Steering PWM</div><div class="trg-val" id="aPwm">0%</div></div>
+    <div class="trg-item"><div class="trg-lbl">Throttle DAC</div><div class="trg-val" id="aThr">0%</div></div>
+    <div class="trg-item"><div class="trg-lbl">Brake DAC</div><div class="trg-val" id="aBrk">0%</div></div></div></div>
   <div class="card"><div class="card-t">Targets</div><div class="trg-grid">
     <div class="trg-item"><div class="trg-lbl">Steering</div><div class="trg-val" id="cSteer">0.0°</div></div>
     <div class="trg-item"><div class="trg-lbl">Throttle</div><div class="trg-val" id="cThr">0%</div></div>
@@ -503,6 +507,10 @@ body { font-family:'Inter',-apple-system,BlinkMacSystemFont,'SF Pro',system-ui,s
     $('vALon').textContent = lonG.toFixed(2)+' g';
     $('vATotal').textContent = Math.sqrt(latG*latG+lonG*lonG).toFixed(2)+' g';
     updatePedals(d); updateTargets(d); updatePills(d); updateMissions(d);
+    // Actuations
+    $('aPwm').textContent = (Math.abs(d.esp32_steering_pwm || 0) * 100).toFixed(0) + '%';
+    $('aThr').textContent = ((d.esp32_throttle || 0) * 100).toFixed(0) + '%';
+    $('aBrk').textContent = ((d.esp32_braking || 0) * 100).toFixed(0) + '%';
   }
 };
 

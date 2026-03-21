@@ -9,7 +9,7 @@
             pub_frame_rate: 100.0      # Match grab rate
             pub_resolution: 'NATIVE'   # No downscaling at VGA
         depth:
-            depth_mode: 'NONE'         # Disable depth to free GPU for YOLO
+            depth_mode: 'PERFORMANCE'  # Fastest depth mode
             point_cloud_freq: 0.0      # Disable point cloud publishing
         pos_tracking:
             pos_tracking_enabled: false # Disable positional tracking
