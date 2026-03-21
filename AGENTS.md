@@ -26,7 +26,7 @@
 ## Environments
 
 ### Jetson Orin (Real Hardware)
-- **Connection:** `ssh orin` (WiFi 10.7.20.142) or AnyDesk
+- **Connection:** `ssh orin-local` (WiFi 10.7.20.142) or `ssh orin-remote` (Cloudflare Tunnel) or AnyDesk
 - **Workspace:** `~/kart_brain`
 - **Camera:** ZED 2 stereo (USB)
 - **sudo password:** `0`
@@ -53,7 +53,8 @@ A change is NOT done until it's **validated on the target machine**:
 
 ## Critical Rules
 - **Environment is in `.bashrc`** — ROS, workspace, and `IGN_GAZEBO_RESOURCE_PATH` are all sourced in `.bashrc` on every machine. **Never tell the user to source or export these manually.**
-- **After creating/modifying files under `src/`, scp them to the VM and rebuild via SSH — don't just tell the user.** Use: `scp <files> utm:~/kart_brain/...` then `ssh utm "source /opt/ros/humble/setup.bash && cd ~/kart_brain && colcon build --packages-select <pkg>"`. Note: `.bashrc` is NOT sourced in non-interactive SSH — always source ROS explicitly.
+- **Always use `--symlink-install`** when building. This symlinks Python scripts and launch files so edits in `src/` take effect immediately without rebuilding. Only C++ changes need a rebuild.
+- **After creating/modifying files under `src/`, scp them to the VM and rebuild via SSH — don't just tell the user.** Use: `scp <files> utm:~/kart_brain/...` then `ssh utm "source /opt/ros/humble/setup.bash && cd ~/kart_brain && colcon build --symlink-install --packages-select <pkg>"`. Note: `.bashrc` is NOT sourced in non-interactive SSH — always source ROS explicitly.
 - **Gazebo Fortress uses `ign` CLI**, not `gz`. Message types are `ignition.msgs.*`, not `gz.msgs.*`.
 - **No `<cone>` geometry** in SDF — use `<cylinder>` instead (Fortress limitation).
 - **Odom is relative to spawn** — always account for the kart's initial world position.
@@ -63,11 +64,11 @@ A change is NOT done until it's **validated on the target machine**:
 
 ## Build & Run
 ```bash
-# Build everything
-cd ~/kart_brain && colcon build
+# Build everything (always use --symlink-install so Python/launch edits take effect without rebuilding)
+cd ~/kart_brain && colcon build --symlink-install
 
 # Build single package
-colcon build --packages-select kart_perception
+colcon build --symlink-install --packages-select kart_perception
 
 # Live perception on Orin
 ~/kart_brain/run_live.sh
@@ -121,7 +122,7 @@ When the user says "work on tasks" (or similar), launch subagents to execute tas
 2. `git diff --cached` — review changes
 3. Build and verify before committing
 4. If a mistake occurred, document it in `.agents/error_log.md`
-5. If recurring, create a postmortem in `.agents/postmortems/`
+5. If recurring, create a detailed write-up in `.agents/errors/`
 
 ## Documentation
 The official documentation for the kart project lives in a separate repo:
