@@ -170,8 +170,15 @@ function initJoystick() {
   });
 
   jsManager.on('move', (evt, data) => {
-    const steer = -data.vector.x; // negate: nipplejs left=negative, our convention positive=left
-    const drive = data.vector.y;
+    // Circle-to-square: normalize each axis by the dominant one, scale by distance from center
+    // At 45° full: vx=vy=0.71, m=0.71, len=1 → both axes = (0.71/0.71)*1 = 1.0
+    // At pure fwd: vx=0, vy=1, m=1, len=1 → steer=0, drive=1.0
+    // At half fwd: vx=0, vy=0.5, m=0.5, len=0.5 → steer=0, drive=0.5
+    const vx = data.vector.x, vy = data.vector.y;
+    const len = Math.sqrt(vx * vx + vy * vy);
+    const m = Math.max(Math.abs(vx), Math.abs(vy));
+    const steer = m > 0.01 ? -(vx / m) * len : 0;  // negate: our positive=left
+    const drive = m > 0.01 ? (vy / m) * len : 0;
     $('jsSteerVal').textContent = steer.toFixed(2);
     $('jsThrottleVal').textContent = drive.toFixed(2);
     jsLastCmd = {
