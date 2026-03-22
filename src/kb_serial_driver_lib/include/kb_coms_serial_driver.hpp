@@ -195,6 +195,12 @@ private:
     // Timeout handling
     std::chrono::steady_clock::time_point frame_start_;
 
+    /** Last time a valid frame was received (for watchdog reconnect) */
+    std::atomic<std::chrono::steady_clock::time_point> last_rx_ok_time_{std::chrono::steady_clock::now()};
+
+    /** Watchdog timeout — force reconnect if no valid frames for this long */
+    static constexpr std::chrono::seconds WATCHDOG_TIMEOUT{5};
+
     /**
      * @brief Supervisor thread loop.
      *
