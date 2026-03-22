@@ -171,19 +171,6 @@ void SerialDriver::supervisor_loop()
             }
         }
 
-        // Watchdog: if port is open but no valid frames for WATCHDOG_TIMEOUT, force reconnect
-        if (fd_ >= 0) {
-            auto elapsed = std::chrono::steady_clock::now() - last_rx_ok_time_.load();
-            if (elapsed > WATCHDOG_TIMEOUT) {
-                std::cerr << "Serial: watchdog timeout — no valid frames for "
-                          << std::chrono::duration_cast<std::chrono::seconds>(elapsed).count()
-                          << "s, reconnecting" << std::endl;
-                close_port();
-                if (rx_thread_.joinable()) rx_thread_.join();
-                if (tx_thread_.joinable()) tx_thread_.join();
-            }
-        }
-
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }
 }
