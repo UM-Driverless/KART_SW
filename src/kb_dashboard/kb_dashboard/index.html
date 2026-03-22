@@ -154,11 +154,14 @@ let currentMission = 'manual'; // Track mission state locally to show/hide widge
 
 // Touch joystick (nipplejs)
 let jsManager = null;
+let jsLastCmd = null;   // last joystick command, resent periodically
+let jsResendTimer = null;
 
 function initJoystick() {
   const zone = $('joystickZone');
   if (!zone || typeof nipplejs === 'undefined') return;
   if (jsManager) jsManager.destroy();
+  if (jsResendTimer) { clearInterval(jsResendTimer); jsResendTimer = null; }
 
   jsManager = nipplejs.create({
     zone: zone, mode: 'static',
@@ -171,16 +174,23 @@ function initJoystick() {
     const drive = data.vector.y;
     $('jsSteerVal').textContent = steer.toFixed(2);
     $('jsThrottleVal').textContent = drive.toFixed(2);
-    wsSend({
+    jsLastCmd = {
       action: 'manual_control',
       steering: steer,
       steer_type: manualSteerType,
       throttle: drive > 0 ? drive : 0,
       brake: drive < 0 ? Math.abs(drive) : 0
-    });
+    };
+    wsSend(jsLastCmd);
+    // Start resending while held (keeps server timeout from zeroing)
+    if (!jsResendTimer) {
+      jsResendTimer = setInterval(() => { if (jsLastCmd) wsSend(jsLastCmd); }, 200);
+    }
   });
 
   jsManager.on('end', () => {
+    jsLastCmd = null;
+    if (jsResendTimer) { clearInterval(jsResendTimer); jsResendTimer = null; }
     $('jsSteerVal').textContent = '0.00';
     $('jsThrottleVal').textContent = '0.00';
     wsSend({ action: 'manual_control', steering: 0, steer_type: manualSteerType, throttle: 0, brake: 0 });
