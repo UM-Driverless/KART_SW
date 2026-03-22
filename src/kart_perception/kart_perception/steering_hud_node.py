@@ -211,6 +211,11 @@ class SteeringHudNode(Node):
         img = self.bridge.imgmsg_to_cv2(img_msg, desired_encoding="bgr8")
         h, w = img.shape[:2]
 
+        # Draw YOLO detection area outline (full frame = detection region)
+        cv2.rectangle(img, (0, 0), (w - 1, h - 1), (0, 255, 255), 2)
+        cv2.putText(img, f"YOLO area: {w}x{h}", (8, h - 40),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 255, 255), 1, cv2.LINE_AA)
+
         # Draw 2D bounding boxes from YOLO detections
         if self.latest_2d is not None:
             for det in self.latest_2d.detections:
