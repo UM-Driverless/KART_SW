@@ -393,7 +393,7 @@ class SteeringHudNode(Node):
         speed = cmd.linear.x
         lines = [
             f"Steer: {steer_deg:+.1f} deg",
-            f"Speed: {speed:.1f} m/s",
+            f"Tgt Spd: {speed:.1f} m/s",
             f"YOLO: {self._yolo_fps:.1f} Hz",
         ]
         y0 = 25

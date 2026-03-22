@@ -119,6 +119,11 @@ When the user says "work on tasks" (or similar), launch subagents to execute tas
 6. **Independent tasks can run in parallel** — launch multiple subagents simultaneously. Tasks that touch the same files must run sequentially.
 7. **Never skip steps** — always update `tasks.md` status before and after work.
 
+## Git Workflow
+- **`dev` is the working branch.** Push all changes to `dev` first, deploy and test on hardware.
+- **Merge to `main` only after confirming changes work.** Use `gh pr merge` to merge PRs when main is protected.
+- For repos with branch protection (like kart_medulla), create PRs with `gh pr create` and merge with `gh pr merge`.
+
 ## Commit Protocol
 1. `git status` — check what will be committed
 2. `git diff --cached` — review changes
