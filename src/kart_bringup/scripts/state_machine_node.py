@@ -84,14 +84,14 @@ class StateMachineNode(Node):
         self.get_logger().info(f"Mission: {old} → {self._mission}")
         self._publish_mission_frame()
 
+        # Switching away from autonomous → reset to AS_OFF
+        if self._mission not in AUTONOMOUS_MISSIONS and self._state != AS_OFF:
+            self._set_state(AS_OFF)
         # Auto-transition: selecting autonomous mission → AS_READY
-        if self._mission in AUTONOMOUS_MISSIONS and self._state == AS_OFF:
+        elif self._mission in AUTONOMOUS_MISSIONS and self._state in (AS_OFF, AS_DRIVING, AS_FINISHED):
             self._set_state(AS_READY)
             # Force PID steering mode for autonomous missions
             self._publish_steer_mode(0)
-        # Selecting manual/remote_control while in AS_READY → back to AS_OFF
-        elif self._mission not in AUTONOMOUS_MISSIONS and self._state == AS_READY:
-            self._set_state(AS_OFF)
 
     def _on_state_cmd(self, msg: String):
         """@brief Callback for state commands (start, stop, ebs, finish, reset).
