@@ -14,7 +14,7 @@ source install/setup.bash
 echo "Cleaning up previous instances..."
 killall -q rqt_image_view component_container_isolated robot_state_publisher KB_Coms_micro 2>/dev/null
 pkill -f "yolo_detector|steering_hud|cone_depth_localizer|cone_follower_node|image_source|cmd_vel_bridge|dashboard" 2>/dev/null
-fuser -k 8080/tcp 2>/dev/null
+fuser -k 9090/tcp 2>/dev/null
 sleep 1
 
 # Software USB reset for ZED (avoids CAMERA NOT DETECTED after reboot)
@@ -56,9 +56,9 @@ ros2 run kart_bringup cmd_vel_bridge_node.py --ros-args \
 ros2 run kb_coms_micro KB_Coms_micro --ros-args \
   -r __node:=kb_coms_micro &
 
-# Dashboard (web UI on port 8080)
+# Dashboard (web UI on port 9090)
 ros2 run kb_dashboard dashboard --ros-args \
-  -r __node:=kb_dashboard -p port:=8080 &
+  -r __node:=kb_dashboard -p port:=9090 &
 
 # Steering HUD overlay
 ros2 run kart_perception steering_hud --ros-args \

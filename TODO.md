@@ -6,7 +6,7 @@
 
 ## MEDIUM PRIORITY (Optimization & Infrastructure)
 
-- [x] **Expose dashboard via Cloudflare Tunnel** (Ruben) -- `kart.rubenayla.xyz → http://localhost:8080` done. TODO: add Cloudflare Access (free) for auth.
+- [x] **Expose dashboard via Cloudflare Tunnel** (Ruben) -- `kart.rubenayla.xyz → http://localhost:9090` done. TODO: add Cloudflare Access (free) for auth.
 - [ ] **Benchmark YOLOv10n vs v11n on Orin with TensorRT** -- export both, compare ms/frame. v10 removes NMS which may help.
 - [ ] Create reproducible Orin setup script/guide
 
