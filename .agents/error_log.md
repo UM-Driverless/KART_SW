@@ -241,3 +241,11 @@ echo "0" | sudo -S bash -c "echo 0 > /sys/bus/usb/devices/2-3.2/authorized && sl
 **Root cause:** `--symlink-install` means the file in `install/` is a symlink to `src/`, so the **on-disk** code is always current. But a **running Python process** loads the module into memory at startup and never re-reads the file. Only a process restart loads the new code.
 **Prevention added:**
 - Rule: **After changing a Python script or launch file, always restart the affected nodes.** `--symlink-install` saves you from `colcon build`, not from restarting. C++ nodes need both a rebuild AND a restart.
+
+## 2026-03-22 - Stale memory claimed ESP32 outputLimit=0.10 when it was actually 0.40
+**What happened:** Agent memory (MEMORY.md) said "PWM limit=0.10 (10%)" for the ESP32 steering actuator. When user reported PWM mode was too strong and asked to lower by 5%, the agent set the Orin-side scaling to 0.05 (5%) based on the stale memory value. The actual ESP32 firmware had `outputLimit = 0.40` (40%) — 4x higher than memory claimed. The user caught it when the "10%" didn't match their experience.
+**Root cause:** Memory was written months ago and never re-verified against the actual firmware on the Orin. The ESP32 outputLimit was changed directly on the Orin without updating memory or docs.
+**Prevention added:**
+- Rule: **Never trust memory for hardware configuration values (PID gains, PWM limits, baud rates).** Always check the actual firmware/config on the target machine before making changes based on remembered values.
+- Rule: **When the user reports behavior that contradicts your information, check the source of truth (actual code/firmware) immediately.** Don't defend or cite memory — verify first.
+- Updated MEMORY.md ESP32 section with correct values.
