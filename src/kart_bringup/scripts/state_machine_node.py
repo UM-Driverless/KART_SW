@@ -31,7 +31,7 @@ STATE_NAMES = {
 }
 
 # Missions that count as "autonomous"
-AUTONOMOUS_MISSIONS = {"acceleration", "skidpad", "autocross", "trackdrive", "ebs_test", "inspection", "throttle_test"}
+AUTONOMOUS_MISSIONS = {"autonomous", "acceleration", "skidpad", "autocross", "trackdrive", "ebs_test", "inspection", "throttle_test"}
 
 
 class StateMachineNode(Node):
@@ -61,6 +61,7 @@ class StateMachineNode(Node):
         self._state_pub = self.create_publisher(String, "/kart/state", 10)
         self._machine_state_pub = self.create_publisher(Frame, "/orin/machine_state", 10)
         self._mission_pub = self.create_publisher(Frame, "/orin/mission", 10)
+        self._steer_mode_pub = self.create_publisher(Frame, "/orin/steer_mode", 10)
 
         # 100 Hz mux timer
         self.create_timer(0.01, self._mux_tick)
@@ -86,6 +87,8 @@ class StateMachineNode(Node):
         # Auto-transition: selecting autonomous mission → AS_READY
         if self._mission in AUTONOMOUS_MISSIONS and self._state == AS_OFF:
             self._set_state(AS_READY)
+            # Force PID steering mode for autonomous missions
+            self._publish_steer_mode(0)
         # Selecting manual/remote_control while in AS_READY → back to AS_OFF
         elif self._mission not in AUTONOMOUS_MISSIONS and self._state == AS_READY:
             self._set_state(AS_OFF)
@@ -164,6 +167,14 @@ class StateMachineNode(Node):
         frame.type = Frame.ORIN_MACHINE_STATE
         frame.payload = [self._state]
         self._machine_state_pub.publish(frame)
+
+    def _publish_steer_mode(self, mode: int):
+        """@brief Publish steering mode to cmd_vel_bridge. 0=PID, 1=direct PWM."""
+        frame = Frame()
+        frame.type = 0x29  # ORIN_STEER_MODE
+        frame.payload = [mode]
+        self._steer_mode_pub.publish(frame)
+        self.get_logger().info(f"Steer mode forced: {'PID' if mode == 0 else 'PWM'}")
 
     def _publish_mission_frame(self):
         """@brief Publish current mission ID as a Frame to /orin/mission for the ESP32."""

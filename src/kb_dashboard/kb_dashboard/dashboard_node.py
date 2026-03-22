@@ -125,7 +125,7 @@ class DashboardNode(Node):
         # Steering mode publisher (Frame to ESP32 via kb_coms_micro)
         self.steer_mode_pub = self.create_publisher(Frame, "/orin/steer_mode", 10)
         self._steer_mode = 0  # 0=PID, 1=direct PWM
-        self.declare_parameter("pwm_limit", 0.10)
+        self.declare_parameter("pwm_limit", 0.05)
         self._pwm_limit = float(self.get_parameter("pwm_limit").value)
         # Pending commands set from asyncio thread, published by ROS timer
         self._pending_manual_cmd = None

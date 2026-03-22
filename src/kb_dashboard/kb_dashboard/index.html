@@ -465,7 +465,7 @@ body { font-family:'Inter',-apple-system,BlinkMacSystemFont,'SF Pro',system-ui,s
   render() { return `<div class="container">
   <div class="sbar"><div class="spill" id="pillState">IDLE</div><div class="spill" id="pillMission">MANUAL</div><div class="spill" id="pillHb">HB --</div></div>
   <div class="card"><div class="card-t">Mission</div>
-    <div class="mis-grid" id="misGrid"><button class="mis-btn sel" data-m="manual">Manual</button><button class="mis-btn" data-m="remote_control">Remote</button><button class="mis-btn" data-m="acceleration">Accel</button><button class="mis-btn" data-m="skidpad">Skidpad</button><button class="mis-btn" data-m="autocross">Autocross</button><button class="mis-btn" data-m="trackdrive">Trackdrive</button><button class="mis-btn" data-m="inspection">Inspect</button></div>
+    <div class="mis-grid" id="misGrid"><button class="mis-btn sel" data-m="manual">Manual</button><button class="mis-btn" data-m="remote_control">Remote</button><button class="mis-btn" data-m="autonomous">Auto</button><button class="mis-btn" data-m="acceleration">Accel</button><button class="mis-btn" data-m="skidpad">Skidpad</button><button class="mis-btn" data-m="autocross">Autocross</button><button class="mis-btn" data-m="trackdrive">Trackdrive</button><button class="mis-btn" data-m="inspection">Inspect</button></div>
     <div class="ctrl-row"><button class="ctrl-btn go" onclick="wsSend({action:'set_state',state:'running'})">Start</button><button class="ctrl-btn stop" onclick="wsSend({action:'set_state',state:'idle'})">Stop</button><button class="ctrl-btn ebs" onclick="wsSend({action:'set_state',state:'ebs'})">EBS</button></div>
   </div>
   <div class="card"><div class="card-t">Kart State</div>
@@ -1114,7 +1114,7 @@ body { font-family:'Inter',sans-serif; background:#0a0a0a; color:#f5f5f5; }
   </div>
   <div class="t-sec-label">Mission</div>
   <div class="t-mis-grid" id="misGrid">
-    <button class="t-mis-btn sel" data-m="manual">Manual</button><button class="t-mis-btn" data-m="remote_control">Remote</button><button class="t-mis-btn" data-m="acceleration">Accel</button>
+    <button class="t-mis-btn sel" data-m="manual">Manual</button><button class="t-mis-btn" data-m="remote_control">Remote</button><button class="t-mis-btn" data-m="autonomous">Auto</button><button class="t-mis-btn" data-m="acceleration">Accel</button>
     <button class="t-mis-btn" data-m="skidpad">Skidpad</button><button class="t-mis-btn" data-m="autocross">Autocross</button><button class="t-mis-btn" data-m="trackdrive">Trackdrive</button><button class="t-mis-btn" data-m="inspection">Inspect</button>
   </div>
   <div class="t-ctrl-row">

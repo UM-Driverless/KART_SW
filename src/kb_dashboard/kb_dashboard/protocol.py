@@ -27,6 +27,7 @@ ORIN_STEER_MODE = 0x29
 MISSIONS = {
     "manual": 0,
     "remote_control": 7,
+    "autonomous": 8,
     "acceleration": 1,
     "skidpad": 2,
     "autocross": 3,
