@@ -12,7 +12,7 @@ import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Twist
 from kb_interfaces.msg import Frame
-from kb_dashboard.protocol import encode_steering, encode_throttle, encode_braking
+from kb_dashboard.protocol import encode_steering, encode_throttle, encode_braking, ORIN_STEER_MODE
 
 
 class CmdVelBridgeNode(Node):
@@ -43,18 +43,25 @@ class CmdVelBridgeNode(Node):
         self.steering_pub = self.create_publisher(Frame, "/orin/steering", 10)
 
         self.sub = self.create_subscription(Twist, in_topic, self._on_cmd, 10)
+        self.create_subscription(Frame, "/orin/steer_mode", self._on_steer_mode, 10)
 
         self._throttle_effort = 0.0
         self._brake_effort = 0.0
         self._steer_rad = 0.0
+        self._steer_mode = 0  # 0=PID, 1=direct PWM
 
         self.timer = self.create_timer(1.0 / rate, self._send_frames)
         self.get_logger().info(f"CmdVelBridge: {in_topic} @ {rate} Hz")
 
+    def _on_steer_mode(self, msg: Frame):
+        """@brief Callback for steer mode changes. Updates local mode flag."""
+        if msg.payload:
+            self._steer_mode = int(msg.payload[0])
+
     def _on_cmd(self, msg: Twist):
         """@brief Callback for incoming Twist commands. Splits into throttle/brake and clamps steering.
 
-        @param msg Twist with linear.x as speed (m/s) and angular.z as steering (rad).
+        @param msg Twist with linear.x as speed (m/s) and angular.z as steering (rad or PWM).
         """
         speed = msg.linear.x
         steer = msg.angular.z
@@ -67,8 +74,12 @@ class CmdVelBridgeNode(Node):
             self._throttle_effort = 0.0
             self._brake_effort = min(1.0, -speed / self.max_speed)
 
-        # Steering: clamp to max_steer
-        self._steer_rad = max(-self.max_steer, min(self.max_steer, steer))
+        if self._steer_mode == 1:
+            # Direct PWM: clamp to [-1, 1]
+            self._steer_rad = max(-1.0, min(1.0, steer))
+        else:
+            # PID angle: clamp to max_steer
+            self._steer_rad = max(-self.max_steer, min(self.max_steer, steer))
 
     def _send_frames(self):
         """@brief Timer callback: publish current throttle, brake, and steering as Frame messages."""

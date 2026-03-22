@@ -173,6 +173,10 @@ async def run_websocket_server(
                 controller["holder"] = None
                 controller["id"] = None
                 node.get_logger().info(f"Control released by {client_id}")
+        elif action == "set_steer_mode":
+            mode = cmd.get("mode", "pid")  # "pid" or "pwm"
+            if hasattr(node, "publish_steer_mode"):
+                node.publish_steer_mode(1 if mode == "pwm" else 0)
         elif action == "manual_control":
             # Auto-acquire control on first manual_control if nobody has it
             if controller["holder"] is None:

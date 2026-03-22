@@ -26,6 +26,7 @@ from geometry_msgs.msg import Twist
 
 from kb_dashboard.protocol import (
     DashboardState,
+    ORIN_STEER_MODE,
     decode_steering,
     decode_steering_raw,
     decode_speed,
@@ -33,6 +34,7 @@ from kb_dashboard.protocol import (
     decode_braking,
     decode_throttle,
     decode_health,
+    encode_steer_mode,
 )
 from kb_dashboard.server import run_websocket_server
 
@@ -120,6 +122,9 @@ class DashboardNode(Node):
 
         # Publisher for manual remote control (Twist for now)
         self.manual_cmd_pub = self.create_publisher(Twist, "/kart/cmd_vel_manual", 10)
+        # Steering mode publisher (Frame to ESP32 via kb_coms_micro)
+        self.steer_mode_pub = self.create_publisher(Frame, "/orin/steer_mode", 10)
+        self._steer_mode = 0  # 0=PID, 1=direct PWM
         # Pending commands set from asyncio thread, published by ROS timer
         self._pending_manual_cmd = None
         self._manual_cmd_time = 0.0  # monotonic timestamp of last WS manual_control
@@ -127,6 +132,8 @@ class DashboardNode(Node):
         self._pending_mission_count = 0
         self._pending_state_cmd = None
         self._pending_state_cmd_count = 0
+        self._pending_steer_mode = None
+        self._pending_steer_mode_count = 0
         self.create_timer(0.01, self._publish_pending)  # 100 Hz
 
         # One-shot self-test after 2 seconds
@@ -278,6 +285,23 @@ class DashboardNode(Node):
         if self._pending_state_cmd is not None and self._pending_state_cmd_count > 0:
             self.state_cmd_pub.publish(self._pending_state_cmd)
             self._pending_state_cmd_count -= 1
+        if self._pending_steer_mode is not None and self._pending_steer_mode_count > 0:
+            self.steer_mode_pub.publish(self._pending_steer_mode)
+            self._pending_steer_mode_count -= 1
+
+    def publish_steer_mode(self, mode: int):
+        """@brief Publish steering mode change to ESP32.
+
+        @param mode 0=PID, 1=direct PWM.
+        """
+        self._steer_mode = mode
+        self.state.update("steer_mode", "pwm" if mode else "pid")
+        frame = Frame()
+        frame.type = ORIN_STEER_MODE
+        frame.payload = encode_steer_mode(mode)
+        self._pending_steer_mode = frame
+        self._pending_steer_mode_count = 100  # publish for 1s to ensure delivery
+        self.get_logger().info(f"Steer mode: {'PWM' if mode else 'PID'}")
 
     def publish_manual_control(
         self, steer: float, steer_type: str, throttle: float, brake: float
@@ -297,8 +321,12 @@ class DashboardNode(Node):
 
         cmd = Twist()
         cmd.linear.x = (throttle - brake) * NOMINAL_MAX_SPEED
-        # steer already positive=left (negated in JS)
-        cmd.angular.z = steer * NOMINAL_MAX_STEER
+        if self._steer_mode == 1:
+            # Direct PWM mode: send raw [-1, 1] value (no angle scaling)
+            cmd.angular.z = steer
+        else:
+            # PID mode: scale to radians
+            cmd.angular.z = steer * NOMINAL_MAX_STEER
         self._pending_manual_cmd = cmd
         self._manual_cmd_time = time.monotonic()
 

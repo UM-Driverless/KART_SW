@@ -178,7 +178,7 @@ function initJoystick() {
     wsSend({
       action: 'manual_control',
       steering: steer,
-      steer_type: 'angle',
+      steer_type: manualSteerType,
       throttle: drive > 0 ? drive : 0,
       brake: drive < 0 ? Math.abs(drive) : 0
     });
@@ -187,7 +187,7 @@ function initJoystick() {
   jsManager.on('end', () => {
     $('jsSteerVal').textContent = '0.00';
     $('jsThrottleVal').textContent = '0.00';
-    wsSend({ action: 'manual_control', steering: 0, steer_type: 'angle', throttle: 0, brake: 0 });
+    wsSend({ action: 'manual_control', steering: 0, steer_type: manualSteerType, throttle: 0, brake: 0 });
   });
 }
 
@@ -288,6 +288,7 @@ window.addEventListener('DOMContentLoaded', () => {
     $('btnSteerAngle').style.color = '#fff';
     $('btnSteerPWM').style.background = 'transparent';
     $('btnSteerPWM').style.color = '#888';
+    wsSend({ action: 'set_steer_mode', mode: 'pid' });
   };
   $('btnSteerPWM').onclick = () => {
     manualSteerType = 'pwm';
@@ -295,6 +296,7 @@ window.addEventListener('DOMContentLoaded', () => {
     $('btnSteerPWM').style.color = '#fff';
     $('btnSteerAngle').style.background = 'transparent';
     $('btnSteerAngle').style.color = '#888';
+    wsSend({ action: 'set_steer_mode', mode: 'pwm' });
   };
   startGamepadLoop();
 });
@@ -933,6 +935,7 @@ body::after {
       manualSteerType = m;
       $('togAngle').classList.toggle('on', m==='angle');
       $('togPwm').classList.toggle('on', m==='pwm');
+      wsSend({ action: 'set_steer_mode', mode: m === 'pwm' ? 'pwm' : 'pid' });
     };
     window.switchKittTab = (btn, id) => {
       document.querySelectorAll('.k-tab').forEach(t=>t.classList.remove('on'));
@@ -951,11 +954,11 @@ body::after {
       const sv = (dx/JR).toFixed(2), tv = (-dy/JR).toFixed(2);
       $('steerVal').textContent = sv; $('throttleVal').textContent = tv;
       litSegs('steerSegs', parseFloat(sv), true);
-      wsSend({ action: 'manual_control', steering: parseFloat(sv), steer_type: 'angle', throttle: tv > 0 ? tv : 0, brake: tv < 0 ? Math.abs(tv) : 0 });
+      wsSend({ action: 'manual_control', steering: parseFloat(sv), steer_type: manualSteerType, throttle: tv > 0 ? tv : 0, brake: tv < 0 ? Math.abs(tv) : 0 });
     };
     const jDown = e => { jDrag = true; const r = joyPad.getBoundingClientRect(); jOx = r.left + r.width/2; jOy = r.top + r.height/2; joyPad.setPointerCapture(e.pointerId); e.preventDefault(); };
     const jMove = e => { if (!jDrag) return; let dx = e.clientX-jOx, dy = e.clientY-jOy; const d = Math.sqrt(dx*dx+dy*dy); if(d>JR){dx=dx/d*JR;dy=dy/d*JR;} applyJoy(dx, dy); };
-    const jUp = () => { jDrag = false; const sp = setInterval(() => { jDx*=0.72; jDy*=0.72; if(Math.abs(jDx)<0.4&&Math.abs(jDy)<0.4){jDx=0;jDy=0;clearInterval(sp); wsSend({ action: 'manual_control', steering: 0, steer_type: 'angle', throttle: 0, brake: 0 }); } applyJoy(jDx, jDy); }, 16); };
+    const jUp = () => { jDrag = false; const sp = setInterval(() => { jDx*=0.72; jDy*=0.72; if(Math.abs(jDx)<0.4&&Math.abs(jDy)<0.4){jDx=0;jDy=0;clearInterval(sp); wsSend({ action: 'manual_control', steering: 0, steer_type: manualSteerType, throttle: 0, brake: 0 }); } applyJoy(jDx, jDy); }, 16); };
     joyPad.addEventListener('pointerdown', jDown);
     joyPad.addEventListener('pointermove', jMove);
     joyPad.addEventListener('pointerup', jUp);

@@ -22,6 +22,7 @@ ESP_HEALTH_STATUS = 0x0B
 ORIN_TARG_THROTTLE = 0x20
 ORIN_TARG_BRAKING = 0x21
 ORIN_TARG_STEERING = 0x22
+ORIN_STEER_MODE = 0x29
 
 MISSIONS = {
     "manual": 0,
@@ -179,6 +180,15 @@ def encode_braking(effort: float) -> list:
     return [int(effort * 255)]
 
 
+def encode_steer_mode(mode: int) -> list:
+    """@brief Encode steering mode as [mode].
+
+    @param mode 0=PID (angle target), 1=direct PWM.
+    @return List with one int32 element.
+    """
+    return [int(mode)]
+
+
 # ── Encoders (ESP32 → Orin, used by sim node) ───────────────────────
 
 def encode_act_steering(angle_rad: float, raw_encoder: int = 0) -> list:
@@ -286,6 +296,7 @@ class DashboardState:
             "yolo_fps": 0.0,
             "mission": "manual",
             "state": "idle",  # idle | running | ebs
+            "steer_mode": "pid",  # "pid" or "pwm"
         }
         self._heartbeat_time = 0.0
 
