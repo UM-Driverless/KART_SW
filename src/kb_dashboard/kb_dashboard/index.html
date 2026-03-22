@@ -167,12 +167,8 @@ function initJoystick() {
   });
 
   jsManager.on('move', (evt, data) => {
-    const rawSteer = -data.vector.x; // negate: nipplejs left=negative, our convention positive=left
-    const rawDrive = data.vector.y;
-    // Axis-dominant: if mostly horizontal → steer only, if mostly vertical → throttle only
-    const horizontal = Math.abs(rawSteer) >= Math.abs(rawDrive);
-    const steer = horizontal ? rawSteer : 0;
-    const drive = horizontal ? 0 : rawDrive;
+    const steer = -data.vector.x; // negate: nipplejs left=negative, our convention positive=left
+    const drive = data.vector.y;
     $('jsSteerVal').textContent = steer.toFixed(2);
     $('jsThrottleVal').textContent = drive.toFixed(2);
     wsSend({

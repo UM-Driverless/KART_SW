@@ -50,6 +50,7 @@ A change is NOT done until it's **validated on the target machine**:
 - ESP32 firmware? → **Flash it.**
 - Python/launch change? → **Restart the affected nodes.**
 - Never claim something is fixed if you only pushed — deploy and verify.
+- **Don't push to main until the change is confirmed working on hardware.** Push to a feature branch, deploy, test, then merge.
 
 ## Critical Rules
 - **Environment is in `.bashrc`** — ROS, workspace, and `IGN_GAZEBO_RESOURCE_PATH` are all sourced in `.bashrc` on every machine. **Never tell the user to source or export these manually.**
