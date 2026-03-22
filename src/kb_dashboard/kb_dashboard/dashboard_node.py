@@ -319,7 +319,7 @@ class DashboardNode(Node):
         @param brake Brake input, 0.0 to 1.0.
         """
         NOMINAL_MAX_SPEED = 5.0
-        NOMINAL_MAX_STEER = 0.5  # radians
+        NOMINAL_MAX_STEER = 0.785  # radians (~45 deg)
 
         cmd = Twist()
         cmd.linear.x = (throttle - brake) * NOMINAL_MAX_SPEED
