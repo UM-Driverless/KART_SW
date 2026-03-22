@@ -58,6 +58,7 @@ class YoloDetectorNode(Node):
         self.declare_parameter("iou_threshold", 0.45)
         self.declare_parameter("imgsz", 320)
         self.declare_parameter("device", "")
+        self.declare_parameter("crop_top", 0.35)  # fraction of image height to crop from top (sky)
 
         self.image_topic = str(self.get_parameter("image_topic").value)
         self.detections_topic = str(self.get_parameter("detections_topic").value)
@@ -66,6 +67,7 @@ class YoloDetectorNode(Node):
         self.iou_threshold = float(self.get_parameter("iou_threshold").value)
         self.imgsz = int(self.get_parameter("imgsz").value)
         self.device = str(self.get_parameter("device").value)
+        self.crop_top = float(self.get_parameter("crop_top").value)
 
         self.bridge = CvBridge()
         self.publisher = self.create_publisher(Detection2DArray, self.detections_topic, 10)
@@ -186,9 +188,13 @@ class YoloDetectorNode(Node):
             header = msg.header
             frame_bgr = self.bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
 
+            # Crop top portion (sky) to focus YOLO resolution on the ground
+            crop_y = int(frame_bgr.shape[0] * self.crop_top)
+            cropped = frame_bgr[crop_y:] if crop_y > 0 else frame_bgr
+
             t0 = time.monotonic()
             results = self.model(
-                frame_bgr,
+                cropped,
                 imgsz=self.imgsz,
                 conf=self.conf_threshold,
                 iou=self.iou_threshold,
@@ -208,7 +214,7 @@ class YoloDetectorNode(Node):
 
                     bbox = BoundingBox2D()
                     bbox.center.position.x = (x1 + x2) / 2.0
-                    bbox.center.position.y = (y1 + y2) / 2.0
+                    bbox.center.position.y = (y1 + y2) / 2.0 + crop_y  # offset back to full frame
                     bbox.center.theta = 0.0
                     bbox.size_x = max(0.0, x2 - x1)
                     bbox.size_y = max(0.0, y2 - y1)
