@@ -70,8 +70,6 @@ body { min-height: 100vh; -webkit-tap-highlight-color: transparent; }
   <b>YOLO</b> YOLO inference rate (Hz). Green &gt;30, yellow 15-30, red &lt;15
 </div>
 
-<div id="app"></div>
-
 <!-- Touch Joystick Widget (Hidden unless mission is remote_control) -->
 <div id="manualWidgetJoystick" style="display:none;max-width:480px;margin:8px auto;padding:20px;background:#14141f;border:1px solid #2a2a3a;border-radius:12px;text-align:center;">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
@@ -79,7 +77,7 @@ body { min-height: 100vh; -webkit-tap-highlight-color: transparent; }
       <div id="controlStatus" style="font-size:10px;font-weight:600;padding:4px 10px;border-radius:6px;background:#1a1a2e;color:#888;">--</div>
     </div>
     <button id="takeControlBtn" onclick="wsSend({action:'take_control'})" style="display:none;width:100%;padding:8px;margin-bottom:12px;background:#e74c3c;color:#fff;border:none;border-radius:6px;font-weight:600;cursor:pointer;font-size:12px;">Take Control</button>
-    <div id="joystickZone" style="width:160px;height:160px;background:rgba(0,0,0,0.2);border-radius:50%;border:2px solid #2a2a3a;margin:0 auto;position:relative;touch-action:none;"></div>
+    <div id="joystickZone" style="width:220px;height:170px;background:rgba(0,0,0,0.2);border-radius:12px;border:2px solid #2a2a3a;margin:0 auto;position:relative;touch-action:none;"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:20px;font-family:monospace;">
         <div>
             <div style="font-size:9px;color:#6a6a7a;text-transform:uppercase;">Steering</div>
@@ -91,6 +89,8 @@ body { min-height: 100vh; -webkit-tap-highlight-color: transparent; }
         </div>
     </div>
 </div>
+
+<div id="app"></div>
 
 <!-- Gamepad Control Widget (Hidden unless mission is remote_control) -->
 <div id="manualWidget" style="display:none;max-width:480px;margin:8px auto;padding:12px;background:#14141f;border:1px solid #2a2a3a;border-radius:12px;color:#e0e0e8;font-family:'Inter',sans-serif;">
@@ -152,33 +152,53 @@ let currentSkin = localStorage.getItem('skin') || 'default';
 let manualSteerType = 'angle'; // 'angle' or 'pwm'
 let currentMission = 'manual'; // Track mission state locally to show/hide widget
 
-// Touch joystick (nipplejs)
-let jsManager = null;
-let jsLastCmd = null;   // last joystick command, resent periodically
+// Touch joystick (rectangular, no nipplejs)
+let jsLastCmd = null;
 let jsResendTimer = null;
+let jsActive = false;
 
 function initJoystick() {
   const zone = $('joystickZone');
-  if (!zone || typeof nipplejs === 'undefined') return;
-  if (jsManager) jsManager.destroy();
+  if (!zone) return;
   if (jsResendTimer) { clearInterval(jsResendTimer); jsResendTimer = null; }
 
-  jsManager = nipplejs.create({
-    zone: zone, mode: 'static',
-    position: { left: '50%', top: '50%' },
-    color: '#4a9eff', size: 130
-  });
+  // Create thumb indicator if not present
+  if (!zone.querySelector('.js-thumb')) {
+    const thumb = document.createElement('div');
+    thumb.className = 'js-thumb';
+    thumb.style.cssText = 'width:28px;height:28px;border-radius:50%;background:#4a9eff;border:2px solid #fff;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;opacity:0.7;transition:opacity 0.1s;';
+    zone.appendChild(thumb);
+    // Crosshair lines
+    const ch = document.createElement('div');
+    ch.style.cssText = 'position:absolute;top:50%;left:10px;right:10px;height:1px;background:rgba(255,255,255,0.1);pointer-events:none;';
+    zone.appendChild(ch);
+    const cv = document.createElement('div');
+    cv.style.cssText = 'position:absolute;left:50%;top:10px;bottom:10px;width:1px;background:rgba(255,255,255,0.1);pointer-events:none;';
+    zone.appendChild(cv);
+  }
 
-  jsManager.on('move', (evt, data) => {
-    // Circle-to-square: normalize each axis by the dominant one, scale by distance from center
-    // At 45° full: vx=vy=0.71, m=0.71, len=1 → both axes = (0.71/0.71)*1 = 1.0
-    // At pure fwd: vx=0, vy=1, m=1, len=1 → steer=0, drive=1.0
-    // At half fwd: vx=0, vy=0.5, m=0.5, len=0.5 → steer=0, drive=0.5
-    const vx = data.vector.x, vy = data.vector.y;
-    const len = Math.sqrt(vx * vx + vy * vy);
-    const m = Math.max(Math.abs(vx), Math.abs(vy));
-    const steer = m > 0.01 ? -(vx / m) * len : 0;  // negate: our positive=left
-    const drive = m > 0.01 ? (vy / m) * len : 0;
+  function getAxes(e, rect) {
+    const touch = e.touches ? e.touches[0] : e;
+    const x = (touch.clientX - rect.left) / rect.width * 2 - 1;   // -1 to 1
+    const y = -((touch.clientY - rect.top) / rect.height * 2 - 1); // -1 to 1, inverted (up=positive)
+    return { x: Math.max(-1, Math.min(1, x)), y: Math.max(-1, Math.min(1, y)) };
+  }
+
+  function updateThumb(zone, x, y) {
+    const thumb = zone.querySelector('.js-thumb');
+    if (thumb) {
+      thumb.style.left = ((x + 1) / 2 * 100) + '%';
+      thumb.style.top = ((-y + 1) / 2 * 100) + '%';
+      thumb.style.opacity = '1';
+    }
+  }
+
+  function resetThumb(zone) {
+    const thumb = zone.querySelector('.js-thumb');
+    if (thumb) { thumb.style.left = '50%'; thumb.style.top = '50%'; thumb.style.opacity = '0.7'; }
+  }
+
+  function sendAxes(steer, drive) {
     $('jsSteerVal').textContent = steer.toFixed(2);
     $('jsThrottleVal').textContent = drive.toFixed(2);
     jsLastCmd = {
@@ -189,19 +209,47 @@ function initJoystick() {
       brake: drive < 0 ? Math.abs(drive) : 0
     };
     wsSend(jsLastCmd);
-    // Start resending while held (keeps server timeout from zeroing)
+  }
+
+  function onStart(e) {
+    e.preventDefault();
+    jsActive = true;
+    const rect = zone.getBoundingClientRect();
+    const a = getAxes(e, rect);
+    updateThumb(zone, a.x, a.y);
+    sendAxes(-a.x, a.y);  // negate x: our positive=left
     if (!jsResendTimer) {
       jsResendTimer = setInterval(() => { if (jsLastCmd) wsSend(jsLastCmd); }, 200);
     }
-  });
+  }
 
-  jsManager.on('end', () => {
+  function onMove(e) {
+    if (!jsActive) return;
+    e.preventDefault();
+    const rect = zone.getBoundingClientRect();
+    const a = getAxes(e, rect);
+    updateThumb(zone, a.x, a.y);
+    sendAxes(-a.x, a.y);
+  }
+
+  function onEnd(e) {
+    if (!jsActive) return;
+    jsActive = false;
     jsLastCmd = null;
     if (jsResendTimer) { clearInterval(jsResendTimer); jsResendTimer = null; }
+    resetThumb(zone);
     $('jsSteerVal').textContent = '0.00';
     $('jsThrottleVal').textContent = '0.00';
     wsSend({ action: 'manual_control', steering: 0, steer_type: manualSteerType, throttle: 0, brake: 0 });
-  });
+  }
+
+  zone.addEventListener('touchstart', onStart, { passive: false });
+  zone.addEventListener('touchmove', onMove, { passive: false });
+  zone.addEventListener('touchend', onEnd);
+  zone.addEventListener('touchcancel', onEnd);
+  zone.addEventListener('mousedown', onStart);
+  window.addEventListener('mousemove', onMove);
+  window.addEventListener('mouseup', onEnd);
 }
 
 function updateJoystickWidget() {
@@ -622,20 +670,20 @@ body::after {
 /* JOYSTICK */
 .joy-wrap { display:flex; flex-direction:column; align-items:center; gap:14px; }
 .joy-outer {
-  width:170px; height:170px; border-radius:50%;
-  background:radial-gradient(circle at 38% 32%, #1c0400 0%, #080000 60%, #020000 100%);
+  width:220px; height:170px; border-radius:12px;
+  background:radial-gradient(ellipse at 38% 32%, #1c0400 0%, #080000 60%, #020000 100%);
   border:2px solid rgba(255,34,0,0.4);
   box-shadow:0 0 0 4px rgba(255,34,0,0.05), 0 0 30px rgba(255,34,0,0.1), inset 0 0 50px rgba(0,0,0,0.9);
   position:relative; cursor:crosshair; touch-action:none;
 }
-.joy-outer::before { content:''; position:absolute; inset:12px; border-radius:50%; border:1px solid rgba(255,34,0,0.12); }
-.joy-outer::after  { content:''; position:absolute; inset:34px;  border-radius:50%; border:1px dashed rgba(255,34,0,0.07); }
+.joy-outer::before { content:''; position:absolute; inset:12px; border-radius:8px; border:1px solid rgba(255,34,0,0.12); }
+.joy-outer::after  { content:''; position:absolute; inset:34px;  border-radius:6px; border:1px dashed rgba(255,34,0,0.07); }
 .joy-cross-h,.joy-cross-v { position:absolute; background:rgba(255,34,0,0.09); pointer-events:none; }
 .joy-cross-h { top:50%; left:8%; right:8%; height:1px; transform:translateY(-50%); }
 .joy-cross-v { left:50%; top:8%; bottom:8%; width:1px;  transform:translateX(-50%); }
 .joy-ticks {
-  position:absolute; inset:0; border-radius:50%;
-  background:repeating-conic-gradient(rgba(255,34,0,0.07) 0deg, rgba(255,34,0,0.07) 1deg, transparent 1deg, transparent 45deg);
+  position:absolute; inset:0; border-radius:12px;
+  background:none;
 }
 .joy-thumb {
   width:58px; height:58px; border-radius:50%;
