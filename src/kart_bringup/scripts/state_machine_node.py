@@ -103,7 +103,7 @@ class StateMachineNode(Node):
 
         if cmd == "start" and s == AS_READY:
             self._set_state(AS_DRIVING)
-        elif cmd == "stop" and s in (AS_READY, AS_DRIVING):
+        elif cmd == "stop" and s in (AS_READY, AS_DRIVING, AS_FINISHED, AS_EMERGENCY):
             self._set_state(AS_OFF)
         elif cmd == "ebs" and s != AS_OFF:
             self._set_state(AS_EMERGENCY)
