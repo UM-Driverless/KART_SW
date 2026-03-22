@@ -54,7 +54,7 @@ class YoloDetectorNode(Node):
         self.declare_parameter("image_topic", "/image_raw")
         self.declare_parameter("detections_topic", "/perception/cones_2d")
         self.declare_parameter("weights_path", "models/perception/yolo/ruben_yolov11n_2026_03_320.engine")
-        self.declare_parameter("conf_threshold", 0.25)
+        self.declare_parameter("conf_threshold", 0.10)
         self.declare_parameter("iou_threshold", 0.45)
         self.declare_parameter("imgsz", 320)
         self.declare_parameter("device", "")
