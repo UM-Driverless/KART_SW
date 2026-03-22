@@ -42,16 +42,18 @@ def generate_launch_description():
     )
     set_ld_path = SetEnvironmentVariable("LD_LIBRARY_PATH", ld_path)
 
-    # Kill stale GUI processes from previous runs to prevent accumulation on Orin
-    cleanup_gui = ExecuteProcess(
+    # Kill stale processes from previous runs to prevent accumulation on Orin
+    cleanup = ExecuteProcess(
         cmd=[
             "bash",
             "-c",
+            "pkill -9 -f 'yolo_detector|cone_follower|steering_hud|state_machine|cmd_vel_bridge|KB_Coms_micro|dashboard_node|cone_depth' 2>/dev/null; "
             "killall -q rviz2 rqt_image_view 2>/dev/null; "
-            "pkill -f 'rviz2|rqt_image_view' 2>/dev/null; "
+            "fuser -k 9090/tcp 2>/dev/null; "
+            "rm -rf /dev/shm/fastrtps_*; "
             "sleep 0.5; exit 0",
         ],
-        name="cleanup_stale_gui",
+        name="cleanup_stale",
         output="log",
     )
 
@@ -140,7 +142,7 @@ def generate_launch_description():
         package="kb_dashboard",
         executable="dashboard",
         name="kb_dashboard",
-        parameters=[{"port": 8080}],
+        parameters=[{"port": 9090}],
         output="screen",
     )
 
@@ -156,7 +158,7 @@ def generate_launch_description():
             steering_gain_arg,
             use_zed_od_arg,
             set_ld_path,
-            cleanup_gui,
+            cleanup,
             zed_camera_with_od,
             zed_camera_no_od,
             perception_zed_od,

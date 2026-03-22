@@ -1,3 +1,4 @@
+<!-- read in full — kept under 150 lines -->
 # Kart Brain Agent Documentation
 
 This directory contains persistent AI-focused documentation for the kart_brain workspace. It follows a two-layer system: **memory** (what agents read) and **enforcement** (what prevents bad work).
@@ -18,7 +19,7 @@ LLMs have no persistent memory between sessions. Every conversation starts fresh
 | `orin_environment.md` | Jetson Orin specifics: hardware, ZED camera, live pipeline, known issues |
 | `orin_flash_guide.md` | Step-by-step guide for flashing Orin to NVMe with JetPack 6.2.2 |
 | `error_log.md` | Running log of mistakes and prevention mechanisms |
-| `postmortems/` | Detailed failure analysis for significant errors |
+| `errors/` | Detailed failure analysis for significant errors |
 
 ### Layer 2: Enforcement
 
@@ -34,7 +35,7 @@ LLMs have no persistent memory between sessions. Every conversation starts fresh
 3b. **After commit: ALWAYS push immediately** — multiple machines (Mac, Orin) work on the same repos, so unpushed commits cause conflicts
 3c. **Use background tasks for long-running ops** — flashing (~30s), building, serial reads. Don't block the conversation waiting for them.
 4. **If something breaks:** Document in `error_log.md`, add prevention
-5. **If recurring:** Create postmortem in `postmortems/`
+5. **If recurring:** Create detailed write-up in `errors/`
 
 ## Environment-Specific Guides
 

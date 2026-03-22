@@ -3,7 +3,7 @@
 kb_dashboard — Phone dashboard for kart telemetry and mission control.
 
 Runs a WebSocket server alongside a ROS2 node. Any phone/browser on the
-same network can open http://<orin-ip>:8080 to see live sensor values
+same network can open http://<orin-ip>:9090 to see live sensor values
 and send commands (mission select, start/stop, EBS).
 """
 
@@ -54,7 +54,7 @@ class DashboardNode(Node):
         """
         super().__init__("kb_dashboard")
         self.state = state
-        self.declare_parameter("port", 8080)
+        self.declare_parameter("port", 9090)
         self.port = self.get_parameter("port").value
 
         qos_reliable = QoSProfile(depth=10, reliability=ReliabilityPolicy.RELIABLE)

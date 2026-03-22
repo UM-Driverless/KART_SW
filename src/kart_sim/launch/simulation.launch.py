@@ -8,7 +8,7 @@ Starts:
 5. Cone marker visualization
 6. CameraInfo fix node (when use_yolo=true)
 7. ESP32 simulator node (fake telemetry)
-8. Dashboard web UI (port 8080)
+8. Dashboard web UI (port 9090)
 
 Launch arguments:
     track:=oval      -> Oval track (default)
@@ -237,7 +237,7 @@ def _launch_setup(context):
         package="kb_dashboard",
         executable="dashboard",
         name="kb_dashboard",
-        parameters=[{"port": 8080}],
+        parameters=[{"port": 9090}],
         output="screen",
     )
 

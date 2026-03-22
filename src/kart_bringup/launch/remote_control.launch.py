@@ -33,7 +33,7 @@ def generate_launch_description():
         package="kb_dashboard",
         executable="dashboard",
         name="kb_dashboard",
-        parameters=[{"port": 8080}],
+        parameters=[{"port": 9090}],
         output="screen",
     )
 

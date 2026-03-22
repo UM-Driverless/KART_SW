@@ -1,3 +1,4 @@
+<!-- reference — read when relevant -->
 # Orin NVMe Flash & Setup Guide
 
 Complete guide for flashing the Jetson AGX Orin to boot from NVMe SSD with JetPack 6.2.2 (L4T R36.5).

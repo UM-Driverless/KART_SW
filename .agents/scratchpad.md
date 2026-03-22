@@ -1,3 +1,4 @@
+<!-- consult selectively — grep, never read in full -->
 # Scratchpad — Simulation & Track Work (2026-03-01)
 
 ## Context: Running Claude Code on the UTM VM

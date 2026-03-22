@@ -1,3 +1,4 @@
+<!-- consult selectively — grep, never read in full -->
 # Notes
 
 ## Autonomous Agent Orchestrator (idea — 2026-03-14)

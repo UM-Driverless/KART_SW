@@ -11,7 +11,7 @@ ingress:
   - hostname: orin.rubenayla.xyz
     service: ssh://localhost:22
   - hostname: kart.rubenayla.xyz
-    service: http://localhost:8080
+    service: http://localhost:9090
   - service: http_status:404'
 
 SSH_ONLY='tunnel: 6ac3f5b6-9140-47ad-82fb-55b1a6c4afa1

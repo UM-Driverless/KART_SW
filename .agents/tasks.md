@@ -1,3 +1,4 @@
+<!-- read in full — kept under 150 lines -->
 # Agent Task Board
 
 Actionable work items for AI agents. Derived from `TODO.md` (human roadmap).

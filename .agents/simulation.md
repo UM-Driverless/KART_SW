@@ -1,3 +1,4 @@
+<!-- reference — read when relevant -->
 # Gazebo Simulation Guide
 
 ## Overview
@@ -175,7 +176,7 @@ ign service -s /world/fs_track/control \
 
 Gazebo + ROS 2 launch files spawn ~10 processes (ign server, ign gui, parameter_bridge, perfect_perception, cone_follower, esp32_sim, dashboard, cone_marker_viz_3d, ackermann_to_vel, camera_info_fix). If any survive from a previous run:
 - **Duplicate nodes** subscribe/publish on the same topics → messages get split between instances, data goes missing (e.g. odom never reaches perception → `got_odom=False`)
-- **Port 8080 stays occupied** → dashboard crashes with `OSError: address already in use`
+- **Port 9090 stays occupied** → dashboard crashes with `OSError: address already in use`
 - **Stale Gazebo state** → kart inherits the old position (off-track) instead of respawning at (20,0)
 - **`cone_marker_viz_3d` is especially sticky** — it survives `killall python3` because the process name in `ps` is `/usr/bin/python3 /path/to/cone_marker_viz_3d`
 
@@ -193,7 +194,7 @@ ssh utm "pkill -9 -f esp32_sim"
 ssh utm "pkill -9 -f ackermann_to_vel"
 ssh utm "pkill -9 -f camera_info_fix"
 ssh utm "pkill -9 -f dashboard"
-ssh utm "fuser -k 8080/tcp 2>/dev/null"
+ssh utm "fuser -k 9090/tcp 2>/dev/null"
 ```
 
 Wait 2-3 seconds, then verify:
@@ -214,7 +215,7 @@ ssh utm 'DISPLAY=:0 nohup bash -c "source /opt/ros/humble/setup.bash && source ~
 
 ### Launch file
 
-`simulation.launch.py` in `kart_sim` — runs everything: Gazebo + bridge + perception + controller + esp32_sim + dashboard (port 8080).
+`simulation.launch.py` in `kart_sim` — runs everything: Gazebo + bridge + perception + controller + esp32_sim + dashboard (port 9090).
 
 ### Verifying it works
 
@@ -224,7 +225,7 @@ ssh utm 'grep "Published.*cones" /tmp/sim_gui.log | tail -3'
 # Should show "Published N cones  kart=(20.0,Y.Y)" with N > 0
 
 # Check dashboard is up
-curl -s http://192.168.64.3:8080/ | head -1
+curl -s http://192.168.64.3:9090/ | head -1
 # Should return HTML
 ```
 

@@ -1,3 +1,4 @@
+<!-- reference — read when relevant -->
 # Jetson Orin Environment
 
 ## Hardware
@@ -18,15 +19,17 @@
 
 ## Access
 ```bash
-ssh orin          # WiFi (10.7.20.142, DHCP — may change)
-ssh orin_wire     # Wired (10.0.255.177, ethernet must be connected)
+ssh orin-local    # LAN — direct WiFi IP (10.7.20.142). Only works on same network.
+ssh orin-remote   # WAN — Cloudflare Tunnel (orin.rubenayla.xyz). Works from anywhere.
+# There is NO "ssh orin" alias. Always use orin-local or orin-remote.
+# Try orin-local first (faster), fall back to orin-remote if unreachable.
 # AnyDesk for GUI (needs dummy HDMI plug)
 # sudo password: 0
 ```
 
 For non-interactive sudo:
 ```bash
-ssh orin 'echo "0" | sudo -S <command>'
+ssh orin-local 'echo "0" | sudo -S <command>'
 ```
 
 ## Software
@@ -138,7 +141,7 @@ rm models/perception/yolo/<model>.onnx
 5. **WiFi SSH dropouts**: WiFi power saving causes intermittent SSH disconnects. Fix applied: `iw dev wlP1p1s0 set power_save off`, persisted via NetworkManager dispatcher script at `/etc/NetworkManager/dispatcher.d/99-disable-wifi-powersave`. If SSH starts timing out, check with `iw dev wlP1p1s0 get power_save` and re-apply if needed. May also need physical access (AnyDesk/monitor) if WiFi is fully down.
 6. **libcudss.so.0 for PyTorch**: The NVIDIA pip packages install CUDA libs under `~/.local/lib/python3.10/site-packages/nvidia/cu12/lib/`. This path is registered in `/etc/ld.so.conf.d/nvidia-pip.conf` and ldconfig'd. If torch fails to import with `libcudss.so.0: cannot open shared object file`, re-run: `echo "0" | sudo -S bash -c "echo /home/orin/.local/lib/python3.10/site-packages/nvidia/cu12/lib > /etc/ld.so.conf.d/nvidia-pip.conf && ldconfig"`
 7. **Orin display is :1** — when launching GUI apps via SSH, set `export DISPLAY=:1` and `export XAUTHORITY=/run/user/1000/gdm/Xauthority`. The `run_live.sh` script already does this. `XAUTHORITY` is optional (X has `localuser:orin` access) but recommended.
-8. **Port 8080 (dashboard)**: If dashboard fails with "address already in use", kill the stale process: `fuser -k 8080/tcp`
+8. **Port 9090 (dashboard)**: If dashboard fails with "address already in use", kill the stale process: `fuser -k 9090/tcp`
 
 ## Launching the Autonomous Pipeline
 

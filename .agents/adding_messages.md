@@ -1,3 +1,4 @@
+<!-- reference — read when relevant -->
 # How to Add New Message Types (Orin ↔ ESP32)
 
 This guide describes how to add a new message type to the serial communication between the Orin (ROS2) and the ESP32 (kart_medulla firmware). Both sides must be updated to keep message tags in sync.
