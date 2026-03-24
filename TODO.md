@@ -2,6 +2,7 @@
 
 ## HIGH PRIORITY (Firmware & Core)
 
+- [x] **ESP32 comms watchdog** -- zero PWM output (steering + throttle) if no command received for 1s. Prevents holding last position when ROS nodes are killed. Also: manual mode disables power (zero PWM) on the ESP32 side.
 - [ ] **PID tuning** -- tune kp/ki/kd now that steering gears are fixed and outputLimit works
 
 ## MEDIUM PRIORITY (Optimization & Infrastructure)

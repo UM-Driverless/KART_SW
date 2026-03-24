@@ -114,21 +114,21 @@ def generate_launch_description():
             {
                 "controller_type": "geometric",
                 "steering_gain": steering_gain,
-                "max_speed": 2.5,
+                "max_speed": 2.625,
+                "speed_curve_factor": 0.0,
             }
         ],
         condition=IfCondition(perception),
     )
+
+    # --- Always launched ---
 
     steering_hud = Node(
         package="kart_perception",
         executable="steering_hud",
         name="steering_hud",
         output="screen",
-        condition=IfCondition(perception),
     )
-
-    # --- Always launched ---
 
     state_machine = Node(
         package="kart_bringup",
