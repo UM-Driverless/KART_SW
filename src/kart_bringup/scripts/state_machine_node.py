@@ -141,7 +141,7 @@ class StateMachineNode(Node):
         """@brief Timer callback (100 Hz): mux autonomous or manual cmd_vel based on mission and state."""
         out = Twist()
 
-        if self._mission == "remote_control":
+        if self._mission in ("manual", "remote_control"):
             out = self._last_manual_cmd
         elif self._mission == "throttle_test":
             # Fixed 10% throttle for hardware debugging — no perception needed
