@@ -39,7 +39,7 @@ source install/setup.bash
 
 | Launch file | Command | Description | Nodes |
 |---|---|---|---|
-| **autonomous.launch.py** | `ros2 launch kart_bringup autonomous.launch.py` | Full autonomous pipeline — camera, perception, control, comms, and dashboard | ZED camera, perception_3d (YOLO + depth localizer), steering_hud, cone_follower, cmd_vel_bridge, KB_Coms_micro, kb_dashboard |
+| **launch.py** | `ros2 launch kart_bringup launch.py` | Full pipeline — camera, perception, control, comms, and dashboard. Use `perception:=false` for remote-control only | ZED camera, perception_3d (YOLO + depth localizer), steering_hud, cone_follower, cmd_vel_bridge, KB_Coms_micro, kb_dashboard |
 | **teleop.launch.py** | `ros2 launch kart_bringup teleop.launch.py` | Manual driving with a joystick. Requires gamepad at `/dev/input/js0` | joy_node, joy_to_cmd_vel, cmd_vel_bridge, KB_Coms_micro |
 | **dashboard.launch.py** | `ros2 launch kart_bringup dashboard.launch.py` | Comms + web dashboard only — safe for firmware testing, sends no commands to the kart | KB_Coms_micro, kb_dashboard |
 | **gui.launch.py** | `ros2 launch kart_bringup gui.launch.py` | HUD viewer window on Orin display (launch separately from autonomous) | hud_viewer |
@@ -65,7 +65,7 @@ Arguments: `track:=oval|hairpin|autocross`, `use_yolo:=true|false`, `gui:=true|f
 | Launch file | Command | Description | Nodes |
 |---|---|---|---|
 | **perception_test.launch.py** | `ros2 launch kart_perception perception_test.launch.py source:=<path> weights:=<path>` | 2D YOLO on recorded images/video — no camera needed | image_source, yolo_detector, cone_marker_viz, static_tf |
-| **perception_3d.launch.py** | `ros2 launch kart_perception perception_3d.launch.py` | Live 3D perception — YOLO + depth localization. Used as sub-launch by autonomous.launch.py | yolo_detector, cone_depth_localizer, cone_marker_viz_3d |
+| **perception_3d.launch.py** | `ros2 launch kart_perception perception_3d.launch.py` | Live 3D perception — YOLO + depth localization. Used as sub-launch by launch.py | yolo_detector, cone_depth_localizer, cone_marker_viz_3d |
 
 ### Standalone
 

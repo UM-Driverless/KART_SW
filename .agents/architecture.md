@@ -30,7 +30,7 @@
 │   │
 │   ├── kart_bringup/               (ament_cmake) Hardware launch files
 │   │   ├── launch/
-│   │   │   ├── autonomous.launch.py      Full pipeline (perception→control→comms→dashboard)
+│   │   │   ├── launch.py                  Full pipeline (perception→control→comms→dashboard)
 │   │   │   ├── dashboard.launch.py        Dashboard + comms (no commands sent to kart)
 │   │   │   └── teleop.launch.py          Joystick teleop
 │   │   ├── scripts/

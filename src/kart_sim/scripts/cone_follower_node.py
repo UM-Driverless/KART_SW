@@ -57,11 +57,11 @@ class ConeFollowerNode(Node):
         # --- geometric params ---
         self.declare_parameter("steering_gain", 1.0)
         self.declare_parameter("max_steer", 0.785)
-        self.declare_parameter("max_speed", 2.0)
+        self.declare_parameter("max_speed", 2.625)
         self.declare_parameter("min_speed", 0.5)
         self.declare_parameter("lookahead_max", 15.0)
         self.declare_parameter("half_track_width", 1.5)
-        self.declare_parameter("speed_curve_factor", 1.0)
+        self.declare_parameter("speed_curve_factor", 0.0)
 
         det_topic = str(self.get_parameter("detections_topic").value)
         cmd_topic = str(self.get_parameter("cmd_vel_topic").value)

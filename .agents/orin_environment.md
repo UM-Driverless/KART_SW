@@ -27,6 +27,13 @@ ssh orin-remote   # WAN — Cloudflare Tunnel (orin.rubenayla.xyz). Works from a
 # sudo password: 0
 ```
 
+## WiFi Networks (priority order)
+| Priority | Connection Name | SSID | Password | Notes |
+|---|---|---|---|---|
+| 100 | Ruben's iPhone | Ruben\u2019s iPhone | 00000000 | Ruben's phone hotspot. SSID has curly apostrophe (U+2019) — use `nmcli dev wifi connect` or Python to pass correct UTF-8. |
+| 50 | iPhone de JBA | iPhone de JBA | — | Jorge's phone hotspot. |
+| 10 | Robots_urjc | Robots_urjc | — | Lab WiFi. |
+
 For non-interactive sudo:
 ```bash
 ssh orin-local 'echo "0" | sudo -S <command>'
@@ -148,7 +155,7 @@ rm models/perception/yolo/<model>.onnx
 ```bash
 # From Orin terminal (or SSH with DISPLAY=:1):
 cd ~/kart_brain && source install/setup.bash
-ros2 launch kart_bringup autonomous.launch.py
+ros2 launch kart_bringup launch.py
 
 # This starts: ZED camera → YOLO perception → cone_follower → cmd_vel_bridge → KB_Coms_micro → dashboard
 

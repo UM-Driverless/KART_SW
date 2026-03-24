@@ -1,4 +1,4 @@
-"""GUI visualization -- launch separately from autonomous.launch.py.
+"""GUI visualization -- launch separately from launch.py.
 
 Provides the HUD viewer and optionally rviz2 for 3D marker visualization.
 Kills stale rviz2/rqt_image_view processes before starting to prevent

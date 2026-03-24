@@ -4,7 +4,7 @@
 
 echo "Stopping autonomous pipeline..."
 
-# ROS2 nodes launched by autonomous.launch.py
+# ROS2 nodes launched by launch.py
 pkill -f 'yolo_detector|cone_follower|steering_hud|state_machine|cmd_vel_bridge|KB_Coms_micro|dashboard_node|cone_depth|cone_marker_viz' 2>/dev/null
 
 # ZED camera

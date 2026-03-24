@@ -160,7 +160,7 @@ echo "0" | sudo -S bash -c "echo 0 > /sys/bus/usb/devices/2-3.2/authorized && sl
 ```
 **Prevention added:**
 - Added the software USB reset to `run_autonomous.sh` (runs automatically before ZED launch)
-- Added to `autonomous.launch.py` documentation in `.agents/orin_environment.md`
+- Added to `launch.py` documentation in `.agents/orin_environment.md`
 - Rule: **The ZED is at USB path `2-3.2` (SuperSpeed 5 Gbps).** If it moves to a different port, find the new path with `lsusb -t`.
 - Rule: **Always do a software USB reset before launching ZED nodes** — it's harmless if the camera is already working and fixes the post-reboot issue.
 
@@ -249,3 +249,11 @@ echo "0" | sudo -S bash -c "echo 0 > /sys/bus/usb/devices/2-3.2/authorized && sl
 - Rule: **Never trust memory for hardware configuration values (PID gains, PWM limits, baud rates).** Always check the actual firmware/config on the target machine before making changes based on remembered values.
 - Rule: **When the user reports behavior that contradicts your information, check the source of truth (actual code/firmware) immediately.** Don't defend or cite memory — verify first.
 - Updated MEMORY.md ESP32 section with correct values.
+
+## 2026-03-24 - Wasted 10+ minutes failing to connect Orin to iPhone hotspot
+**What happened:** User asked to add their iPhone hotspot as top-priority WiFi on the Orin. I created the connection with `nmcli con add` using a straight apostrophe (`'`) in the SSID "Ruben's iPhone", but iOS uses a curly apostrophe (`'` U+2019). NM silently failed to match the SSID — wpa_supplicant associated with Robots_urjc instead. I retried the same failing approach ~6 times, trying WPA3, BSSID locks, disabling autoconnect on other networks — all missing the root cause. Eventually fixed by using `nmcli dev wifi connect` via Python to pass correct UTF-8 bytes.
+**Root cause:** (1) Didn't check raw bytes of the SSID early — the mismatch was visible in the first scan. (2) Kept retrying the same approach instead of investigating why wpa_supplicant connected to the wrong network. (3) Didn't read the NM log carefully — it showed "Connected to wireless network Robots_urjc" on every attempt, which should have been the first clue.
+**Prevention added:**
+- Rule: **When creating WiFi connections for SSIDs with special characters, compare raw bytes** (`od -c`) between the scanned SSID and the stored profile SSID immediately.
+- Rule: **If the same command fails twice, stop and investigate** — read logs, check assumptions. Don't retry 6 times.
+- Rule: **Use `nmcli dev wifi connect <SSID>` instead of `nmcli con add`** when possible — it takes the SSID directly from the scan results, avoiding encoding issues.
