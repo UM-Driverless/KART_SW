@@ -22,7 +22,7 @@ def generate_launch_description():
     )
     weights_arg = DeclareLaunchArgument(
         "weights",
-        default_value="models/perception/yolo/ruben_yolov11n_2026_03_640.engine",
+        default_value="models/perception/yolo/ruben_yolov11n_2026_03_320_orin_trt10.engine",
         description="Path to YOLO weights (.pt or .engine).",
     )
 
@@ -37,7 +37,7 @@ def generate_launch_description():
                 "detections_topic": "/perception/cones_2d",
                 "debug_image_topic": "/perception/yolo/annotated",
                 "weights_path": LaunchConfiguration("weights"),
-                "imgsz": 640,
+                "imgsz": 320,
             }
         ],
     )
