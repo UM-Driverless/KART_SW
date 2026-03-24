@@ -60,7 +60,7 @@ class StateMachineNode(Node):
         self._muxed_pub = self.create_publisher(Twist, "/kart/cmd_vel_muxed", 10)
         self._state_pub = self.create_publisher(String, "/kart/state", 10)
         self._machine_state_pub = self.create_publisher(Frame, "/orin/machine_state", 10)
-        self._mission_pub = self.create_publisher(Frame, "/orin/mission", 10)
+        self._mission_pub = self.create_publisher(Frame, "/orin/mision", 10)
         self._steer_mode_pub = self.create_publisher(Frame, "/orin/steer_mode", 10)
 
         # 100 Hz mux timer
