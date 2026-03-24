@@ -114,6 +114,7 @@ def generate_launch_description():
             {
                 "controller_type": "geometric",
                 "steering_gain": steering_gain,
+                "max_speed": 2.25,
             }
         ],
         condition=IfCondition(perception),
