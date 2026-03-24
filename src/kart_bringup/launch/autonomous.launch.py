@@ -19,9 +19,8 @@ from ament_index_python.packages import get_package_share_directory
 def generate_launch_description():
     steering_gain_arg = DeclareLaunchArgument(
         "steering_gain",
-        default_value="0.5",
-        description="Gain applied to lateral cone angle before sending to steering. "
-        "Lower values reduce oversteering. Default 0.5 (was 1.0).",
+        default_value="2.0",
+        description="Gain applied to lateral cone angle before sending to steering.",
     )
     steering_gain = LaunchConfiguration("steering_gain")
 
