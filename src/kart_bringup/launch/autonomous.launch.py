@@ -1,10 +1,11 @@
 import glob
 import os
 
+import subprocess
+
 from launch import LaunchDescription
 from launch.actions import (
     DeclareLaunchArgument,
-    ExecuteProcess,
     IncludeLaunchDescription,
     SetEnvironmentVariable,
 )
@@ -42,19 +43,15 @@ def generate_launch_description():
     )
     set_ld_path = SetEnvironmentVariable("LD_LIBRARY_PATH", ld_path)
 
-    # Kill stale processes from previous runs to prevent accumulation on Orin
-    cleanup = ExecuteProcess(
-        cmd=[
-            "bash",
-            "-c",
-            "pkill -9 -f 'yolo_detector|cone_follower|steering_hud|state_machine|cmd_vel_bridge|KB_Coms_micro|dashboard_node|cone_depth' 2>/dev/null; "
-            "killall -q rviz2 rqt_image_view 2>/dev/null; "
-            "fuser -k 9090/tcp 2>/dev/null; "
-            "rm -rf /dev/shm/fastrtps_*; "
-            "sleep 0.5; exit 0",
-        ],
-        name="cleanup_stale",
-        output="log",
+    # Kill stale processes from previous runs BEFORE any nodes start
+    subprocess.run(
+        "pkill -9 -f 'yolo_detector|cone_follower|steering_hud|state_machine|"
+        "cmd_vel_bridge|KB_Coms_micro|dashboard_node|cone_depth' 2>/dev/null; "
+        "killall -q rviz2 rqt_image_view 2>/dev/null; "
+        "fuser -k 9090/tcp 2>/dev/null; "
+        "rm -rf /dev/shm/fastrtps_*; "
+        "sleep 0.5",
+        shell=True,
     )
 
     bringup_share = get_package_share_directory("kart_bringup")
@@ -158,7 +155,6 @@ def generate_launch_description():
             steering_gain_arg,
             use_zed_od_arg,
             set_ld_path,
-            cleanup,
             zed_camera_with_od,
             zed_camera_no_od,
             perception_zed_od,
