@@ -26,7 +26,7 @@ def generate_launch_description():
 
     steering_gain_arg = DeclareLaunchArgument(
         "steering_gain",
-        default_value="2.0",
+        default_value="4.0",
         description="Gain applied to lateral cone angle before sending to steering.",
     )
     steering_gain = LaunchConfiguration("steering_gain")
