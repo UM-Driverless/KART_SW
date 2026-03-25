@@ -3,8 +3,25 @@
 ROS workspace for the UM-Driverless kart software stack.
 
 ## Jetson Orin Access
-- **SSH**: `ssh orin` (WiFi, DHCP — IP may change)
-- **AnyDesk ID**: `721489674`
+
+Add these to your `~/.ssh/config`:
+
+```ssh-config
+# Jetson Orin via Cloudflare Tunnel — works from anywhere
+Host orin-remote
+    HostName orin.rubenayla.xyz
+    User orin
+    ProxyCommand cloudflared access ssh --hostname %h
+
+# Jetson Orin on LAN — faster, use when on same network
+Host orin-local
+    HostName 10.7.20.142
+    User orin
+```
+
+Requires [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/) for the tunnel and an SSH key authorized on the Orin.
+
+- **AnyDesk ID**: `721489674` (GUI access)
 
 ## Hardware
 
