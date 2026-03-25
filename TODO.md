@@ -1,12 +1,13 @@
 # TODO
 
 ## HIGH PRIORITY (Firmware & Core)
-
-- [x] **ESP32 comms watchdog** -- zero PWM output (steering + throttle) if no command received for 1s. Prevents holding last position when ROS nodes are killed. Also: manual mode disables power (zero PWM) on the ESP32 side.
-- [ ] **PID tuning** -- tune kp/ki/kd now that steering gears are fixed and outputLimit works
+- 
 
 ## MEDIUM PRIORITY (Optimization & Infrastructure)
 
+- [ ] **PID tuning** -- tune kp/ki/kd now that steering gears are fixed and outputLimit works
+    - Maybe some small integral component would be good
+- [ ] Any way to determine our speed without the 
 - [x] **Expose dashboard via Cloudflare Tunnel** (Ruben) -- `kart.rubenayla.xyz → http://localhost:9090` done. TODO: add Cloudflare Access (free) for auth.
 - [ ] **Benchmark YOLOv10n vs v11n on Orin with TensorRT** -- export both, compare ms/frame. v10 removes NMS which may help.
 - [ ] Create reproducible Orin setup script/guide
