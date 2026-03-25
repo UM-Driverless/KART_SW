@@ -1,7 +1,7 @@
 <!-- reference — read when relevant -->
 # Errors
 
-This directory holds detailed analysis of significant failures. Use when an error is complex enough that the one-line entry in `error_log.md` isn't sufficient.
+This directory holds detailed analysis of significant failures. Use when an error is complex enough that the one-line entry in `error-log.md` isn't sufficient.
 
 ## Format
 

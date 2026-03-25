@@ -11,17 +11,17 @@
 - **`tasks.md`** — Current work items and status.
 
 **Consult selectively** (search/grep — these grow over time):
-- **`error_log.md`** — Append-only log of past mistakes and preventions.
+- **`error-log.md`** — Append-only log of past mistakes and preventions.
 - **`notes.md`** — Design decisions and rationale.
 - **`scratchpad.md`** — Permanent scratchpad. Random notes, no cleanup needed.
 
 **Reference** (read when relevant):
 - **`architecture.md`** — System architecture, packages, topic map, message types.
-- **`orin_environment.md`** — Jetson Orin hardware setup and versions.
-- **`vm_environment.md`** — UTM VM setup.
+- **`orin-environment.md`** — Jetson Orin hardware setup and versions.
+- **`vm-environment.md`** — UTM VM setup.
 - **`simulation.md`** — Gazebo Fortress simulation details.
-- **`adding_messages.md`** — How to add new ROS message types.
-- **`orin_flash_guide.md`** — Flashing the Jetson Orin.
+- **`adding-messages.md`** — How to add new ROS message types.
+- **`orin-flash-guide.md`** — Flashing the Jetson Orin.
 
 ## Environments
 
@@ -30,14 +30,14 @@
 - **Workspace:** `~/kart_brain`
 - **Camera:** ZED 2 stereo (USB)
 - **sudo password:** `0`
-- **Full details:** `.agents/orin_environment.md`
+- **Full details:** `.agents/orin-environment.md`
 
 ### UTM VM (Simulation)
 - **Connection:** `ssh utm` (192.168.64.3, static IP)
 - **Workspace:** `~/kart_brain/`
 - **Simulator:** Gazebo Fortress (headless, CPU rendering)
 - **sudo password:** `0`
-- **Full details:** `.agents/vm_environment.md`
+- **Full details:** `.agents/vm-environment.md`
 
 ## Working Style
 - **Use subagents for parallel work.** When tasks are independent (e.g., reading multiple files, searching codebase, running builds while editing), use the Agent tool to delegate to subagents. This keeps the main context clean and speeds up work.
@@ -62,7 +62,7 @@ A change is NOT done until it's **validated on the target machine**:
 - **No hardware GPU on the VM** — CPU rendering via llvmpipe (OpenGL 4.5). Gazebo GUI works on `DISPLAY=:0` but headless EGL fails. Keep camera resolution at 640x360.
 - **Kill ROS properly before relaunching.** Never use `killall python3` — it misses orphaned children. Use: `sudo kill -9 $(ps aux | grep -E "ros2|yolo|cone_|steering|cmd_vel|state_machine|dashboard|KB_Coms|component_container|robot_state" | grep -v grep | awk '{print $2}') 2>/dev/null` then verify `0` processes remain, then `rm -rf /dev/shm/fastrtps_*`. Stale processes eat GPU and halve FPS.
 - **Clean up after yourself** — delete temporary files, screenshots, debug artifacts, and tool-generated directories before finishing. Don't leave untracked trash in the repo.
-- When something goes wrong, document it in `.agents/error_log.md`.
+- When something goes wrong, document it in `.agents/error-log.md`.
 
 ## Build & Run
 ```bash
@@ -98,8 +98,8 @@ Used everywhere — YOLO class names, Detection messages, visualization:
 
 ## Documentation Rules
 - **Document every decision.** When a version is chosen, a workaround is found, or an approach is selected over alternatives, write it down in the relevant `.agents/` file with the date and reasoning.
-- **Document every error.** When something breaks or doesn't work as expected, add it to `.agents/error_log.md` with what happened and the prevention rule.
-- **Document every version.** Software versions, SDK versions, wheel sources, compatibility notes — all go in `.agents/orin_environment.md` or the relevant environment file.
+- **Document every error.** When something breaks or doesn't work as expected, add it to `.agents/error-log.md` with what happened and the prevention rule.
+- **Document every version.** Software versions, SDK versions, wheel sources, compatibility notes — all go in `.agents/orin-environment.md` or the relevant environment file.
 - **Official docs live in kart_docs.** The `.agents/` directory is for AI agent workflow. Official project documentation goes to https://github.com/UM-Driverless/kart_docs.
 
 ## Task Management
@@ -128,7 +128,7 @@ When the user says "work on tasks" (or similar), launch subagents to execute tas
 1. `git status` — check what will be committed
 2. `git diff --cached` — review changes
 3. Build and verify before committing
-4. If a mistake occurred, document it in `.agents/error_log.md`
+4. If a mistake occurred, document it in `.agents/error-log.md`
 5. If recurring, create a detailed write-up in `.agents/errors/`
 
 ## Documentation

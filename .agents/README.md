@@ -15,10 +15,10 @@ LLMs have no persistent memory between sessions. Every conversation starts fresh
 |---|---|
 | `architecture.md` | Package structure, node graph, message types, topic map, ESP32 UART routing & protocol |
 | `simulation.md` | Gazebo setup, known issues, rendering quirks, how to test |
-| `vm_environment.md` | UTM VM specifics: SSH, sudo, installed packages, limitations |
-| `orin_environment.md` | Jetson Orin specifics: hardware, ZED camera, live pipeline, known issues |
-| `orin_flash_guide.md` | Step-by-step guide for flashing Orin to NVMe with JetPack 6.2.2 |
-| `error_log.md` | Running log of mistakes and prevention mechanisms |
+| `vm-environment.md` | UTM VM specifics: SSH, sudo, installed packages, limitations |
+| `orin-environment.md` | Jetson Orin specifics: hardware, ZED camera, live pipeline, known issues |
+| `orin-flash-guide.md` | Step-by-step guide for flashing Orin to NVMe with JetPack 6.2.2 |
+| `error-log.md` | Running log of mistakes and prevention mechanisms |
 | `errors/` | Detailed failure analysis for significant errors |
 
 ### Layer 2: Enforcement
@@ -34,17 +34,17 @@ LLMs have no persistent memory between sessions. Every conversation starts fresh
 3. **Before commit:** Build, verify, `git status` + `git diff`
 3b. **After commit: ALWAYS push immediately** — multiple machines (Mac, Orin) work on the same repos, so unpushed commits cause conflicts
 3c. **Use background tasks for long-running ops** — flashing (~30s), building, serial reads. Don't block the conversation waiting for them.
-4. **If something breaks:** Document in `error_log.md`, add prevention
+4. **If something breaks:** Document in `error-log.md`, add prevention
 5. **If recurring:** Create detailed write-up in `errors/`
 
 ## Environment-Specific Guides
 
 | Environment | Doc | Connection |
 |---|---|---|
-| **Jetson Orin** (real hardware) | `orin_environment.md` | `ssh orin` (WiFi) or AnyDesk |
-| **Jetson Orin** (flash/reinstall) | `orin_flash_guide.md` | USB-C from y540 to Orin |
+| **Jetson Orin** (real hardware) | `orin-environment.md` | `ssh orin` (WiFi) or AnyDesk |
+| **Jetson Orin** (flash/reinstall) | `orin-flash-guide.md` | USB-C from y540 to Orin |
 | **y540 laptop** (flash host) | — | `ssh y540` (Robots_urjc WiFi, DHCP) |
-| **UTM VM** (simulation) | `vm_environment.md` | `ssh utm` (192.168.65.2) |
+| **UTM VM** (simulation) | `vm-environment.md` | `ssh utm` (192.168.65.2) |
 
 ## Conventions
 

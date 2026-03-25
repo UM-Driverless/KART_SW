@@ -98,7 +98,7 @@ Claude Code runs on the Mac. The Gazebo simulator runs on the UTM VM (Ubuntu 22.
 - [x] ~~Multi-track training support~~ (avg fitness across tracks)
 - [x] ~~Deploy noise-robust weights~~ (CMA-V2 noisy → neural_v2_weights.json)
 - [ ] **Validate in Gazebo** — launch with `track:=autocross` and confirm visually
-- [ ] **Document Claude Code on VM setup** (add to `vm_environment.md`)
+- [ ] **Document Claude Code on VM setup** (add to `vm-environment.md`)
 - [ ] Fix `visualize.py` GeometricController bug (low priority)
 - [ ] Explore recurrent (LSTM-like) controller for temporal context
 

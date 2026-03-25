@@ -62,7 +62,7 @@ Tracks mistakes made during development and the prevention mechanisms added. Eve
 **What happened:** `ssh utm "sudo apt install ..."` failed because sudo needs a TTY for password input. `-t` flag doesn't help from non-interactive contexts.
 **Prevention added:**
 - Use `ssh <host> 'echo "0" | sudo -S <command>'` for all sudo operations
-- Documented in `.agents/vm_environment.md` and `.agents/orin_environment.md`
+- Documented in `.agents/vm-environment.md` and `.agents/orin-environment.md`
 
 ## 2026-02-22 - Wrong IP for y540 laptop, wasted time on SSH setup
 **What happened:** The laptop (y540) was given IP 10.7.20.136 but DHCP had assigned 10.7.20.138. Spent multiple attempts trying to connect to the wrong IP. Also referenced IPs without labeling which machine they belonged to, causing confusion.
@@ -160,7 +160,7 @@ echo "0" | sudo -S bash -c "echo 0 > /sys/bus/usb/devices/2-3.2/authorized && sl
 ```
 **Prevention added:**
 - Added the software USB reset to `run_autonomous.sh` (runs automatically before ZED launch)
-- Added to `launch.py` documentation in `.agents/orin_environment.md`
+- Added to `launch.py` documentation in `.agents/orin-environment.md`
 - Rule: **The ZED is at USB path `2-3.2` (SuperSpeed 5 Gbps).** If it moves to a different port, find the new path with `lsusb -t`.
 - Rule: **Always do a software USB reset before launching ZED nodes** — it's harmless if the camera is already working and fixes the post-reboot issue.
 

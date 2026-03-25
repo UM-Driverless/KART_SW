@@ -53,7 +53,7 @@ Flash takes ~10-20 minutes. The Orin reboots automatically when done.
 
 ## After flashing
 
-See [`.agents/orin_flash_guide.md`](../../.agents/orin_flash_guide.md) for post-flash setup (SSH, JetPack packages, ROS 2, ZED SDK, PyTorch).
+See [`.agents/orin-flash-guide.md`](../../.agents/orin-flash-guide.md) for post-flash setup (SSH, JetPack packages, ROS 2, ZED SDK, PyTorch).
 
 Verify NVMe is root:
 ```bash
