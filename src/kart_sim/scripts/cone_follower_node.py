@@ -26,6 +26,7 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile, DurabilityPolicy, ReliabilityPolicy
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
+from std_msgs.msg import String
 from vision_msgs.msg import Detection3DArray
 
 try:
@@ -117,8 +118,18 @@ class ConeFollowerNode(Node):
         self._last_steer = 0.0
         self.last_detection_time = self.get_clock().now()
         self.timer = self.create_timer(0.1, self._safety_check)
+        self.create_subscription(String, "/dashboard/controller_type", self._on_controller_type, 10)
 
         self.get_logger().info(f"Controller type: {self.controller_type}")
+
+    def _on_controller_type(self, msg: String):
+        """@brief Callback for runtime controller type changes from the dashboard."""
+        new_type = msg.data
+        if new_type in ("geometric", "pure_pursuit", "neural_v2") and new_type != self.controller_type:
+            self.get_logger().info(f"Controller type: {self.controller_type} → {new_type}")
+            self.controller_type = new_type
+            if new_type in ("neural", "neural_v2") and self._nn_W1 is None:
+                self._load_neural_weights()
 
     def _on_odom(self, msg: Odometry):
         """@brief Callback for odometry. Extracts current speed for neural_v2 speed feedback."""

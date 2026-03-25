@@ -136,6 +136,10 @@ class DashboardNode(Node):
         self._pending_state_cmd_count = 0
         self._pending_steer_mode = None
         self._pending_steer_mode_count = 0
+        # Controller type publisher (String to cone_follower)
+        self.controller_type_pub = self.create_publisher(String, "/dashboard/controller_type", 10)
+        self._pending_controller_type = None
+        self._pending_controller_type_count = 0
         self.create_timer(0.01, self._publish_pending)  # 100 Hz
 
         # One-shot self-test after 2 seconds
@@ -290,6 +294,9 @@ class DashboardNode(Node):
         if self._pending_steer_mode is not None and self._pending_steer_mode_count > 0:
             self.steer_mode_pub.publish(self._pending_steer_mode)
             self._pending_steer_mode_count -= 1
+        if self._pending_controller_type is not None and self._pending_controller_type_count > 0:
+            self.controller_type_pub.publish(self._pending_controller_type)
+            self._pending_controller_type_count -= 1
 
     def publish_steer_mode(self, mode: int):
         """@brief Publish steering mode change to ESP32.
@@ -304,6 +311,17 @@ class DashboardNode(Node):
         self._pending_steer_mode = frame
         self._pending_steer_mode_count = 100  # publish for 1s to ensure delivery
         self.get_logger().info(f"Steer mode: {'PWM' if mode else 'PID'}")
+
+    def publish_controller_type(self, ctrl_type: str):
+        """@brief Publish controller type change to cone_follower.
+
+        @param ctrl_type One of: geometric, pure_pursuit, neural_v2.
+        """
+        msg = String()
+        msg.data = ctrl_type
+        self._pending_controller_type = msg
+        self._pending_controller_type_count = 100
+        self.get_logger().info(f"Controller type: {ctrl_type}")
 
     def publish_manual_control(
         self, steer: float, steer_type: str, throttle: float, brake: float

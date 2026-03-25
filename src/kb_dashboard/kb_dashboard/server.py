@@ -173,6 +173,12 @@ async def run_websocket_server(
                 controller["holder"] = None
                 controller["id"] = None
                 node.get_logger().info(f"Control released by {client_id}")
+        elif action == "set_controller":
+            ctrl_type = cmd.get("type", "geometric")
+            if ctrl_type in ("geometric", "pure_pursuit", "neural_v2"):
+                state.update("controller_type", ctrl_type)
+                if hasattr(node, "publish_controller_type"):
+                    node.publish_controller_type(ctrl_type)
         elif action == "set_steer_mode":
             mode = cmd.get("mode", "pid")  # "pid" or "pwm"
             if hasattr(node, "publish_steer_mode"):
