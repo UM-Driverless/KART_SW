@@ -11,7 +11,11 @@ Add this to your `~/.ssh/config`:
 Host orin-remote
     HostName orin.rubenayla.xyz
     User orin
+    IdentityFile ~/.ssh/id_ed25519
     ProxyCommand cloudflared access ssh --hostname %h
+    ControlMaster auto
+    ControlPath ~/.ssh/sockets/%r@%h-%p
+    ControlPersist 10m
 ```
 
 Requires [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/) and an SSH key authorized on the Orin.
