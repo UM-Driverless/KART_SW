@@ -367,9 +367,11 @@ def main(args=None):
     spin_thread.start()
 
     # Run the async web server in the main thread
+    import signal
+    signal.signal(signal.SIGTERM, lambda *_: None)  # let asyncio handle it
     try:
         asyncio.run(run_websocket_server(state, node, node.port, password=node.password))
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, SystemExit):
         pass
     finally:
         node.destroy_node()

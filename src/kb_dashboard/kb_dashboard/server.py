@@ -382,4 +382,10 @@ async def run_websocket_server(
     if ready_callback:
         ready_callback()
 
-    await asyncio.gather(server.serve_forever(), broadcast_loop())
+    try:
+        await asyncio.gather(server.serve_forever(), broadcast_loop())
+    except asyncio.CancelledError:
+        pass
+    finally:
+        server.close()
+        await server.wait_closed()

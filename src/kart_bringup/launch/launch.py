@@ -148,6 +148,8 @@ def generate_launch_description():
         executable="KB_Coms_micro",
         name="kb_coms_micro",
         output="screen",
+        sigterm_timeout="3",
+        sigkill_timeout="2",
     )
 
     dashboard = Node(
@@ -156,6 +158,8 @@ def generate_launch_description():
         name="kb_dashboard",
         parameters=[{"port": 9090}],
         output="screen",
+        sigterm_timeout="3",
+        sigkill_timeout="2",
     )
 
     return LaunchDescription(
