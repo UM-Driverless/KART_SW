@@ -369,6 +369,7 @@ class ConeFollowerNode(Node):
         if ld < 0.5:
             ld = 0.5
         steer = math.atan2(2.0 * WHEELBASE * math.sin(alpha), ld)
+        steer = self.steering_gain * steer
         steer = max(-self.max_steer, min(self.max_steer, steer))
         self._last_steer = steer
 
