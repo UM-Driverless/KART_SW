@@ -38,9 +38,10 @@ LOGIN_HTML = """\
   .err { color: #f87171; font-size: 13px; margin-top: 8px; }
 </style>
 </head><body>
-<form method="POST" action="/login">
+<form method="POST" action="/login" autocomplete="on">
   <h1>Kart Dashboard</h1>
-  <input type="password" name="password" placeholder="Password" autofocus><br>
+  <input type="text" name="username" value="kart" autocomplete="username" style="display:none">
+  <input type="password" name="password" placeholder="Password" autocomplete="current-password" autofocus><br>
   <button type="submit">Enter</button>
   $error$
 </form>
