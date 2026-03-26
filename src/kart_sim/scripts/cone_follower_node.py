@@ -288,13 +288,16 @@ class ConeFollowerNode(Node):
         @return Tuple of (steer_rad, speed_mps).
         """
         WHEELBASE = 1.05
-        LOOKAHEAD_MIN = 2.0
-        LOOKAHEAD_MAX = 6.0
+        LOOKAHEAD_MIN = 1.5
+        LOOKAHEAD_MAX = 3.5
+        CONE_RANGE = 8.0  # only consider cones within this range
 
         blues = []
         yellows = []
         for cls, fwd, left in cones:
             if fwd < 0.3:
+                continue
+            if math.hypot(fwd, left) > CONE_RANGE:
                 continue
             if cls == "blue_cone":
                 blues.append((fwd, left))
