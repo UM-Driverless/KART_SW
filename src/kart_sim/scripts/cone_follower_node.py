@@ -288,8 +288,8 @@ class ConeFollowerNode(Node):
         @return Tuple of (steer_rad, speed_mps).
         """
         WHEELBASE = 1.05
-        LOOKAHEAD_MIN = 1.5
-        LOOKAHEAD_MAX = 3.5
+        LOOKAHEAD_MIN = 3.0
+        LOOKAHEAD_MAX = 5.0
         CONE_RANGE = 8.0  # only consider cones within this range
 
         blues = []
