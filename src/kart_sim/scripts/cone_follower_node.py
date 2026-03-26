@@ -278,75 +278,92 @@ class ConeFollowerNode(Node):
     # ── pure pursuit controller ─────────────────────────────────────────
 
     def _control_pure_pursuit(self, cones):
-        """@brief Pure pursuit: build path from all cone pairs, follow with lookahead.
+        """@brief Pure pursuit: build centreline from cone pairs, follow with adaptive lookahead.
+
+        Uses nearest-neighbor pairing in 2D (not just distance), sorts midpoints
+        along the path by forward distance, interpolates a target at a speed-adaptive
+        lookahead, and applies the pure pursuit steering law.
 
         @param cones List of (class_id, fwd, left) tuples in camera_link frame.
         @return Tuple of (steer_rad, speed_mps).
         """
         WHEELBASE = 1.05
+        LOOKAHEAD_MIN = 2.0
+        LOOKAHEAD_MAX = 6.0
 
         blues = []
         yellows = []
         for cls, fwd, left in cones:
             if fwd < 0.3:
                 continue
-            dist = math.hypot(fwd, left)
             if cls == "blue_cone":
-                blues.append((fwd, left, dist))
+                blues.append((fwd, left))
             elif cls == "yellow_cone":
-                yellows.append((fwd, left, dist))
+                yellows.append((fwd, left))
 
-        blues.sort(key=lambda c: c[2])
-        yellows.sort(key=lambda c: c[2])
+        blues.sort(key=lambda c: c[0])    # sort by forward distance
+        yellows.sort(key=lambda c: c[0])
 
-        # Build midpoints by pairing blue/yellow cones
+        # Pair blue/yellow cones by nearest 2D distance
         midpoints = []
         if blues and yellows:
             used_y = set()
-            for bx, by, bd in blues:
+            for bx, by in blues:
                 best_j, best_dd = -1, float('inf')
-                for j, (yx, yy, yd) in enumerate(yellows):
+                for j, (yx, yy) in enumerate(yellows):
                     if j in used_y:
                         continue
-                    dd = abs(bd - yd)
+                    dd = math.hypot(bx - yx, by - yy)
                     if dd < best_dd:
                         best_dd = dd
                         best_j = j
-                if best_j >= 0 and best_dd < 8.0:
-                    yx, yy, _ = yellows[best_j]
+                if best_j >= 0 and best_dd < 6.0:
+                    yx, yy = yellows[best_j]
                     used_y.add(best_j)
                     midpoints.append(((bx + yx) / 2.0, (by + yy) / 2.0))
                 else:
                     midpoints.append((bx, by - self.half_track_width))
-            for j, (yx, yy, _) in enumerate(yellows):
+            for j, (yx, yy) in enumerate(yellows):
                 if j not in used_y:
                     midpoints.append((yx, yy + self.half_track_width))
         elif blues:
-            for bx, by, _ in blues:
+            for bx, by in blues:
                 midpoints.append((bx, by - self.half_track_width))
         elif yellows:
-            for yx, yy, _ in yellows:
+            for yx, yy in yellows:
                 midpoints.append((yx, yy + self.half_track_width))
 
         if not midpoints:
             return self._last_steer, self.min_speed
 
+        # Sort by forward distance to form a path
         midpoints.sort(key=lambda p: p[0])
 
-        # Find pursuit target at lookahead distance along the path
+        # Adaptive lookahead: shorter when turning, longer when straight
+        abs_last_steer = abs(self._last_steer)
+        steer_ratio = abs_last_steer / self.max_steer  # 0 = straight, 1 = max turn
+        lookahead = LOOKAHEAD_MAX - (LOOKAHEAD_MAX - LOOKAHEAD_MIN) * steer_ratio
+
+        # Interpolate target along the midpoint path at lookahead distance
         target_x, target_y = midpoints[0]
         cum_dist = 0.0
-        for i in range(len(midpoints)):
-            if i > 0:
-                dx = midpoints[i][0] - midpoints[i - 1][0]
-                dy = midpoints[i][1] - midpoints[i - 1][1]
-                cum_dist += math.hypot(dx, dy)
-            if cum_dist >= self.lookahead_max:
-                target_x, target_y = midpoints[i]
+        for i in range(1, len(midpoints)):
+            seg_dx = midpoints[i][0] - midpoints[i - 1][0]
+            seg_dy = midpoints[i][1] - midpoints[i - 1][1]
+            seg_len = math.hypot(seg_dx, seg_dy)
+            if seg_len < 1e-6:
+                continue
+            if cum_dist + seg_len >= lookahead:
+                # Interpolate within this segment
+                remain = lookahead - cum_dist
+                t = remain / seg_len
+                target_x = midpoints[i - 1][0] + t * seg_dx
+                target_y = midpoints[i - 1][1] + t * seg_dy
                 break
+            cum_dist += seg_len
             target_x, target_y = midpoints[i]
 
-        # Pure pursuit steering
+        # Pure pursuit steering law
         alpha = math.atan2(target_y, target_x)
         ld = math.hypot(target_x, target_y)
         if ld < 0.5:
@@ -355,13 +372,13 @@ class ConeFollowerNode(Node):
         steer = max(-self.max_steer, min(self.max_steer, steer))
         self._last_steer = steer
 
-        # Speed: max_speed reduced by curvature
+        # Speed: same profile as geometric
         speed = self.max_speed * (1.0 - self.speed_curve_factor * abs(steer))
         speed = max(self.min_speed, min(self.max_speed, speed))
 
         self.get_logger().info(
-            f"[pp] target=({target_x:.1f},{target_y:.1f}) steer={steer:.3f} "
-            f"speed={speed:.1f} midpoints={len(midpoints)}"
+            f"[pp] target=({target_x:.1f},{target_y:.1f}) ld={ld:.1f} "
+            f"steer={steer:.3f} speed={speed:.1f} midpts={len(midpoints)}"
         )
         return steer, speed
 
