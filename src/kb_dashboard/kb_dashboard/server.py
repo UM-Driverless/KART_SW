@@ -10,15 +10,56 @@ import asyncio
 import base64
 import hashlib
 import json
+import secrets
 from pathlib import Path
+from http.cookies import SimpleCookie
 
 from kb_dashboard.protocol import DashboardState, MISSIONS
 
 HTML_PATH = Path(__file__).parent / "index.html"
 
+LOGIN_HTML = """\
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kart Dashboard — Login</title>
+<style>
+  body { background: #0a0a0f; color: #e0e0e0; font-family: Inter, sans-serif;
+         display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+  form { background: #14141f; padding: 32px; border-radius: 12px; text-align: center;
+         box-shadow: 0 4px 24px rgba(0,0,0,0.5); }
+  h1 { font-size: 18px; margin-bottom: 20px; }
+  input { background: #1e1e2e; color: #fff; border: 1px solid #333; border-radius: 8px;
+          padding: 10px 14px; font-size: 16px; width: 160px; text-align: center; }
+  button { background: #2563eb; color: #fff; border: none; border-radius: 8px;
+           padding: 10px 24px; font-size: 16px; cursor: pointer; margin-top: 12px; }
+  button:active { background: #1d4ed8; }
+  .err { color: #f87171; font-size: 13px; margin-top: 8px; }
+</style>
+</head><body>
+<form method="POST" action="/login">
+  <h1>Kart Dashboard</h1>
+  <input type="password" name="password" placeholder="Password" autofocus><br>
+  <button type="submit">Enter</button>
+  {error}
+</form>
+</body></html>
+"""
+
+
+def _parse_cookies(header_str: str) -> dict[str, str]:
+    """Parse a Cookie header into a dict."""
+    cookies = {}
+    for item in header_str.split(";"):
+        if "=" in item:
+            k, v = item.strip().split("=", 1)
+            cookies[k.strip()] = v.strip()
+    return cookies
+
 
 async def run_websocket_server(
-    state: DashboardState, node, port: int, ready_callback=None
+    state: DashboardState, node, port: int, ready_callback=None, password: str = ""
 ):
     """@brief HTTP + WebSocket server for the dashboard.
 
@@ -26,7 +67,12 @@ async def run_websocket_server(
     @param node ROS node with publish_mission(), publish_state_cmd(), publish_manual_control().
     @param port TCP port to listen on.
     @param ready_callback Optional callable invoked once the server is listening.
+    @param password If non-empty, require this password to access the dashboard.
     """
+    # Generate a random session token on startup — all authenticated sessions share it.
+    # It rotates every time the server restarts.
+    auth_token = secrets.token_hex(16)
+
     clients: dict[asyncio.StreamWriter, str] = {}  # writer → client_id
     controller: dict = {"holder": None, "id": None}  # who has manual control
     _next_id = [0]
@@ -48,7 +94,9 @@ async def run_websocket_server(
 
         request_str = request.decode(errors="replace")
         first_line = request_str.split("\r\n")[0]
-        path = first_line.split(" ")[1] if len(first_line.split(" ")) > 1 else "/"
+        parts = first_line.split(" ")
+        method = parts[0] if parts else "GET"
+        path = parts[1] if len(parts) > 1 else "/"
 
         headers = {}
         for line_str in request_str.split("\r\n")[1:]:
@@ -56,9 +104,57 @@ async def run_websocket_server(
                 k, v = line_str.split(": ", 1)
                 headers[k.lower()] = v.strip()
 
+        # --- Auth check ---
+        def _is_authenticated() -> bool:
+            if not password:
+                return True
+            cookies = _parse_cookies(headers.get("cookie", ""))
+            return cookies.get("kart_session") == auth_token
+
+        # Handle login POST
+        if path == "/login" and method == "POST":
+            # Read POST body (Content-Length)
+            body_len = int(headers.get("content-length", "0"))
+            body_data = b""
+            if body_len > 0:
+                body_data = await reader.readexactly(body_len)
+            # Parse form: password=xxx
+            form = {}
+            for pair in body_data.decode(errors="replace").split("&"):
+                if "=" in pair:
+                    fk, fv = pair.split("=", 1)
+                    form[fk] = fv
+            if form.get("password") == password:
+                resp = (
+                    f"HTTP/1.1 303 See Other\r\n"
+                    f"Location: /\r\n"
+                    f"Set-Cookie: kart_session={auth_token}; Path=/; HttpOnly; SameSite=Strict\r\n"
+                    f"Connection: close\r\n\r\n"
+                ).encode()
+            else:
+                err_body = LOGIN_HTML.format(error='<p class="err">Wrong password</p>').encode()
+                resp = (
+                    f"HTTP/1.1 200 OK\r\n"
+                    f"Content-Type: text/html; charset=utf-8\r\n"
+                    f"Content-Length: {len(err_body)}\r\n"
+                    f"Connection: close\r\n\r\n"
+                ).encode() + err_body
+            writer.write(resp)
+            await writer.drain()
+            writer.close()
+            await writer.wait_closed()
+            return
+
         conn_header = headers.get("connection", "").lower()
         upgrade_header = headers.get("upgrade", "").lower()
         if "upgrade" in conn_header and "websocket" in upgrade_header:
+            # Reject unauthenticated WebSocket upgrades
+            if not _is_authenticated():
+                writer.write(b"HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n")
+                await writer.drain()
+                writer.close()
+                await writer.wait_closed()
+                return
             key = headers.get("sec-websocket-key", "").strip()
             accept = base64.b64encode(
                 hashlib.sha1(
@@ -86,6 +182,22 @@ async def run_websocket_server(
                     controller["id"] = None
                     node.get_logger().info(f"Controller released: {client_id} disconnected")
                 node.get_logger().info(f"WS disconnected: {client_id}")
+            return
+
+        # Serve login page if not authenticated
+        if not _is_authenticated():
+            body = LOGIN_HTML.format(error="").encode()
+            header = (
+                f"HTTP/1.1 200 OK\r\n"
+                f"Content-Type: text/html; charset=utf-8\r\n"
+                f"Content-Length: {len(body)}\r\n"
+                f"Connection: close\r\n"
+                f"Cache-Control: no-cache\r\n\r\n"
+            ).encode()
+            writer.write(header + body)
+            await writer.drain()
+            writer.close()
+            await writer.wait_closed()
             return
 
         # Serve HTML

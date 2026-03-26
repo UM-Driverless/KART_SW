@@ -55,7 +55,9 @@ class DashboardNode(Node):
         super().__init__("kb_dashboard")
         self.state = state
         self.declare_parameter("port", 9090)
+        self.declare_parameter("password", "0")
         self.port = self.get_parameter("port").value
+        self.password = self.get_parameter("password").value
 
         qos_reliable = QoSProfile(depth=10, reliability=ReliabilityPolicy.RELIABLE)
         qos_best_effort = QoSProfile(
@@ -366,7 +368,7 @@ def main(args=None):
 
     # Run the async web server in the main thread
     try:
-        asyncio.run(run_websocket_server(state, node, node.port))
+        asyncio.run(run_websocket_server(state, node, node.port, password=node.password))
     except KeyboardInterrupt:
         pass
     finally:
