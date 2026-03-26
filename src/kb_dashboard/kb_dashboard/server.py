@@ -42,7 +42,7 @@ LOGIN_HTML = """\
   <h1>Kart Dashboard</h1>
   <input type="password" name="password" placeholder="Password" autofocus><br>
   <button type="submit">Enter</button>
-  {error}
+  $error$
 </form>
 </body></html>
 """
@@ -132,7 +132,7 @@ async def run_websocket_server(
                     f"Connection: close\r\n\r\n"
                 ).encode()
             else:
-                err_body = LOGIN_HTML.format(error='<p class="err">Wrong password</p>').encode()
+                err_body = LOGIN_HTML.replace("$error$",'<p class="err">Wrong password</p>').encode()
                 resp = (
                     f"HTTP/1.1 200 OK\r\n"
                     f"Content-Type: text/html; charset=utf-8\r\n"
@@ -186,7 +186,7 @@ async def run_websocket_server(
 
         # Serve login page if not authenticated
         if not _is_authenticated():
-            body = LOGIN_HTML.format(error="").encode()
+            body = LOGIN_HTML.replace("$error$","").encode()
             header = (
                 f"HTTP/1.1 200 OK\r\n"
                 f"Content-Type: text/html; charset=utf-8\r\n"
