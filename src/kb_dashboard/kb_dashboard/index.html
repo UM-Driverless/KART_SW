@@ -282,9 +282,12 @@ function updateMissionUI() {
 }
 
 function updateAlgoButtons() {
-  document.querySelectorAll('.algo-btn').forEach(b =>
-    b.classList.toggle('on', b.dataset.algo === currentControllerType)
-  );
+  document.querySelectorAll('.algo-dropdown').forEach(sel => sel.value = currentControllerType);
+}
+function onAlgoChange(sel) {
+  currentControllerType = sel.value;
+  wsSend({action:'set_controller', type: sel.value});
+  updateAlgoButtons();
 }
 
 // Gamepad polling
@@ -550,7 +553,7 @@ body { font-family:'Inter',-apple-system,BlinkMacSystemFont,'SF Pro',system-ui,s
   <div class="sbar"><div class="spill" id="pillState">IDLE</div><div class="spill" id="pillMission">MANUAL</div><div class="spill" id="pillHb">HB --</div></div>
   <div class="card"><div class="card-t">Mission</div>
     <div class="mis-grid" id="misGrid"><button class="mis-btn sel" data-m="manual">Manual</button><button class="mis-btn" data-m="remote_control">Remote</button><button class="mis-btn" data-m="autonomous">Auto</button><button class="mis-btn" data-m="acceleration">Accel</button><button class="mis-btn" data-m="skidpad">Skidpad</button><button class="mis-btn" data-m="autocross">Autocross</button><button class="mis-btn" data-m="trackdrive">Trackdrive</button><button class="mis-btn" data-m="inspection">Inspect</button></div>
-    <div class="algo-select"><div class="algo-label">Algorithm</div><div class="algo-grid"><button class="algo-btn on" data-algo="geometric" onclick="wsSend({action:'set_controller',type:'geometric'})">GEOMETRIC</button><button class="algo-btn" data-algo="pure_pursuit" onclick="wsSend({action:'set_controller',type:'pure_pursuit'})">PURE PURSUIT</button><button class="algo-btn" data-algo="neural_v2" onclick="wsSend({action:'set_controller',type:'neural_v2'})">NEURAL V2</button></div></div>
+    <div class="algo-select"><div class="algo-label">Algorithm</div><select class="algo-dropdown" onchange="onAlgoChange(this)"><option value="geometric">GEOMETRIC</option><option value="pure_pursuit">PURE PURSUIT</option><option value="neural_v2">NEURAL V2</option></select></div>
     <div class="ctrl-row"><button class="ctrl-btn go" onclick="wsSend({action:'set_state',state:'running'})">Start</button><button class="ctrl-btn stop" onclick="wsSend({action:'set_state',state:'idle'})">Stop</button><button class="ctrl-btn ebs" onclick="wsSend({action:'set_state',state:'ebs'})">EBS</button></div>
   </div>
   <div class="card"><div class="card-t">Kart State</div>
@@ -803,14 +806,15 @@ body::after {
 /* ALGORITHM SELECTOR */
 .algo-select { margin:8px 0; display:none; }
 .algo-label { font-size:8px; letter-spacing:2px; text-transform:uppercase; color:var(--dim); margin-bottom:4px; }
-.algo-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:4px; }
-.algo-btn {
-  padding:7px 4px; border:1px solid rgba(128,128,128,0.25); background:transparent;
-  font-family:'Share Tech Mono',monospace; font-size:9px; letter-spacing:1px;
-  cursor:pointer; color:rgba(128,128,128,0.5); transition:all 0.12s; text-align:center;
+.algo-dropdown {
+  width:100%; padding:10px 12px; border:1px solid rgba(128,128,128,0.3); border-radius:6px;
+  background:#0a0a0f; color:var(--grn); font-family:'Share Tech Mono',monospace; font-size:13px;
+  letter-spacing:1px; cursor:pointer; appearance:none; -webkit-appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2333ff44' d='M2 4l4 4 4-4'/%3E%3C/svg%3E");
+  background-repeat:no-repeat; background-position:right 10px center;
 }
-.algo-btn:hover { border-color:rgba(128,128,128,0.5); color:rgba(128,128,128,0.8); }
-.algo-btn.on { border-color:var(--grn); color:var(--grn); background:rgba(51,255,68,0.05); box-shadow:0 0 6px rgba(51,255,68,0.1); }
+.algo-dropdown:focus { outline:none; border-color:var(--grn); box-shadow:0 0 6px rgba(51,255,68,0.15); }
+.algo-dropdown option { background:#14141f; color:#e0e0e0; padding:8px; }
 
 /* ACTION BUTTONS */
 .act-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; }
@@ -960,11 +964,11 @@ body::after {
       </div>
       <div class="algo-select">
         <div class="algo-label">Algorithm</div>
-        <div class="algo-grid">
-          <button class="algo-btn on" data-algo="geometric" onclick="wsSend({action:'set_controller',type:'geometric'})">GEOMETRIC</button>
-          <button class="algo-btn" data-algo="pure_pursuit" onclick="wsSend({action:'set_controller',type:'pure_pursuit'})">PURE PURSUIT</button>
-          <button class="algo-btn" data-algo="neural_v2" onclick="wsSend({action:'set_controller',type:'neural_v2'})">NEURAL V2</button>
-        </div>
+        <select class="algo-dropdown" onchange="onAlgoChange(this)">
+          <option value="geometric">GEOMETRIC</option>
+          <option value="pure_pursuit">PURE PURSUIT</option>
+          <option value="neural_v2">NEURAL V2</option>
+        </select>
       </div>
       <div class="act-grid">
         <button class="abtn abtn-start" onclick="wsSend({action:'set_state',state:'running'})">START</button>
@@ -1222,7 +1226,7 @@ body { font-family:'Inter',sans-serif; background:#0a0a0a; color:#f5f5f5; }
     <button class="t-mis-btn sel" data-m="manual">Manual</button><button class="t-mis-btn" data-m="remote_control">Remote</button><button class="t-mis-btn" data-m="autonomous">Auto</button><button class="t-mis-btn" data-m="acceleration">Accel</button>
     <button class="t-mis-btn" data-m="skidpad">Skidpad</button><button class="t-mis-btn" data-m="autocross">Autocross</button><button class="t-mis-btn" data-m="trackdrive">Trackdrive</button><button class="t-mis-btn" data-m="inspection">Inspect</button>
   </div>
-  <div class="algo-select"><div class="algo-label">Algorithm</div><div class="algo-grid"><button class="algo-btn on" data-algo="geometric" onclick="wsSend({action:'set_controller',type:'geometric'})">GEOMETRIC</button><button class="algo-btn" data-algo="pure_pursuit" onclick="wsSend({action:'set_controller',type:'pure_pursuit'})">PURE PURSUIT</button><button class="algo-btn" data-algo="neural_v2" onclick="wsSend({action:'set_controller',type:'neural_v2'})">NEURAL V2</button></div></div>
+  <div class="algo-select"><div class="algo-label">Algorithm</div><select class="algo-dropdown" onchange="onAlgoChange(this)"><option value="geometric">GEOMETRIC</option><option value="pure_pursuit">PURE PURSUIT</option><option value="neural_v2">NEURAL V2</option></select></div>
   <div class="t-ctrl-row">
     <button class="t-ctrl go" onclick="wsSend({action:'set_state',state:'running'})">Start</button>
     <button class="t-ctrl stop" onclick="wsSend({action:'set_state',state:'idle'})">Stop</button>
@@ -1411,7 +1415,7 @@ body::before { content:''; position:fixed; inset:0; pointer-events:none; backgro
       <button class="h-mis-btn sel" data-m="manual">MANUAL</button><button class="h-mis-btn" data-m="remote_control">REMOTE</button><button class="h-mis-btn" data-m="acceleration">ACCEL</button>
       <button class="h-mis-btn" data-m="skidpad">SKIDPAD</button><button class="h-mis-btn" data-m="autocross">AUTOCROSS</button><button class="h-mis-btn" data-m="trackdrive">TRACKDRIVE</button><button class="h-mis-btn" data-m="inspection">INSPECT</button>
     </div>
-    <div class="algo-select"><div class="algo-label">Algorithm</div><div class="algo-grid"><button class="algo-btn on" data-algo="geometric" onclick="wsSend({action:'set_controller',type:'geometric'})">GEOMETRIC</button><button class="algo-btn" data-algo="pure_pursuit" onclick="wsSend({action:'set_controller',type:'pure_pursuit'})">PURE PURSUIT</button><button class="algo-btn" data-algo="neural_v2" onclick="wsSend({action:'set_controller',type:'neural_v2'})">NEURAL V2</button></div></div>
+    <div class="algo-select"><div class="algo-label">Algorithm</div><select class="algo-dropdown" onchange="onAlgoChange(this)"><option value="geometric">GEOMETRIC</option><option value="pure_pursuit">PURE PURSUIT</option><option value="neural_v2">NEURAL V2</option></select></div>
     <div class="h-ctrl-row">
       <button class="h-ctrl go" onclick="wsSend({action:'set_state',state:'running'})">START</button>
       <button class="h-ctrl stop" onclick="wsSend({action:'set_state',state:'idle'})">STOP</button>
