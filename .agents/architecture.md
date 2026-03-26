@@ -40,7 +40,7 @@
 │   ├── kb_coms_micro/              (ament_cmake, C++) Serial bridge (ROS ↔ ESP32 UART)
 │   ├── kb_interfaces/              (ament_cmake) Custom msg/srv (Frame.msg)
 │   ├── kb_serial_driver_lib/       (ament_cmake, C++) Low-level serial driver
-│   ├── kb_dashboard/               (ament_python) Web dashboard (port 9090)
+│   ├── kb_dashboard/               (ament_python) Web dashboard (port 9090, public: kart.rubenayla.xyz)
 │   ├── joy_to_cmd_vel/             (ament_cmake, C++) Joystick → Twist
 │   └── ThirdParty/
 │
@@ -229,7 +229,7 @@ Track width: 3m. Cone spacing: ~5m on straights, ~8m on curves.
 
 ## Debugging the Dashboard
 
-The `kb_dashboard` package serves a web UI on port 9090 with a custom WebSocket server (no dependencies beyond stdlib). To verify it works end-to-end:
+The `kb_dashboard` package serves a web UI on port 9090 with a custom WebSocket server (no dependencies beyond stdlib). Public URL: `kart.rubenayla.xyz` (Cloudflare Tunnel → `localhost:9090` on Orin, config at `/etc/cloudflared/config.yml`, needs sudo). Password auth enabled (default: `0`, configurable via ROS param `password`). To verify it works end-to-end:
 
 1. **Use Playwright MCP** (`claude mcp add playwright --scope user -- npx @playwright/mcp@latest`). This is the only reliable way to visually verify the dashboard — headless Firefox `--screenshot` exits before WebSocket data arrives.
 2. Navigate to `http://192.168.64.3:9090/`, wait 3s, then take a screenshot or read the snapshot. Values should be non-zero when the sim is running.

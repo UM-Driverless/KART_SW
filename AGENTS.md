@@ -27,6 +27,7 @@
 
 ### Jetson Orin (Real Hardware)
 - **Connection:** `ssh orin-local` (WiFi 10.7.20.142) or `ssh orin-remote` (Cloudflare Tunnel) or AnyDesk
+- **Dashboard:** `kart.rubenayla.xyz` (password: `0`, configurable via ROS param `password`)
 - **Workspace:** `~/kart_brain`
 - **Camera:** ZED 2 stereo (USB)
 - **sudo password:** `0`

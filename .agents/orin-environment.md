@@ -21,6 +21,9 @@
 ```bash
 ssh orin-local    # LAN — direct WiFi IP (10.7.20.142). Only works on same network.
 ssh orin-remote   # WAN — Cloudflare Tunnel (orin.rubenayla.xyz). Works from anywhere.
+# Dashboard: https://kart.rubenayla.xyz (password: "0", configurable via ROS param `password`)
+#   Cloudflare Tunnel config: /etc/cloudflared/config.yml (system-level, needs sudo)
+#   Routes kart.rubenayla.xyz → localhost:9090 on Orin
 # There is NO "ssh orin" alias. Always use orin-local or orin-remote.
 # Try orin-local first (faster), fall back to orin-remote if unreachable.
 # AnyDesk for GUI (needs dummy HDMI plug)
