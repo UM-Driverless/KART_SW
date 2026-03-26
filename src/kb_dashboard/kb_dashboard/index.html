@@ -146,7 +146,7 @@ body { min-height: 100vh; -webkit-tap-highlight-color: transparent; }
 // ═══════════════════════════════════════════════════════
 const $ = id => document.getElementById(id);
 const deg = r => (r * 180 / Math.PI).toFixed(1);
-const WS_URL = `ws://${location.hostname}:${location.port||80}/`;
+const WS_URL = `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/`;
 let ws = null, reconnectTimer = null, lastData = null, skinCleanup = null;
 let currentSkin = localStorage.getItem('skin') || 'default';
 let manualSteerType = 'angle'; // 'angle' or 'pwm'
