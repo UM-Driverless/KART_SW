@@ -339,32 +339,23 @@ class ConeFollowerNode(Node):
         if not midpoints:
             return self._last_steer, self.min_speed
 
-        # Sort by forward distance to form a path
-        midpoints.sort(key=lambda p: p[0])
+        # Sort by distance from kart (origin)
+        midpoints.sort(key=lambda p: math.hypot(p[0], p[1]))
 
-        # Adaptive lookahead: shorter when turning, longer when straight
+        # Adaptive lookahead from kart: shorter when turning, longer when straight
         abs_last_steer = abs(self._last_steer)
         steer_ratio = abs_last_steer / self.max_steer  # 0 = straight, 1 = max turn
         lookahead = LOOKAHEAD_MAX - (LOOKAHEAD_MAX - LOOKAHEAD_MIN) * steer_ratio
 
-        # Interpolate target along the midpoint path at lookahead distance
+        # Pick the midpoint closest to the lookahead distance from the kart
         target_x, target_y = midpoints[0]
-        cum_dist = 0.0
-        for i in range(1, len(midpoints)):
-            seg_dx = midpoints[i][0] - midpoints[i - 1][0]
-            seg_dy = midpoints[i][1] - midpoints[i - 1][1]
-            seg_len = math.hypot(seg_dx, seg_dy)
-            if seg_len < 1e-6:
-                continue
-            if cum_dist + seg_len >= lookahead:
-                # Interpolate within this segment
-                remain = lookahead - cum_dist
-                t = remain / seg_len
-                target_x = midpoints[i - 1][0] + t * seg_dx
-                target_y = midpoints[i - 1][1] + t * seg_dy
-                break
-            cum_dist += seg_len
-            target_x, target_y = midpoints[i]
+        best_diff = float('inf')
+        for mx, my in midpoints:
+            d = math.hypot(mx, my)
+            diff = abs(d - lookahead)
+            if diff < best_diff:
+                best_diff = diff
+                target_x, target_y = mx, my
 
         # Pure pursuit steering law
         alpha = math.atan2(target_y, target_x)
