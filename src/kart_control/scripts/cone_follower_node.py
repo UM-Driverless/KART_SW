@@ -107,10 +107,10 @@ class ConeFollowerNode(Node):
                 lambda msg: self._on_detections(zed_objects_to_det3d(msg)),
                 10,
             )
-        # Subscribe to odometry for actual speed feedback
+        # Subscribe to odometry for actual speed feedback (RELIABLE to match ZED publisher QoS)
         odom_qos = QoSProfile(
             depth=10,
-            reliability=ReliabilityPolicy.BEST_EFFORT,
+            reliability=ReliabilityPolicy.RELIABLE,
             durability=DurabilityPolicy.VOLATILE,
         )
         self.odom_sub = self.create_subscription(
