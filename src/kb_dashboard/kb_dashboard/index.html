@@ -545,16 +545,19 @@ body { font-family:'Inter',-apple-system,BlinkMacSystemFont,'SF Pro',system-ui,s
 .ctrl-row { display:flex; gap:6px; margin-top:10px; }
 .ctrl-btn { flex:1; padding:14px 8px; border-radius:14px; border:1px solid; font-size:11px; font-weight:600; letter-spacing:1.5px; cursor:pointer; text-transform:uppercase; -webkit-user-select:none; user-select:none; font-family:'Inter',sans-serif; }
 .ctrl-btn:active { transform:scale(0.96); }
-.ctrl-btn.go { background:#2ecc71; border-color:#2ecc71; color:#fff; }
+.ctrl-btn.go { background:transparent; border-color:#2a2a3a; color:#2ecc71; }
+.ctrl-btn.go.on { background:#2ecc71; border-color:#2ecc71; color:#fff; }
 .ctrl-btn.stop { background:transparent; border-color:#2a2a3a; color:#888; }
+.ctrl-btn.stop.on { background:#e74c3c; border-color:#e74c3c; color:#fff; }
 .ctrl-btn.ebs { background:transparent; border-color:rgba(243,156,18,0.4); color:#f39c12; }
+.ctrl-btn.ebs.on { background:#f39c12; border-color:#f39c12; color:#fff; }
 `,
   render() { return `<div class="container">
   <div class="sbar"><div class="spill" id="pillState">IDLE</div><div class="spill" id="pillMission">MANUAL</div><div class="spill" id="pillHb">HB --</div></div>
   <div class="card"><div class="card-t">Mission</div>
     <div class="mis-grid" id="misGrid"><button class="mis-btn sel" data-m="manual">Manual</button><button class="mis-btn" data-m="remote_control">Remote</button><button class="mis-btn" data-m="autonomous">Auto</button><button class="mis-btn" data-m="acceleration">Accel</button><button class="mis-btn" data-m="skidpad">Skidpad</button><button class="mis-btn" data-m="autocross">Autocross</button><button class="mis-btn" data-m="trackdrive">Trackdrive</button><button class="mis-btn" data-m="inspection">Inspect</button></div>
     <div class="algo-select"><div class="algo-label">Algorithm</div><select class="algo-dropdown" onchange="onAlgoChange(this)"><option value="geometric">GEOMETRIC</option><option value="pure_pursuit">PURE PURSUIT</option><option value="neural_v2">NEURAL V2</option></select></div>
-    <div class="ctrl-row"><button class="ctrl-btn go" onclick="wsSend({action:'set_state',state:'running'})">Start</button><button class="ctrl-btn stop" onclick="wsSend({action:'set_state',state:'idle'})">Stop</button><button class="ctrl-btn ebs" onclick="wsSend({action:'set_state',state:'ebs'})">EBS</button></div>
+    <div class="ctrl-row"><button class="ctrl-btn go" data-st="running" onclick="wsSend({action:'set_state',state:'running'})">Start</button><button class="ctrl-btn stop" data-st="idle" onclick="wsSend({action:'set_state',state:'idle'})">Stop</button><button class="ctrl-btn ebs" data-st="ebs" onclick="wsSend({action:'set_state',state:'ebs'})">EBS</button></div>
   </div>
   <div class="card"><div class="card-t">Kart State</div>
     <div class="tg"><div class="ti"><div class="tl">Steering</div><div class="tv" id="vSteer">0.0 <span class="tu">°</span></div><div class="ti-bar"><div class="ti-bar-fill" id="steerBarFill" style="width:0%;background:#4a9eff"></div></div></div>
@@ -596,7 +599,7 @@ body { font-family:'Inter',-apple-system,BlinkMacSystemFont,'SF Pro',system-ui,s
     $('vALat').textContent = latG.toFixed(2)+' g';
     $('vALon').textContent = lonG.toFixed(2)+' g';
     $('vATotal').textContent = Math.sqrt(latG*latG+lonG*lonG).toFixed(2)+' g';
-    updatePedals(d); updateTargets(d); updatePills(d); updateMissions(d);
+    updatePedals(d); updateTargets(d); updatePills(d); updateMissions(d); updateStateButtons(d);
     // Actuations
     $('aPwm').textContent = (Math.abs(d.esp32_steering_pwm || 0) * 100).toFixed(0) + '%';
     $('aThr').textContent = ((d.esp32_throttle || 0) * 100).toFixed(0) + '%';
@@ -826,10 +829,13 @@ body::after {
 .abtn::before { content:''; position:absolute; top:0; left:0; right:0; height:1px; background:rgba(255,255,255,0.06); }
 .abtn-start { background:rgba(0,0,0,0); border:2px solid rgba(51,255,68,0.55); color:var(--grn); box-shadow:0 0 10px rgba(51,255,68,0.12); }
 .abtn-start:active { background:rgba(51,255,68,0.08); box-shadow:0 0 22px rgba(51,255,68,0.35); }
+.abtn-start.on { background:rgba(51,255,68,0.15); box-shadow:0 0 22px rgba(51,255,68,0.4); }
 .abtn-stop  { background:rgba(0,0,0,0); border:2px solid rgba(255,119,0,0.55); color:var(--amb); box-shadow:0 0 10px rgba(255,119,0,0.1); }
 .abtn-stop:active  { background:rgba(255,119,0,0.07); box-shadow:0 0 22px rgba(255,119,0,0.32); }
+.abtn-stop.on  { background:rgba(255,119,0,0.12); box-shadow:0 0 22px rgba(255,119,0,0.35); }
 .abtn-ebs   { background:rgba(0,0,0,0); border:2px solid rgba(255,34,0,0.65); color:#ff2200; box-shadow:0 0 12px rgba(255,34,0,0.18); animation:ebsp 2.5s ease-in-out infinite; }
 .abtn-ebs:active   { background:rgba(255,34,0,0.12); box-shadow:0 0 28px rgba(255,34,0,0.5); }
+.abtn-ebs.on   { background:rgba(255,34,0,0.18); box-shadow:0 0 28px rgba(255,34,0,0.5); }
 @keyframes ebsp { 0%,100%{box-shadow:0 0 10px rgba(255,34,0,0.15)} 50%{box-shadow:0 0 20px rgba(255,34,0,0.35), 0 0 40px rgba(255,34,0,0.1)} }
 
 /* LOG */
@@ -971,9 +977,9 @@ body::after {
         </select>
       </div>
       <div class="act-grid">
-        <button class="abtn abtn-start" onclick="wsSend({action:'set_state',state:'running'})">START</button>
-        <button class="abtn abtn-stop"  onclick="wsSend({action:'set_state',state:'idle'})">STOP</button>
-        <button class="abtn abtn-ebs"   onclick="wsSend({action:'set_state',state:'ebs'})">EBS</button>
+        <button class="abtn abtn-start" data-st="running" onclick="wsSend({action:'set_state',state:'running'})">START</button>
+        <button class="abtn abtn-stop"  data-st="idle" onclick="wsSend({action:'set_state',state:'idle'})">STOP</button>
+        <button class="abtn abtn-ebs"   data-st="ebs" onclick="wsSend({action:'set_state',state:'ebs'})">EBS</button>
       </div>
     </div>
   </div>
@@ -1126,6 +1132,7 @@ body::after {
     if (this._lastState !== d.state) { kLog(voices[d.state] || (d.state.toUpperCase() + '. STANDING BY.')); this._lastState = d.state; }
 
     document.querySelectorAll('.mbtn').forEach(b => b.classList.toggle('on', b.dataset.m === d.mission));
+    updateStateButtons(d);
   }
 };
 
@@ -1185,9 +1192,12 @@ body { font-family:'Inter',sans-serif; background:#0a0a0a; color:#f5f5f5; }
 .t-ctrl-row { display:flex; gap:6px; }
 .t-ctrl { flex:1; padding:14px; border-radius:14px; font-family:'Inter',sans-serif; font-size:11px; font-weight:600; letter-spacing:1.5px; text-transform:uppercase; cursor:pointer; border:1px solid; }
 .t-ctrl:active { transform:scale(0.96); }
-.t-ctrl.go { background:#43a047; border-color:#43a047; color:#fff; }
+.t-ctrl.go { background:transparent; border-color:#333; color:#43a047; }
+.t-ctrl.go.on { background:#43a047; border-color:#43a047; color:#fff; }
 .t-ctrl.stop { background:transparent; border-color:#333; color:#888; }
+.t-ctrl.stop.on { background:#e53935; border-color:#e53935; color:#fff; }
 .t-ctrl.ebs { background:transparent; border-color:#fb8c0040; color:#fb8c00; }
+.t-ctrl.ebs.on { background:#fb8c00; border-color:#fb8c00; color:#000; }
 @keyframes breathe { 0%,100%{opacity:0.1} 50%{opacity:0.22} }
 
 .t-tabs { display:flex; background:#111; border:1px solid #222; border-radius:14px; padding:4px; gap:2px; }
@@ -1228,9 +1238,9 @@ body { font-family:'Inter',sans-serif; background:#0a0a0a; color:#f5f5f5; }
   </div>
   <div class="algo-select"><div class="algo-label">Algorithm</div><select class="algo-dropdown" onchange="onAlgoChange(this)"><option value="geometric">GEOMETRIC</option><option value="pure_pursuit">PURE PURSUIT</option><option value="neural_v2">NEURAL V2</option></select></div>
   <div class="t-ctrl-row">
-    <button class="t-ctrl go" onclick="wsSend({action:'set_state',state:'running'})">Start</button>
-    <button class="t-ctrl stop" onclick="wsSend({action:'set_state',state:'idle'})">Stop</button>
-    <button class="t-ctrl ebs" onclick="wsSend({action:'set_state',state:'ebs'})">EBS</button>
+    <button class="t-ctrl go" data-st="running" onclick="wsSend({action:'set_state',state:'running'})">Start</button>
+    <button class="t-ctrl stop" data-st="idle" onclick="wsSend({action:'set_state',state:'idle'})">Stop</button>
+    <button class="t-ctrl ebs" data-st="ebs" onclick="wsSend({action:'set_state',state:'ebs'})">EBS</button>
   </div>
   <div class="t-sec-label">Sensors</div>
   <div class="t-grid2">
@@ -1289,6 +1299,7 @@ body { font-family:'Inter',sans-serif; background:#0a0a0a; color:#f5f5f5; }
     document.querySelectorAll('.t-mis-btn').forEach(b => b.classList.toggle('sel', b.dataset.m === d.mission));
     const stMap = {idle:'idle',running:'auto',ebs:'idle'};
     document.querySelectorAll('.t-tab').forEach(b => b.classList.toggle('active', b.dataset.st === (stMap[d.state]||'idle')));
+    updateStateButtons(d);
   }
 };
 
@@ -1359,9 +1370,12 @@ body::before { content:''; position:fixed; inset:0; pointer-events:none; backgro
 .h-ctrl-row { display:flex; gap:8px; }
 .h-ctrl { flex:1; padding:14px; border-radius:12px; font-family:'Orbitron',sans-serif; font-size:11px; font-weight:900; letter-spacing:3px; cursor:pointer; border:2px solid; }
 .h-ctrl:active { transform:scale(0.96); }
-.h-ctrl.go { background:rgba(57,255,20,0.15); border-color:rgba(57,255,20,0.6); color:#39ff14; text-shadow:0 0 15px #39ff14; box-shadow:0 0 20px rgba(57,255,20,0.15); }
-.h-ctrl.stop { background:rgba(255,48,96,0.1); border-color:rgba(255,48,96,0.4); color:#ff3060; text-shadow:0 0 15px #ff3060; }
-.h-ctrl.ebs { background:rgba(255,170,0,0.1); border-color:rgba(255,170,0,0.4); color:#ffaa00; text-shadow:0 0 15px #ffaa00; }
+.h-ctrl.go { background:transparent; border-color:rgba(57,255,20,0.3); color:rgba(57,255,20,0.5); text-shadow:none; }
+.h-ctrl.go.on { background:rgba(57,255,20,0.15); border-color:rgba(57,255,20,0.6); color:#39ff14; text-shadow:0 0 15px #39ff14; box-shadow:0 0 20px rgba(57,255,20,0.15); }
+.h-ctrl.stop { background:transparent; border-color:rgba(255,48,96,0.2); color:rgba(255,48,96,0.4); text-shadow:none; }
+.h-ctrl.stop.on { background:rgba(255,48,96,0.1); border-color:rgba(255,48,96,0.4); color:#ff3060; text-shadow:0 0 15px #ff3060; }
+.h-ctrl.ebs { background:transparent; border-color:rgba(255,170,0,0.2); color:rgba(255,170,0,0.4); text-shadow:none; }
+.h-ctrl.ebs.on { background:rgba(255,170,0,0.1); border-color:rgba(255,170,0,0.4); color:#ffaa00; text-shadow:0 0 15px #ffaa00; }
 .h-footer { text-align:center; font-family:'Orbitron',sans-serif; font-size:8px; letter-spacing:3px; color:rgba(255,255,255,0.1); margin-top:4px; }
 
 .h-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; }
@@ -1417,9 +1431,9 @@ body::before { content:''; position:fixed; inset:0; pointer-events:none; backgro
     </div>
     <div class="algo-select"><div class="algo-label">Algorithm</div><select class="algo-dropdown" onchange="onAlgoChange(this)"><option value="geometric">GEOMETRIC</option><option value="pure_pursuit">PURE PURSUIT</option><option value="neural_v2">NEURAL V2</option></select></div>
     <div class="h-ctrl-row">
-      <button class="h-ctrl go" onclick="wsSend({action:'set_state',state:'running'})">START</button>
-      <button class="h-ctrl stop" onclick="wsSend({action:'set_state',state:'idle'})">STOP</button>
-      <button class="h-ctrl ebs" onclick="wsSend({action:'set_state',state:'ebs'})">EBS</button>
+      <button class="h-ctrl go" data-st="running" onclick="wsSend({action:'set_state',state:'running'})">START</button>
+      <button class="h-ctrl stop" data-st="idle" onclick="wsSend({action:'set_state',state:'idle'})">STOP</button>
+      <button class="h-ctrl ebs" data-st="ebs" onclick="wsSend({action:'set_state',state:'ebs'})">EBS</button>
     </div>
   </div>
   <div class="h-footer">UNIVERSIDAD DE MALAGA · FSAE AUTONOMOUS · v2.4.1</div>
@@ -1489,6 +1503,7 @@ body::before { content:''; position:fixed; inset:0; pointer-events:none; backgro
     document.querySelectorAll('.h-mis-btn').forEach(b => b.classList.toggle('sel', b.dataset.m === d.mission));
     const stMap = {idle:'idle',running:'auto',ebs:'idle'};
     document.querySelectorAll('.h-tab').forEach(b => b.classList.toggle('active', b.dataset.st === (stMap[d.state]||'idle')));
+    updateStateButtons(d);
   }
 };
 
@@ -1535,6 +1550,10 @@ function updatePills(d) {
 
 function updateMissions(d) {
   document.querySelectorAll('.mis-btn').forEach(b => b.classList.toggle('sel', b.dataset.m === d.mission));
+}
+
+function updateStateButtons(d) {
+  document.querySelectorAll('.ctrl-btn[data-st],.abtn[data-st],.t-ctrl[data-st],.h-ctrl[data-st]').forEach(b => b.classList.toggle('on', b.dataset.st === d.state));
 }
 
 function toggleHealthInfo() {
