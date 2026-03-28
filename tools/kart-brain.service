@@ -14,7 +14,7 @@ ExecStart=/bin/bash -c '\
   source /opt/ros/humble/setup.bash && \
   source ~/kart_brain/install/setup.bash && \
   ros2 launch kart_bringup launch.py'
-ExecStop=/bin/bash -c 'pkill -f "state_machine|cmd_vel_bridge|KB_Coms_micro|dashboard_node|steering_hud|yolo_detector|cone_follower|cone_depth|steering_hud" 2>/dev/null'
+TimeoutStopSec=10
 Restart=on-failure
 RestartSec=5
 

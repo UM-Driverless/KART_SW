@@ -377,7 +377,16 @@ def main(args=None):
 
     # Run the async web server in the main thread
     import signal
-    signal.signal(signal.SIGTERM, lambda *_: None)  # let asyncio handle it
+
+    def _shutdown_on_signal(*_):
+        """Stop the asyncio event loop so the process exits on SIGTERM."""
+        try:
+            loop = asyncio.get_running_loop()
+            loop.call_soon_threadsafe(loop.stop)
+        except RuntimeError:
+            pass
+
+    signal.signal(signal.SIGTERM, _shutdown_on_signal)
     try:
         asyncio.run(run_websocket_server(state, node, node.port, password=node.password))
     except (KeyboardInterrupt, SystemExit):
