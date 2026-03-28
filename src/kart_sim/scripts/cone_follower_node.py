@@ -28,7 +28,7 @@ Fixes respecto a la versión anterior:
 
 Parámetros recomendados (valores por defecto):
     mpc_horizon      = 15
-    mpc_dt           = 0.15
+    mpc_dt           = 0.12
     mpc_w_cte        = 4.0
     mpc_w_heading    = 2.5
     mpc_w_dsteer     = 25.0   (base; se adapta en curva)
@@ -54,7 +54,7 @@ try:
 except ImportError:
     HAS_SCIPY = False
 
-WHEELBASE        = 1.05
+WHEELBASE        = 1.25
 MAX_STEER        = 1.047
 MAX_SPEED        = 2.625
 MIN_SPEED        = 0.5
@@ -244,7 +244,7 @@ class KartMPCNode(Node):
         self.declare_parameter("no_cone_timeout",    1.0)
 
         self.declare_parameter("mpc_horizon",        15)     # FIX-1
-        self.declare_parameter("mpc_dt",             0.15)   # FIX-1
+        self.declare_parameter("mpc_dt",             0.12)   # FIX-1
         self.declare_parameter("mpc_w_cte",          4.0)
         self.declare_parameter("mpc_w_heading",      2.5)
         self.declare_parameter("mpc_w_dsteer",       25.0)   # FIX-4: valor base
