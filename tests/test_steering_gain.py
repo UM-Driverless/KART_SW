@@ -115,7 +115,7 @@ _vis_msg.Detection3DArray = type("Detection3DArray", (), {})
 # ---------------------------------------------------------------------------
 sys.path.insert(
     0,
-    "src/kart_sim/scripts",
+    "src/kart_control/scripts",
 )
 from cone_follower_node import ConeFollowerNode  # noqa: E402
 

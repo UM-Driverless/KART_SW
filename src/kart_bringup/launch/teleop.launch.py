@@ -37,7 +37,7 @@ def generate_launch_description():
 
     # Converts /kart/cmd_vel (Twist) → /orin/* int32 Frame messages
     cmd_vel_bridge = Node(
-        package='kart_bringup',
+        package='kart_control',
         executable='cmd_vel_bridge_node.py',
         name='cmd_vel_bridge',
         output='screen',

@@ -106,7 +106,7 @@ def generate_launch_description():
     )
 
     cone_follower = Node(
-        package="kart_sim",
+        package="kart_control",
         executable="cone_follower_node.py",
         name="cone_follower",
         output="screen",
@@ -130,14 +130,14 @@ def generate_launch_description():
     )
 
     state_machine = Node(
-        package="kart_bringup",
+        package="kart_control",
         executable="state_machine_node.py",
         name="state_machine",
         output="screen",
     )
 
     cmd_vel_bridge = Node(
-        package="kart_bringup",
+        package="kart_control",
         executable="cmd_vel_bridge_node.py",
         name="cmd_vel_bridge",
         output="screen",

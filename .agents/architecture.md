@@ -8,13 +8,21 @@
 ├── AGENTS.md                       ← Agent entry point
 ├── .agents/                        ← This directory
 ├── src/
+│   ├── kart_control/               (ament_cmake) Control nodes
+│   │   ├── scripts/
+│   │   │   ├── cone_follower_node.py     Cone-following controller (geometric/neural/pure_pursuit)
+│   │   │   ├── state_machine_node.py     AS state machine, cmd_vel muxing
+│   │   │   └── cmd_vel_bridge_node.py    Twist → Frame msgs (100 Hz)
+│   │   └── config/                       Neural net weights
+│   │
 │   ├── kart_sim/                   (ament_cmake) Gazebo simulation
 │   │   ├── worlds/fs_track.sdf    44-cone oval track
 │   │   ├── models/kart/           Ackermann kart + RGBD camera
 │   │   ├── models/cone_{blue,yellow,orange}/
 │   │   ├── scripts/
 │   │   │   ├── perfect_perception_node.py
-│   │   │   └── cone_follower_node.py
+│   │   │   ├── esp32_sim_node.py
+│   │   │   └── ackermann_to_vel.py
 │   │   └── launch/simulation.launch.py
 │   │
 │   ├── kart_perception/            (ament_python) Perception pipeline
@@ -28,13 +36,11 @@
 │   │       ├── perception_3d.launch.py       Full 3D pipeline
 │   │       └── perception_test.launch.py     Offline testing
 │   │
-│   ├── kart_bringup/               (ament_cmake) Hardware launch files
+│   ├── kart_bringup/               (ament_cmake) Launch files only
 │   │   ├── launch/
 │   │   │   ├── launch.py                  Full pipeline (perception→control→comms→dashboard)
 │   │   │   ├── dashboard.launch.py        Dashboard + comms (no commands sent to kart)
 │   │   │   └── teleop.launch.py          Joystick teleop
-│   │   ├── scripts/
-│   │   │   └── cmd_vel_bridge_node.py    Twist → Frame msgs (100 Hz)
 │   │   └── config/teleop_params.yaml
 │   │
 │   ├── kb_coms_micro/              (ament_cmake, C++) Serial bridge (ROS ↔ ESP32 UART)

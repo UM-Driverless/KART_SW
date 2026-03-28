@@ -40,7 +40,7 @@ ros2 run kart_sim perfect_perception_node.py --ros-args \
   -p kart_start_yaw:=1.5708 -p fov_deg:=120.0
 
 # Terminal 4: Controller
-ros2 run kart_sim cone_follower_node.py --ros-args \
+ros2 run kart_control cone_follower_node.py --ros-args \
   -p cmd_vel_topic:=/kart/cmd_vel -p max_speed:=2.0
 
 # Terminal 5: Send manual velocity

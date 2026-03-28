@@ -56,8 +56,9 @@ def _launch_setup(context):
     use_yolo = context.launch_configurations.get("use_yolo", "false")
     gui = context.launch_configurations.get("gui", "false")
     controller_type = context.launch_configurations.get("controller", "neural_v2")
+    pkg_kart_control = get_package_share_directory("kart_control")
     default_weights = os.path.join(
-        pkg_kart_sim, "config", "neural_v2_weights.json"
+        pkg_kart_control, "config", "neural_v2_weights.json"
     )
     weights_json = context.launch_configurations.get("weights_json", default_weights)
 
@@ -175,7 +176,7 @@ def _launch_setup(context):
 
     # --- 4. Cone follower control node ---
     cone_follower = Node(
-        package="kart_sim",
+        package="kart_control",
         executable="cone_follower_node.py",
         name="cone_follower",
         output="screen",
@@ -282,7 +283,7 @@ def generate_launch_description():
             DeclareLaunchArgument(
                 "weights_json",
                 default_value=os.path.join(
-                    get_package_share_directory("kart_sim"),
+                    get_package_share_directory("kart_control"),
                     "config", "neural_v2_weights.json",
                 ),
                 description="Path to neural-net weights JSON (from sim2d GA trainer).",

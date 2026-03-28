@@ -43,13 +43,13 @@ ros2 run kart_perception cone_depth_localizer --ros-args \
   -p output_topic:=/perception/cones_3d &
 
 # Cone follower (3D cones → steering)
-ros2 run kart_sim cone_follower_node.py --ros-args \
+ros2 run kart_control cone_follower_node.py --ros-args \
   -p detections_topic:=/perception/cones_3d \
   -p cmd_vel_topic:=/kart/cmd_vel \
   -p controller_type:=geometric &
 
 # cmd_vel bridge (Twist → Frame msgs for ESP32)
-ros2 run kart_bringup cmd_vel_bridge_node.py --ros-args \
+ros2 run kart_control cmd_vel_bridge_node.py --ros-args \
   -r __node:=cmd_vel_bridge &
 
 # KB_Coms_micro (serial bridge to ESP32)
