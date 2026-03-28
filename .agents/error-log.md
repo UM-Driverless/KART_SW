@@ -257,3 +257,10 @@ echo "0" | sudo -S bash -c "echo 0 > /sys/bus/usb/devices/2-3.2/authorized && sl
 - Rule: **When creating WiFi connections for SSIDs with special characters, compare raw bytes** (`od -c`) between the scanned SSID and the stored profile SSID immediately.
 - Rule: **If the same command fails twice, stop and investigate** — read logs, check assumptions. Don't retry 6 times.
 - Rule: **Use `nmcli dev wifi connect <SSID>` instead of `nmcli con add`** when possible — it takes the SSID directly from the scan results, avoiding encoding issues.
+
+## 2026-03-28 - Told user to run commands instead of executing them
+**What happened:** After porting the MPC controller code and updating launch files, ended with "To run it in the UTM VM: `ros2 launch kart_sim simulation.launch.py controller:=mpc`. Make sure scipy is installed: `pip install scipy`. Want me to check that or help you launch it?" — telling the user to do things the agent can do itself (install deps, launch sim via SSH).
+**Root cause:** Defaulting to passive "here's what you should do" mode instead of actively executing. Asking "want me to do X?" when the answer is obviously yes.
+**Prevention added:**
+- Rule: **Never tell the user to run a command you can run yourself.** If a dep needs installing, install it. If a sim needs launching, launch it. If something needs building, build it. Just do it.
+- Rule: **Don't ask "want me to do X?" for obvious next steps.** If the task naturally requires it, execute it immediately.

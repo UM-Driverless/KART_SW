@@ -186,7 +186,9 @@ def _launch_setup(context):
                 "detections_topic": "/perception/cones_3d",
                 "cmd_vel_topic": "/kart/cmd_vel",
                 "controller_type": controller_type,
+                "speed_controller_type": context.launch_configurations.get("speed_controller", "curve_factor"),
                 "weights_json": weights_json,
+                "odom_topic": "/model/kart/odom_gt",
                 "max_speed": float(context.launch_configurations.get("max_speed", "1000000.0")),
                 "min_speed": float(context.launch_configurations.get("min_speed", "0.5")),
                 "steering_gain": float(context.launch_configurations.get("steering_gain", "2.0")),
@@ -194,6 +196,9 @@ def _launch_setup(context):
                 "lookahead_max": float(context.launch_configurations.get("lookahead_max", "15.0")),
                 "half_track_width": 1.5,
                 "speed_curve_factor": float(context.launch_configurations.get("speed_curve_factor", "0.3")),
+                "mpc_w_cte": float(context.launch_configurations.get("mpc_w_cte", "5.0")),
+                "mpc_w_dsteer": float(context.launch_configurations.get("mpc_w_dsteer", "15.0")),
+                "mpc_w_heading": float(context.launch_configurations.get("mpc_w_heading", "3.0")),
             }
         ],
     )
@@ -278,7 +283,7 @@ def generate_launch_description():
             DeclareLaunchArgument(
                 "controller",
                 default_value="neural_v2",
-                description="Controller type: 'geometric', 'neural', or 'neural_v2'.",
+                description="Controller type: 'geometric', 'neural', 'neural_v2', or 'mpc'.",
             ),
             DeclareLaunchArgument(
                 "weights_json",
@@ -291,7 +296,7 @@ def generate_launch_description():
             DeclareLaunchArgument("max_speed", default_value="1000000.0"),
             DeclareLaunchArgument("min_speed", default_value="0.5"),
             DeclareLaunchArgument("steering_gain", default_value="2.0"),
-            DeclareLaunchArgument("max_steer", default_value="0.5"),
+            DeclareLaunchArgument("max_steer", default_value="1.047"),
             DeclareLaunchArgument("lookahead_max", default_value="15.0"),
             DeclareLaunchArgument("speed_curve_factor", default_value="0.3"),
             OpaqueFunction(function=_launch_setup),

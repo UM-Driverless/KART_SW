@@ -332,7 +332,7 @@ class DashboardNode(Node):
     def publish_controller_type(self, ctrl_type: str):
         """@brief Publish controller type change to cone_follower.
 
-        @param ctrl_type One of: geometric, pure_pursuit, neural_v2.
+        @param ctrl_type One of: geometric, pure_pursuit, neural_v2, mpc.
         """
         msg = String()
         msg.data = ctrl_type
@@ -365,7 +365,7 @@ class DashboardNode(Node):
         @param brake Brake input, 0.0 to 1.0.
         """
         NOMINAL_MAX_SPEED = 5.0
-        NOMINAL_MAX_STEER = 0.785  # radians (~45 deg)
+        NOMINAL_MAX_STEER = 1.047  # radians (~60 deg)
 
         cmd = Twist()
         cmd.linear.x = (throttle - brake) * NOMINAL_MAX_SPEED

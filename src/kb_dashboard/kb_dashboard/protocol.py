@@ -298,7 +298,7 @@ class DashboardState:
             "mission": "manual",
             "state": "idle",  # idle | running | ebs
             "steer_mode": "pid",  # "pid" or "pwm"
-            "controller_type": "geometric",  # geometric | pure_pursuit | neural_v2
+            "controller_type": "geometric",  # geometric | pure_pursuit | neural_v2 | mpc
             "speed_controller_type": "curve_factor",  # curve_factor | constant | neural_v2
         }
         self._heartbeat_time = 0.0
