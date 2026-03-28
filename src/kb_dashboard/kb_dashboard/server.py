@@ -71,9 +71,8 @@ async def run_websocket_server(
     @param ready_callback Optional callable invoked once the server is listening.
     @param password If non-empty, require this password to access the dashboard.
     """
-    # Generate a random session token on startup — all authenticated sessions share it.
-    # It rotates every time the server restarts.
-    auth_token = secrets.token_hex(16)
+    # Derive session token from password so cookies survive server restarts.
+    auth_token = hashlib.sha256(password.encode()).hexdigest()[:32]
 
     clients: dict[asyncio.StreamWriter, str] = {}  # writer → client_id
     controller: dict = {"holder": None, "id": None}  # who has manual control
@@ -130,7 +129,7 @@ async def run_websocket_server(
                 resp = (
                     f"HTTP/1.1 303 See Other\r\n"
                     f"Location: /\r\n"
-                    f"Set-Cookie: kart_session={auth_token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=31536000\r\n"
+                    f"Set-Cookie: kart_session={auth_token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000; Secure\r\n"
                     f"Connection: close\r\n\r\n"
                 ).encode()
             else:
