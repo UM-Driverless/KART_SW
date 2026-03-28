@@ -164,10 +164,14 @@ void SerialDriver::supervisor_loop()
 {
     while (running_) {
         if (fd_ < 0 && !rx_thread_.joinable() && !tx_thread_.joinable()) {
+            std::cerr << "Serial: connecting to " << port_ << "..." << std::endl;
             if (open_port()) {
                 last_rx_ok_time_.store(std::chrono::steady_clock::now());
                 rx_thread_ = std::thread(&SerialDriver::rx_loop, this);
                 tx_thread_ = std::thread(&SerialDriver::tx_loop, this);
+            } else {
+                std::cerr << "Serial: open failed (" << port_ << "): "
+                          << strerror(errno) << std::endl;
             }
         }
 
@@ -231,7 +235,9 @@ void SerialDriver::close_port()
 {
     if (fd_ >= 0)
     {
-        // Limpia todos los bytes que ya están en el buffer
+        std::cerr << "Serial: closing " << port_
+                  << " (rx_ok=" << rx_ok_.load()
+                  << " crc_err=" << rx_crc_error_.load() << ")" << std::endl;
         tcflush(fd_, TCIFLUSH);
         close(fd_);
         fd_ = -1;
@@ -409,15 +415,24 @@ int SerialDriver::process_byte(uint8_t byte)
         
                 frame.payload = std::move(data);
         
-                rx_ok_++;
+                uint64_t prev_ok = rx_ok_.fetch_add(1);
                 last_rx_ok_time_.store(std::chrono::steady_clock::now());
+                if (prev_ok == 0) {
+                    std::cerr << "Serial: first valid frame received (type=0x"
+                              << std::hex << (int)type_ << std::dec << ")" << std::endl;
+                }
                 callback_(frame);
                 state_ = State::WAIT_SOF;
         
                 return 1;
             } else {
-                std::cerr << "Serial: CRC mismatch" << std::endl;
-                rx_crc_error_++;
+                uint64_t errs = rx_crc_error_.fetch_add(1) + 1;
+                if (errs <= 5 || (errs % 100 == 0)) {
+                    std::cerr << "Serial: CRC mismatch #" << errs
+                              << " (type=0x" << std::hex << (int)type_
+                              << std::dec << " len=" << (int)len_ << ")"
+                              << std::endl;
+                }
             }
         
             state_ = State::WAIT_SOF;
