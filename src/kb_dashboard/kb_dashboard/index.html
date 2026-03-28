@@ -579,7 +579,7 @@ body { font-family:'Inter',-apple-system,BlinkMacSystemFont,'SF Pro',system-ui,s
   <div class="card"><div class="card-t">Mission</div>
     <div class="mis-grid" id="misGrid"><button class="mis-btn sel" data-m="manual">Manual</button><button class="mis-btn" data-m="remote_control">Remote</button><button class="mis-btn" data-m="autonomous">Auto</button><button class="mis-btn" data-m="acceleration">Accel</button><button class="mis-btn" data-m="skidpad">Skidpad</button><button class="mis-btn" data-m="autocross">Autocross</button><button class="mis-btn" data-m="trackdrive">Trackdrive</button><button class="mis-btn" data-m="inspection">Inspect</button></div>
     <div class="algo-select"><div class="algo-label">Steering</div><select class="algo-dropdown" onchange="onAlgoChange(this)"><option value="geometric">Geometric</option><option value="pure_pursuit">Pure Pursuit</option><option value="neural_v2">Neural V2</option></select></div>
-    <div class="algo-select"><div class="algo-label">Speed</div><select class="algo-dropdown speed-algo-dropdown" onchange="onSpeedAlgoChange(this)"><option value="curve_factor">Curve Factor</option><option value="constant">Constant</option><option value="neural_v2">Neural V2</option></select></div>
+    <div class="algo-select"><div class="algo-label">Speed</div><select class="algo-dropdown speed-algo-dropdown" onchange="onSpeedAlgoChange(this)"><option value="curve_factor">Curve Factor</option><option value="constant">Constant</option><option value="neural_v2">Neural V2</option><option value="zero">Zero</option></select></div>
     <div class="ctrl-row"><button class="ctrl-btn go" data-st="running" onclick="wsSend({action:'set_state',state:'running'})">Start</button><button class="ctrl-btn stop" data-st="idle" onclick="wsSend({action:'set_state',state:'idle'})">Stop</button><button class="ctrl-btn ebs" data-st="ebs" onclick="wsSend({action:'set_state',state:'ebs'})">EBS</button><button class="ctrl-btn restart" onclick="if(confirm('Restart kart-brain service?'))wsSend({action:'restart'})">Restart</button></div>
   </div>
   <div class="card"><div class="card-t">Kart State</div>
@@ -990,7 +990,7 @@ body::after {
       </div>
       <div class="algo-select">
         <div class="algo-label">Speed</div>
-        <select class="algo-dropdown speed-algo-dropdown" onchange="onSpeedAlgoChange(this)"><option value="curve_factor">Curve Factor</option><option value="constant">Constant</option><option value="neural_v2">Neural V2</option></select>
+        <select class="algo-dropdown speed-algo-dropdown" onchange="onSpeedAlgoChange(this)"><option value="curve_factor">Curve Factor</option><option value="constant">Constant</option><option value="neural_v2">Neural V2</option><option value="zero">Zero</option></select>
       </div>
       <div class="act-grid">
         <button class="abtn abtn-start" data-st="running" onclick="wsSend({action:'set_state',state:'running'})">START</button>
@@ -1448,7 +1448,7 @@ body::before { content:''; position:fixed; inset:0; pointer-events:none; backgro
       <button class="h-mis-btn" data-m="skidpad">SKIDPAD</button><button class="h-mis-btn" data-m="autocross">AUTOCROSS</button><button class="h-mis-btn" data-m="trackdrive">TRACKDRIVE</button><button class="h-mis-btn" data-m="inspection">INSPECT</button>
     </div>
     <div class="algo-select"><div class="algo-label">Steering</div><select class="algo-dropdown" onchange="onAlgoChange(this)"><option value="geometric">Geometric</option><option value="pure_pursuit">Pure Pursuit</option><option value="neural_v2">Neural V2</option></select></div>
-    <div class="algo-select"><div class="algo-label">Speed</div><select class="algo-dropdown speed-algo-dropdown" onchange="onSpeedAlgoChange(this)"><option value="curve_factor">Curve Factor</option><option value="constant">Constant</option><option value="neural_v2">Neural V2</option></select></div>
+    <div class="algo-select"><div class="algo-label">Speed</div><select class="algo-dropdown speed-algo-dropdown" onchange="onSpeedAlgoChange(this)"><option value="curve_factor">Curve Factor</option><option value="constant">Constant</option><option value="neural_v2">Neural V2</option><option value="zero">Zero</option></select></div>
     <div class="h-ctrl-row">
       <button class="h-ctrl go" data-st="running" onclick="wsSend({action:'set_state',state:'running'})">START</button>
       <button class="h-ctrl stop" data-st="idle" onclick="wsSend({action:'set_state',state:'idle'})">STOP</button>
