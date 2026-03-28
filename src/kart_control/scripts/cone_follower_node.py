@@ -118,6 +118,8 @@ class ConeFollowerNode(Node):
         )
         self.speed_pub = self.create_publisher(Float32, "/kart/speed", 10)
         self._actual_speed = 0.0
+        self._prev_odom_pos = None
+        self._prev_odom_time = None
         self._last_steer = 0.0
         self.last_detection_time = self.get_clock().now()
         self.timer = self.create_timer(0.1, self._safety_check)
@@ -135,10 +137,19 @@ class ConeFollowerNode(Node):
                 self._load_neural_weights()
 
     def _on_odom(self, msg: Odometry):
-        """@brief Callback for odometry. Extracts current speed and publishes to /kart/speed."""
-        vx = msg.twist.twist.linear.x
-        vy = msg.twist.twist.linear.y
-        self._actual_speed = math.sqrt(vx * vx + vy * vy)
+        """@brief Callback for odometry. Computes speed from position differentiation."""
+        # ZED ROS2 wrapper doesn't populate twist, so derive velocity from position
+        pos = msg.pose.pose.position
+        t = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
+        if self._prev_odom_pos is not None and self._prev_odom_time is not None:
+            dt = t - self._prev_odom_time
+            if dt > 1e-6:
+                dx = pos.x - self._prev_odom_pos[0]
+                dy = pos.y - self._prev_odom_pos[1]
+                dz = pos.z - self._prev_odom_pos[2]
+                self._actual_speed = math.sqrt(dx*dx + dy*dy + dz*dz) / dt
+        self._prev_odom_pos = (pos.x, pos.y, pos.z)
+        self._prev_odom_time = t
         self.speed_pub.publish(Float32(data=self._actual_speed))
 
     # ── neural net loading ────────────────────────────────────────────
