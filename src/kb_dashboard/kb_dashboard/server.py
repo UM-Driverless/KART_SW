@@ -308,25 +308,17 @@ async def run_websocket_server(
             ws_send(writer, resp)
         elif action == "set_svo":
             svo_name = cmd.get("file", "live")
-            import subprocess as _sp
-            # Kill any running SVO player
-            _sp.Popen("pkill -f 'image_source'", shell=True,
-                       stdout=_sp.DEVNULL, stderr=_sp.DEVNULL)
-            if svo_name != "live":
+            svo_path_file = Path("/tmp/kart_svo_path")
+            if svo_name == "live":
+                try:
+                    svo_path_file.unlink()
+                except FileNotFoundError:
+                    pass
+            else:
                 svo_full = str(Path.home() / "kart_brain" / "data" / "svo" / svo_name)
-                # Launch SVO player publishing to the ZED image topic
-                _sp.Popen(
-                    f"source /opt/ros/humble/setup.bash && "
-                    f"source ~/kart_brain/install/setup.bash && "
-                    f"ros2 run kart_perception image_source "
-                    f"--ros-args -p source:={svo_full} "
-                    f"-p image_topic:=/zed/zed_node/rgb/image_rect_color "
-                    f"-p publish_rate:=30.0 -p loop:=true",
-                    shell=True, executable="/bin/bash",
-                    stdout=_sp.DEVNULL, stderr=_sp.DEVNULL,
-                )
+                svo_path_file.write_text(svo_full)
             state.update("svo_file", svo_name)
-            node.get_logger().info(f"SVO set to: {svo_name}")
+            node.get_logger().info(f"SVO set to: {svo_name} (restart to apply)")
         elif action == "restart":
             node.get_logger().warn(f"Restart requested by {client_id}")
             import subprocess
