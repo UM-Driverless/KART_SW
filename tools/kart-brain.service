@@ -8,6 +8,7 @@ Type=simple
 User=orin
 Environment=DISPLAY=:1
 Environment=XAUTHORITY=/run/user/1000/gdm/Xauthority
+ExecStartPre=/bin/sleep 10
 ExecStart=/bin/bash -c '\
   source /opt/ros/humble/setup.bash && \
   source ~/kart_brain/install/setup.bash && \
