@@ -155,8 +155,22 @@ rm models/perception/yolo/<model>.onnx
 
 ## Launching the Autonomous Pipeline
 
+**Autostart (systemd):** The full stack launches automatically on boot via `kart-brain.service`.
+Starts in manual mode; tap an autonomous mission in the dashboard to switch.
+
 ```bash
-# From Orin terminal (or SSH with DISPLAY=:1):
+# Service management
+sudo systemctl status kart-brain       # Check status
+sudo systemctl stop kart-brain         # Stop
+sudo systemctl restart kart-brain      # Restart
+journalctl -u kart-brain -f            # View logs
+
+# Service file lives at: tools/kart-brain.service (repo) → /etc/systemd/system/ (Orin)
+# To update after editing: sudo cp ~/kart_brain/tools/kart-brain.service /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl restart kart-brain
+```
+
+**Manual launch** (if service is stopped):
+```bash
 cd ~/kart_brain && source install/setup.bash
 ros2 launch kart_bringup launch.py
 
@@ -165,6 +179,6 @@ ros2 launch kart_bringup launch.py
 # To view YOLO detections with bounding boxes:
 DISPLAY=:1 ros2 run rqt_image_view rqt_image_view /perception/yolo/annotated
 
-# Dashboard + comms (no commands sent to kart):
+# Dashboard + comms only (no perception):
 ros2 launch kart_bringup dashboard.launch.py
 ```
