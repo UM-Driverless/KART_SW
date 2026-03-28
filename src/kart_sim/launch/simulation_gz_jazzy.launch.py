@@ -178,6 +178,7 @@ def _launch_setup(context):
                 "cmd_vel_topic": "/kart/cmd_vel",
                 "odom_topic": "/model/kart/odom_gt",
                 "controller_type": controller_type,
+                "speed_controller_type": context.launch_configurations.get("speed_controller", "curve_factor"),
                 "weights_json": weights_json,
                 "max_speed": float(context.launch_configurations.get("max_speed", "1000000.0")),
                 "min_speed": float(context.launch_configurations.get("min_speed", "0.5")),

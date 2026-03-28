@@ -143,10 +143,13 @@ class DashboardNode(Node):
         self._pending_state_cmd_count = 0
         self._pending_steer_mode = None
         self._pending_steer_mode_count = 0
-        # Controller type publisher (String to cone_follower)
+        # Controller type publishers (String to cone_follower)
         self.controller_type_pub = self.create_publisher(String, "/dashboard/controller_type", 10)
         self._pending_controller_type = None
         self._pending_controller_type_count = 0
+        self.speed_controller_type_pub = self.create_publisher(String, "/dashboard/speed_controller_type", 10)
+        self._pending_speed_controller_type = None
+        self._pending_speed_controller_type_count = 0
         self.create_timer(0.01, self._publish_pending)  # 100 Hz
 
         # One-shot self-test after 2 seconds
@@ -308,6 +311,9 @@ class DashboardNode(Node):
         if self._pending_controller_type is not None and self._pending_controller_type_count > 0:
             self.controller_type_pub.publish(self._pending_controller_type)
             self._pending_controller_type_count -= 1
+        if self._pending_speed_controller_type is not None and self._pending_speed_controller_type_count > 0:
+            self.speed_controller_type_pub.publish(self._pending_speed_controller_type)
+            self._pending_speed_controller_type_count -= 1
 
     def publish_steer_mode(self, mode: int):
         """@brief Publish steering mode change to ESP32.
@@ -333,6 +339,17 @@ class DashboardNode(Node):
         self._pending_controller_type = msg
         self._pending_controller_type_count = 100
         self.get_logger().info(f"Controller type: {ctrl_type}")
+
+    def publish_speed_controller_type(self, speed_type: str):
+        """@brief Publish speed controller type change to cone_follower.
+
+        @param speed_type One of: curve_factor, constant, neural_v2.
+        """
+        msg = String()
+        msg.data = speed_type
+        self._pending_speed_controller_type = msg
+        self._pending_speed_controller_type_count = 100
+        self.get_logger().info(f"Speed controller type: {speed_type}")
 
     def publish_manual_control(
         self, steer: float, steer_type: str, throttle: float, brake: float

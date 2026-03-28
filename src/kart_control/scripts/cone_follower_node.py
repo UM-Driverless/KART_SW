@@ -54,6 +54,7 @@ class ConeFollowerNode(Node):
         self.declare_parameter("odom_topic", "/zed/zed_node/odom")
         self.declare_parameter("no_cone_timeout", 1.0)
         self.declare_parameter("controller_type", "geometric")  # geometric|pure_pursuit|neural|neural_v2
+        self.declare_parameter("speed_controller_type", "curve_factor")  # curve_factor|constant|neural_v2
         self.declare_parameter("weights_json", "")               # path for neural
 
         # --- geometric params ---
@@ -70,6 +71,7 @@ class ConeFollowerNode(Node):
         odom_topic = str(self.get_parameter("odom_topic").value)
         self.no_cone_timeout = float(self.get_parameter("no_cone_timeout").value)
         self.controller_type = str(self.get_parameter("controller_type").value)
+        self.speed_controller_type = str(self.get_parameter("speed_controller_type").value)
 
         # geometric fields
         self.steering_gain = float(self.get_parameter("steering_gain").value)
@@ -124,8 +126,9 @@ class ConeFollowerNode(Node):
         self.last_detection_time = self.get_clock().now()
         self.timer = self.create_timer(0.1, self._safety_check)
         self.create_subscription(String, "/dashboard/controller_type", self._on_controller_type, 10)
+        self.create_subscription(String, "/dashboard/speed_controller_type", self._on_speed_controller_type, 10)
 
-        self.get_logger().info(f"Controller type: {self.controller_type}")
+        self.get_logger().info(f"Controller: steer={self.controller_type} speed={self.speed_controller_type}")
 
     def _on_controller_type(self, msg: String):
         """@brief Callback for runtime controller type changes from the dashboard."""
@@ -135,6 +138,33 @@ class ConeFollowerNode(Node):
             self.controller_type = new_type
             if new_type in ("neural", "neural_v2") and self._nn_W1 is None:
                 self._load_neural_weights()
+
+    def _on_speed_controller_type(self, msg: String):
+        """@brief Callback for runtime speed controller type changes from the dashboard."""
+        new_type = msg.data
+        if new_type in ("curve_factor", "constant", "neural_v2") and new_type != self.speed_controller_type:
+            self.get_logger().info(f"Speed controller: {self.speed_controller_type} → {new_type}")
+            self.speed_controller_type = new_type
+
+    def _compute_speed(self, steer, nn_out=None):
+        """@brief Compute speed based on the active speed controller type.
+
+        @param steer Current steering angle (rad).
+        @param nn_out Raw neural net output (2-element array), or None if steering is not neural.
+        @return Speed in m/s.
+        """
+        if self.speed_controller_type == "constant":
+            return self.max_speed
+        elif self.speed_controller_type == "neural_v2":
+            if nn_out is not None:
+                speed = float(1.0 / (1.0 + np.exp(-nn_out[1]))) * self._nn_max_speed
+                return max(self.min_speed, min(self.max_speed, speed))
+            # neural_v2 speed requires neural steering; fall back
+            speed = self.max_speed * (1.0 - self.speed_curve_factor * abs(steer))
+            return max(self.min_speed, min(self.max_speed, speed))
+        # default: curve_factor
+        speed = self.max_speed * (1.0 - self.speed_curve_factor * abs(steer))
+        return max(self.min_speed, min(self.max_speed, speed))
 
     def _on_odom(self, msg: Odometry):
         """@brief Callback for odometry. Computes speed from position differentiation."""
@@ -222,12 +252,14 @@ class ConeFollowerNode(Node):
                 continue
             cones.append((class_id, fwd, left))
 
+        nn_out = None
         if self.controller_type in ("neural", "neural_v2"):
-            steer, speed = self._control_neural(cones)
+            steer, _, nn_out = self._control_neural(cones)
         elif self.controller_type == "pure_pursuit":
-            steer, speed = self._control_pure_pursuit(cones)
+            steer, _ = self._control_pure_pursuit(cones)
         else:
-            steer, speed = self._control_geometric(cones)
+            steer, _ = self._control_geometric(cones)
+        speed = self._compute_speed(steer, nn_out)
 
         # Safety: if no cones visible, slow down and keep last steer
         # (don't hard-stop — cones may reappear after a curve transition)
@@ -428,11 +460,7 @@ class ConeFollowerNode(Node):
         out = hidden @ self._nn_W2 + self._nn_b2
 
         steer = float(np.tanh(out[0])) * self._nn_max_steer
-        # Original neural net speed output:
-        # speed = float(1.0 / (1.0 + np.exp(-out[1]))) * self._nn_max_speed
-        # Use same speed profile as geometric instead
-        speed = self.max_speed * (1.0 - self.speed_curve_factor * abs(steer))
-        speed = max(self.min_speed, min(self.max_speed, speed))
+        speed = self._compute_speed(steer, out)
 
         self._last_steer = steer
         self.get_logger().info(
@@ -440,7 +468,7 @@ class ConeFollowerNode(Node):
             f"act_spd={self._actual_speed:.1f} "
             f"blues={len(blues)} yellows={len(yellows)}"
         )
-        return steer, speed
+        return steer, speed, out
 
     # ── safety timeout ────────────────────────────────────────────────
 

@@ -113,6 +113,7 @@ def generate_launch_description():
         parameters=[
             {
                 "controller_type": "geometric",
+                "speed_controller_type": "curve_factor",
                 "steering_gain": steering_gain,
                 "max_speed": 2.625,
             }
