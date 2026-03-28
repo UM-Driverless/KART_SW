@@ -12,8 +12,8 @@
             depth_mode: 'PERFORMANCE'  # Fastest depth mode
             point_cloud_freq: 0.0      # Disable point cloud publishing
         pos_tracking:
-            pos_tracking_enabled: false # Disable positional tracking
-            publish_tf: false
+            pos_tracking_enabled: true  # Visual-inertial odometry for speed estimation
+            publish_tf: true
             publish_map_tf: false
         mapping:
             mapping_enabled: false
