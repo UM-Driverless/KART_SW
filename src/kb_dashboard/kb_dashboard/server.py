@@ -308,15 +308,23 @@ async def run_websocket_server(
             ws_send(writer, resp)
         elif action == "set_svo":
             svo_name = cmd.get("file", "live")
-            if svo_name == "live":
-                # Remove the file so launch.py defaults to live camera
-                try:
-                    Path("/tmp/kart_svo_path").unlink()
-                except FileNotFoundError:
-                    pass
-            else:
-                svo_path = Path.home() / "kart_brain" / "data" / "svo" / svo_name
-                Path("/tmp/kart_svo_path").write_text(str(svo_path))
+            import subprocess as _sp
+            # Kill any running SVO player
+            _sp.Popen("pkill -f 'image_source'", shell=True,
+                       stdout=_sp.DEVNULL, stderr=_sp.DEVNULL)
+            if svo_name != "live":
+                svo_full = str(Path.home() / "kart_brain" / "data" / "svo" / svo_name)
+                # Launch SVO player publishing to the ZED image topic
+                _sp.Popen(
+                    f"source /opt/ros/humble/setup.bash && "
+                    f"source ~/kart_brain/install/setup.bash && "
+                    f"ros2 run kart_perception image_source "
+                    f"--ros-args -p source:={svo_full} "
+                    f"-p image_topic:=/zed/zed_node/rgb/image_rect_color "
+                    f"-p publish_rate:=30.0 -p loop:=true",
+                    shell=True, executable="/bin/bash",
+                    stdout=_sp.DEVNULL, stderr=_sp.DEVNULL,
+                )
             state.update("svo_file", svo_name)
             node.get_logger().info(f"SVO set to: {svo_name}")
         elif action == "restart":

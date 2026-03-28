@@ -8,9 +8,15 @@ from cv_bridge import CvBridge
 from rclpy.node import Node
 from sensor_msgs.msg import Image
 
+try:
+    import pyzed.sl as sl
+    HAS_PYZED = True
+except ImportError:
+    HAS_PYZED = False
 
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".bmp", ".webp"}
 VIDEO_EXTS = {".mp4", ".avi", ".mov", ".mkv", ".webm"}
+SVO_EXTS = {".svo", ".svo2"}
 
 
 class ImageSourceNode(Node):
@@ -51,6 +57,8 @@ class ImageSourceNode(Node):
         self._image_paths: List[pathlib.Path] = []
         self._image_index = 0
         self._video_capture: Optional[cv2.VideoCapture] = None
+        self._zed_camera = None
+        self._zed_image = None
 
         source_str = str(self.source)
         # Webcam: integer index (e.g. "0") or device path (e.g. "/dev/video0")
@@ -69,7 +77,12 @@ class ImageSourceNode(Node):
             if not self._image_paths:
                 self.get_logger().error(f"No images found in {self.source}")
         elif self.source.is_file():
-            if self.source.suffix.lower() in IMAGE_EXTS:
+            if self.source.suffix.lower() in SVO_EXTS:
+                if not HAS_PYZED:
+                    self.get_logger().error("pyzed not installed — cannot play SVO files")
+                else:
+                    self._init_svo(source_str)
+            elif self.source.suffix.lower() in IMAGE_EXTS:
                 self._image_paths = [self.source]
             elif self.source.suffix.lower() in VIDEO_EXTS:
                 self._video_capture = cv2.VideoCapture(str(self.source))
@@ -85,6 +98,39 @@ class ImageSourceNode(Node):
             return
 
         self.timer = self.create_timer(1.0 / publish_rate, self._on_timer)
+
+    def _init_svo(self, path: str) -> None:
+        """@brief Open an SVO file with the ZED SDK for playback."""
+        cam = sl.Camera()
+        params = sl.InitParameters()
+        params.set_from_svo_file(path)
+        params.svo_real_time_mode = False
+        err = cam.open(params)
+        if err != sl.ERROR_CODE.SUCCESS:
+            self.get_logger().error(f"Failed to open SVO: {err}")
+            return
+        self._zed_camera = cam
+        self._zed_image = sl.Mat()
+        self.get_logger().info(f"SVO opened: {path} ({cam.get_svo_number_of_frames()} frames)")
+
+    def _next_svo_frame(self):
+        """@brief Grab the next frame from the SVO file.
+
+        @return BGR frame as numpy array, or None if no frame available.
+        """
+        if self._zed_camera is None:
+            return None
+        err = self._zed_camera.grab()
+        if err == sl.ERROR_CODE.SUCCESS:
+            self._zed_camera.retrieve_image(self._zed_image, sl.VIEW.LEFT)
+            # pyzed returns BGRA, convert to BGR
+            return cv2.cvtColor(self._zed_image.get_data(), cv2.COLOR_BGRA2BGR)
+        if err == sl.ERROR_CODE.END_OF_SVOFILE_REACHED:
+            if self.loop:
+                self._zed_camera.set_svo_position(0)
+                return None
+            self.timer.cancel()
+        return None
 
     def _publish_image(self, frame) -> None:
         """@brief Convert a BGR frame to a ROS Image message and publish it.
@@ -144,7 +190,9 @@ class ImageSourceNode(Node):
     def _on_timer(self) -> None:
         """@brief Timer callback that grabs the next frame and publishes it."""
         frame = None
-        if self._video_capture is not None:
+        if self._zed_camera is not None:
+            frame = self._next_svo_frame()
+        elif self._video_capture is not None:
             frame = self._next_video_frame()
         else:
             frame = self._next_image()
