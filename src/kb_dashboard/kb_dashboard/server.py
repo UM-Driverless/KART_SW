@@ -372,6 +372,10 @@ async def run_websocket_server(
                 jpeg = node.get_hud_jpeg()
                 if jpeg:
                     for w in list(clients):
+                        # Skip frame if client's write buffer is backed up (> 2 frames)
+                        transport = w.transport
+                        if transport and transport.get_write_buffer_size() > 2 * len(jpeg):
+                            continue
                         try:
                             ws_send(w, jpeg, opcode=0x2)
                             await asyncio.wait_for(w.drain(), timeout=0.5)
