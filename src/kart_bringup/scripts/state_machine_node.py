@@ -104,7 +104,12 @@ class StateMachineNode(Node):
         if cmd == "start" and s == AS_READY:
             self._set_state(AS_DRIVING)
         elif cmd == "stop" and s in (AS_READY, AS_DRIVING, AS_FINISHED, AS_EMERGENCY):
-            self._set_state(AS_OFF)
+            # Stay armed (AS_READY) if an autonomous mission is selected,
+            # matching real FS behavior: stop driving ≠ deselect mission / ASMS off.
+            if self._mission in AUTONOMOUS_MISSIONS:
+                self._set_state(AS_READY)
+            else:
+                self._set_state(AS_OFF)
         elif cmd == "ebs" and s != AS_OFF:
             self._set_state(AS_EMERGENCY)
         elif cmd == "finish" and s == AS_DRIVING:
