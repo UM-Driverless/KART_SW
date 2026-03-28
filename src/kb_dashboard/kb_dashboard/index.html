@@ -295,12 +295,11 @@ function updateMissionUI() {
       el.style.display = isAuto ? 'block' : 'none';
     }
   });
-  if (currentMission === 'inspection') wsSend({action:'list_svo'});
   updateAlgoButtons();
 }
 
 function updateAlgoButtons() {
-  document.querySelectorAll('.algo-dropdown:not(.speed-algo-dropdown)').forEach(sel => sel.value = currentControllerType);
+  document.querySelectorAll('.algo-dropdown:not(.speed-algo-dropdown):not(.svo-dropdown)').forEach(sel => sel.value = currentControllerType);
   document.querySelectorAll('.speed-algo-dropdown').forEach(sel => sel.value = currentSpeedControllerType);
 }
 function onAlgoChange(sel) {
@@ -421,6 +420,7 @@ function connect() {
     if (typeof dbgLog==='function') dbgLog('WS OPEN');
     const d = $('connDot'); if (d) d.classList.add('ok');
     if (reconnectTimer) { clearInterval(reconnectTimer); reconnectTimer = null; }
+    wsSend({action:'list_svo'});
   };
   ws.onclose = (ev) => {
     if (typeof dbgLog==='function') dbgLog('WS CLOSE code='+ev.code+' reason='+ev.reason+' clean='+ev.wasClean);
@@ -1553,7 +1553,10 @@ body::before { content:''; position:fixed; inset:0; pointer-events:none; backgro
 // ═══════════════════════════════════════════════════════
 function missionClick(e) {
   const btn = e.target.closest('[data-m]');
-  if (btn) wsSend({ action: 'set_mission', mission: btn.dataset.m });
+  if (btn) {
+    wsSend({ action: 'set_mission', mission: btn.dataset.m });
+    if (btn.dataset.m === 'inspection') wsSend({action:'list_svo'});
+  }
 }
 
 function updateSteerBar(d, fillId, cmdId) {
