@@ -265,7 +265,7 @@ def generate_launch_description():
             DeclareLaunchArgument("max_speed", default_value="1000000.0"),
             DeclareLaunchArgument("min_speed", default_value="0.5"),
             DeclareLaunchArgument("steering_gain", default_value="2.0"),
-            DeclareLaunchArgument("max_steer", default_value="0.5"),
+            DeclareLaunchArgument("max_steer", default_value="1.047"),
             DeclareLaunchArgument("lookahead_max", default_value="15.0"),
             DeclareLaunchArgument("speed_curve_factor", default_value="0.3"),
             OpaqueFunction(function=_launch_setup),

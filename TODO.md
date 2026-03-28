@@ -13,6 +13,7 @@
 - [x] **Measure kart speed without hall sensor PCB** -- ZED VIO positional tracking enabled, speed published to `/kart/speed`, displayed in dashboard (branch `feature/zed-speed-estimation`)
 - [x] **Expose dashboard via Cloudflare Tunnel** (Ruben) -- `kart.rubenayla.xyz → http://localhost:9090` done. TODO: add Cloudflare Access (free) for auth.
 - [ ] **Benchmark YOLOv10n vs v11n on Orin with TensorRT** -- export both, compare ms/frame. v10 removes NMS which may help.
+- [ ] **Dashboard SVO selector UX** -- Selecting an SVO file currently requires manually clicking Restart. Make it intuitive: auto-restart when source changes, show a loading indicator, or prompt the user. The user shouldn't need to know that a restart is required.
 - [ ] Create reproducible Orin setup script/guide
 
 ## LOW PRIORITY (Long-Term)

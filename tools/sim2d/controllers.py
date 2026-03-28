@@ -116,7 +116,7 @@ class PurePursuitController:
 
     NUM_GENES = 5
     INPUT_SIZE = 5
-    MAX_STEER = 0.785
+    MAX_STEER = 1.047
 
     DEFAULTS = np.array([6.0, 5.0, 2.0, 0.5, 0.3])
     RANGES = np.array([
@@ -276,7 +276,7 @@ class NeuralNetController:
     NUM_GENES = (INPUT_SIZE * HIDDEN_SIZE + HIDDEN_SIZE
                  + HIDDEN_SIZE * OUTPUT_SIZE + OUTPUT_SIZE)  # 90
 
-    MAX_STEER = 0.785
+    MAX_STEER = 1.047
     MAX_SPEED = 5.0
 
     def __init__(self, genes):
@@ -350,7 +350,7 @@ class NeuralNetV2Controller:
     NUM_GENES = (INPUT_SIZE * HIDDEN_SIZE + HIDDEN_SIZE
                  + HIDDEN_SIZE * OUTPUT_SIZE + OUTPUT_SIZE)  # 322
 
-    MAX_STEER = 0.785
+    MAX_STEER = 1.047
     MAX_SPEED = 5.0
 
     def __init__(self, genes):
@@ -437,7 +437,7 @@ class NeuralNetV3Controller:
                  + HIDDEN1_SIZE * HIDDEN2_SIZE + HIDDEN2_SIZE
                  + HIDDEN2_SIZE * OUTPUT_SIZE + OUTPUT_SIZE)  # 806
 
-    MAX_STEER = 0.785
+    MAX_STEER = 1.047
     MAX_SPEED = 5.0
 
     def __init__(self, genes):
