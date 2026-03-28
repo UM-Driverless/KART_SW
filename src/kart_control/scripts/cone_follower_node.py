@@ -84,8 +84,8 @@ class ConeFollowerNode(Node):
 
         # neural net weights (loaded for neural or neural_v2)
         self._nn_W1 = self._nn_b1 = self._nn_W2 = self._nn_b2 = None
-        self._nn_max_steer = 0.5
-        self._nn_max_speed = 10.0
+        self._nn_max_steer = 0.785
+        self._nn_max_speed = 5.0
         self._nn_input_size = 8    # v1 default
         self._nn_n_blue = 2        # cones per side for v1
         self._nn_n_yellow = 2
@@ -142,7 +142,7 @@ class ConeFollowerNode(Node):
     def _on_speed_controller_type(self, msg: String):
         """@brief Callback for runtime speed controller type changes from the dashboard."""
         new_type = msg.data
-        if new_type in ("curve_factor", "constant", "neural_v2") and new_type != self.speed_controller_type:
+        if new_type in ("curve_factor", "constant", "neural_v2", "zero") and new_type != self.speed_controller_type:
             self.get_logger().info(f"Speed controller: {self.speed_controller_type} → {new_type}")
             self.speed_controller_type = new_type
 
@@ -153,6 +153,8 @@ class ConeFollowerNode(Node):
         @param nn_out Raw neural net output (2-element array), or None if steering is not neural.
         @return Speed in m/s.
         """
+        if self.speed_controller_type == "zero":
+            return 0.0
         if self.speed_controller_type == "constant":
             return self.max_speed
         elif self.speed_controller_type == "neural_v2":

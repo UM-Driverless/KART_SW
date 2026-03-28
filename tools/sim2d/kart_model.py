@@ -3,8 +3,8 @@
 import numpy as np
 
 WHEELBASE = 1.05   # m
-MAX_STEER = 0.5    # rad
-MAX_SPEED = 1e6    # m/s (effectively uncapped)
+MAX_STEER = 0.785  # rad (~45°, matches real kart)
+MAX_SPEED = 10.0   # m/s (reasonable cap for real kart)
 MAX_ACCEL = 2.0    # m/s²
 MAX_DECEL = 3.0    # m/s²
 TIRE_MU = 1.2      # tire friction coefficient
