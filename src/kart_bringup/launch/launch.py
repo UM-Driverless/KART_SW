@@ -38,9 +38,18 @@ def generate_launch_description():
     )
     use_zed_od = LaunchConfiguration("use_zed_od")
 
+    # Read SVO path from /tmp/kart_svo_path if it exists (set by dashboard)
+    _svo_default = "live"
+    _svo_file = "/tmp/kart_svo_path"
+    if os.path.isfile(_svo_file):
+        with open(_svo_file) as f:
+            _val = f.read().strip()
+            if _val:
+                _svo_default = _val
+
     svo_path_arg = DeclareLaunchArgument(
         "svo_path",
-        default_value="live",
+        default_value=_svo_default,
         description="Path to an SVO file for playback, or 'live' for camera.",
     )
     svo_path = LaunchConfiguration("svo_path")
