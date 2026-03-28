@@ -38,6 +38,13 @@ def generate_launch_description():
     )
     use_zed_od = LaunchConfiguration("use_zed_od")
 
+    svo_path_arg = DeclareLaunchArgument(
+        "svo_path",
+        default_value="live",
+        description="Path to an SVO file for playback, or 'live' for camera.",
+    )
+    svo_path = LaunchConfiguration("svo_path")
+
     # System CUDA libs must precede pip NVIDIA libs to avoid cuBLAS version mismatch
     # (pip installs cuBLAS 12.9 which is incompatible with Jetson's CUDA 12.6)
     cuda_sys = "/usr/local/cuda-12.6/targets/aarch64-linux/lib"
@@ -76,6 +83,7 @@ def generate_launch_description():
         launch_arguments={
             "camera_model": "zed2",
             "ros_params_override_path": zed_overrides_od,
+            "svo_path": svo_path,
         }.items(),
         condition=IfCondition(use_zed_od),
     )
@@ -87,6 +95,7 @@ def generate_launch_description():
         launch_arguments={
             "camera_model": "zed2",
             "ros_params_override_path": zed_overrides,
+            "svo_path": svo_path,
         }.items(),
         condition=UnlessCondition(use_zed_od),
     )
@@ -168,6 +177,7 @@ def generate_launch_description():
             perception_arg,
             steering_gain_arg,
             use_zed_od_arg,
+            svo_path_arg,
             set_ld_path,
             # Perception (only when perception:=true)
             zed_camera_with_od,
