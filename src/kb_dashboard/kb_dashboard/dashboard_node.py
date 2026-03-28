@@ -103,6 +103,11 @@ class DashboardNode(Node):
             Frame, "/orin/steering", self._on_orin_steering, qos_reliable
         )
 
+        # ZED VIO speed (from cone_follower odom extraction)
+        self.create_subscription(
+            Float32, "/kart/speed", self._on_kart_speed, qos_reliable
+        )
+
         # YOLO FPS
         self.create_subscription(
             Float32, "/perception/yolo/fps", self._on_yolo_fps, qos_reliable
@@ -186,6 +191,10 @@ class DashboardNode(Node):
         """@brief Callback for ESP32 speed frames. Decodes speed in m/s."""
         if msg.payload:
             self.state.update("esp32_speed", decode_speed(list(msg.payload)))
+
+    def _on_kart_speed(self, msg):
+        """@brief Callback for ZED VIO speed (Float32, m/s). Updates same state key as ESP32 speed."""
+        self.state.update("esp32_speed", round(msg.data, 2))
 
     def _on_esp_accel(self, msg: Frame):
         """@brief Callback for ESP32 acceleration frames. Decodes lateral and longitudinal acceleration."""

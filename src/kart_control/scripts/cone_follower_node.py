@@ -26,7 +26,7 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile, DurabilityPolicy, ReliabilityPolicy
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
-from std_msgs.msg import String
+from std_msgs.msg import Float32, String
 from vision_msgs.msg import Detection3DArray
 
 try:
@@ -51,6 +51,7 @@ class ConeFollowerNode(Node):
         # --- common params ---
         self.declare_parameter("detections_topic", "/perception/cones_3d")
         self.declare_parameter("cmd_vel_topic", "/kart/cmd_vel")
+        self.declare_parameter("odom_topic", "/zed/zed_node/odom")
         self.declare_parameter("no_cone_timeout", 1.0)
         self.declare_parameter("controller_type", "geometric")  # geometric|pure_pursuit|neural|neural_v2
         self.declare_parameter("weights_json", "")               # path for neural
@@ -66,6 +67,7 @@ class ConeFollowerNode(Node):
 
         det_topic = str(self.get_parameter("detections_topic").value)
         cmd_topic = str(self.get_parameter("cmd_vel_topic").value)
+        odom_topic = str(self.get_parameter("odom_topic").value)
         self.no_cone_timeout = float(self.get_parameter("no_cone_timeout").value)
         self.controller_type = str(self.get_parameter("controller_type").value)
 
@@ -112,8 +114,9 @@ class ConeFollowerNode(Node):
             durability=DurabilityPolicy.VOLATILE,
         )
         self.odom_sub = self.create_subscription(
-            Odometry, "/model/kart/odom_gt", self._on_odom, odom_qos
+            Odometry, odom_topic, self._on_odom, odom_qos
         )
+        self.speed_pub = self.create_publisher(Float32, "/kart/speed", 10)
         self._actual_speed = 0.0
         self._last_steer = 0.0
         self.last_detection_time = self.get_clock().now()
@@ -132,10 +135,11 @@ class ConeFollowerNode(Node):
                 self._load_neural_weights()
 
     def _on_odom(self, msg: Odometry):
-        """@brief Callback for odometry. Extracts current speed for neural_v2 speed feedback."""
+        """@brief Callback for odometry. Extracts current speed and publishes to /kart/speed."""
         vx = msg.twist.twist.linear.x
         vy = msg.twist.twist.linear.y
         self._actual_speed = math.sqrt(vx * vx + vy * vy)
+        self.speed_pub.publish(Float32(data=self._actual_speed))
 
     # ── neural net loading ────────────────────────────────────────────
 

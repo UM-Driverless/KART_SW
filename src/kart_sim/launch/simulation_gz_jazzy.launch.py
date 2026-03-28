@@ -176,6 +176,7 @@ def _launch_setup(context):
                 "use_sim_time": False,
                 "detections_topic": "/perception/cones_3d",
                 "cmd_vel_topic": "/kart/cmd_vel",
+                "odom_topic": "/model/kart/odom_gt",
                 "controller_type": controller_type,
                 "weights_json": weights_json,
                 "max_speed": float(context.launch_configurations.get("max_speed", "1000000.0")),
