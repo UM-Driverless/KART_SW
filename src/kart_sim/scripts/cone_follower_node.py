@@ -147,39 +147,43 @@ def _path_heading(midpoints, idx):
     return math.atan2(dy, dx)
 
 
-def _nearest_path_point(midpoints, x, y):
+def _nearest_path_point(pts_np, x, y):
     """Return the index of the closest midpoint to (x, y).
 
-    @param midpoints Sorted list of (fwd, left) path points.
-    @param x         Query x coordinate [m].
-    @param y         Query y coordinate [m].
-    @return Index into midpoints.
+    Uses a vectorised numpy operation for efficiency — avoids O(M) Python
+    loop called N×eval_count times inside the optimiser.
+
+    @param pts_np  Nx2 numpy array of (fwd, left) path points.
+    @param x       Query x coordinate [m].
+    @param y       Query y coordinate [m].
+    @return Index into pts_np.
     """
-    best_i, best_d = 0, float("inf")
-    for i, (px, py) in enumerate(midpoints):
-        d = math.hypot(px - x, py - y)
-        if d < best_d:
-            best_d = d
-            best_i = i
-    return best_i
+    d = np.hypot(pts_np[:, 0] - x, pts_np[:, 1] - y)
+    return int(np.argmin(d))
 
 
 # ---------------------------------------------------------------------------
 # MPC cost function
 # ---------------------------------------------------------------------------
 
-def _mpc_cost(u_flat, x0, y0, psi0, v, midpoints,
+def _mpc_cost(u_flat, x0, y0, psi0, v, midpoints, pts_np,
                N, dt, wheelbase,
                w_cte, w_dsteer, w_heading,
                prev_steer, max_steer):
     """Compute the MPC objective for a candidate control sequence.
+
+    CTE is computed as a *signed* lateral distance so that the gradient
+    correctly indicates which side of the path the vehicle is on.
 
     @param u_flat    Flat array of N steering angles [rad].
     @param x0        Initial x [m].
     @param y0        Initial y [m].
     @param psi0      Initial heading [rad].
     @param v         Constant speed over horizon [m/s].
-    @param midpoints Reference path points (fwd, left).
+    @param midpoints Reference path points as list of (fwd, left) — used for
+                     heading lookup via finite differences.
+    @param pts_np    Same path as an Nx2 numpy array — used for fast nearest-
+                     point lookup.
     @param N         Horizon length.
     @param dt        Time step [s].
     @param wheelbase Kart wheelbase [m].
@@ -197,23 +201,26 @@ def _mpc_cost(u_flat, x0, y0, psi0, v, midpoints,
     for k in range(N):
         delta = float(u_flat[k])
 
-        # Cross-track error: signed distance to nearest path segment
-        idx = _nearest_path_point(midpoints, x, y)
+        # FIX A: signed cross-track error using path tangent.
+        # hypot was always positive, removing the directional gradient signal.
+        # The cross product of the path tangent with the error vector gives the
+        # correct sign: positive = vehicle is left of path, negative = right.
+        idx = _nearest_path_point(pts_np, x, y)
         px, py = midpoints[idx]
-        cte = math.hypot(x - px, y - py)
+        path_psi = _path_heading(midpoints, idx)
+        dx, dy = x - px, y - py
+        cte = -dx * math.sin(path_psi) + dy * math.cos(path_psi)  # signed
 
         # Heading error relative to local path direction
-        path_psi = _path_heading(midpoints, idx)
         heading_err = psi - path_psi
-        # Wrap to [-pi, pi]
         heading_err = math.atan2(math.sin(heading_err), math.cos(heading_err))
 
         # Steering rate penalty
         d_steer = delta - prev_u
 
-        cost += w_cte    * cte          ** 2
-        cost += w_heading * heading_err ** 2
-        cost += w_dsteer  * d_steer     ** 2
+        cost += w_cte     * cte          ** 2
+        cost += w_heading * heading_err  ** 2
+        cost += w_dsteer  * d_steer      ** 2
 
         x, y, psi = _bicycle_step(x, y, psi, v, delta, wheelbase, dt)
         prev_u = delta
@@ -264,6 +271,9 @@ class ConeFollowerNode(Node):
         self.declare_parameter("mpc_w_dsteer",   40.0)   # high: primary anti-oscillation knob
         self.declare_parameter("mpc_w_heading",   2.0)
         self.declare_parameter("mpc_lookahead",   8.0)   # trim path to this distance [m]
+        # FIX C: target cruise speed fed into bicycle model, decoupled from
+        # the post-hoc speed_curve_factor heuristic.
+        self.declare_parameter("mpc_target_speed", -1.0) # -1 = use max_speed
 
         det_topic = str(self.get_parameter("detections_topic").value)
         cmd_topic = str(self.get_parameter("cmd_vel_topic").value)
@@ -286,8 +296,13 @@ class ConeFollowerNode(Node):
         self.mpc_w_dsteer   = float(self.get_parameter("mpc_w_dsteer").value)
         self.mpc_w_heading  = float(self.get_parameter("mpc_w_heading").value)
         self.mpc_lookahead  = float(self.get_parameter("mpc_lookahead").value)
+        _raw_target = float(self.get_parameter("mpc_target_speed").value)
+        self.mpc_target_speed = _raw_target if _raw_target > 0.0 else self.max_speed
+
         # Shifted warm-start: reuse previous solution to avoid cold re-solve oscillation
         self._mpc_prev_solution: np.ndarray | None = None
+        # FIX F: track first solve so we can allow more iterations on cold start
+        self._mpc_first_solve: bool = True
 
         if self.controller_type == "mpc" and not HAS_SCIPY:
             self.get_logger().error("controller_type=mpc but scipy is not installed. "
@@ -356,6 +371,10 @@ class ConeFollowerNode(Node):
                 return
             if new_type in ("neural", "neural_v2") and self._nn_W1 is None:
                 self._load_neural_weights()
+            if new_type == "mpc":
+                # Reset warm-start state on controller switch
+                self._mpc_prev_solution = None
+                self._mpc_first_solve   = True
 
     def _on_odom(self, msg: Odometry):
         """@brief Callback for odometry. Extracts current speed for neural_v2 and MPC."""
@@ -460,6 +479,9 @@ class ConeFollowerNode(Node):
                     "[mpc] no cones visible — holding zero cmd. "
                     "Check perception node output."
                 )
+                # Reset warm-start so the next solve starts fresh
+                self._mpc_prev_solution = None
+                self._mpc_first_solve   = True
 
         cmd = Twist()
         cmd.angular.z = steer
@@ -607,7 +629,7 @@ class ConeFollowerNode(Node):
         Builds a midpoint reference path from paired blue/yellow cones, converts
         it into the bicycle model's X-forward/Y-left frame (camera fwd→X,
         camera left→Y), trims it to mpc_lookahead metres, then minimises a cost
-        that penalises cross-track error, heading error, and steering rate.
+        that penalises signed cross-track error, heading error, and steering rate.
 
         Frame mapping (camera optical → bicycle model):
             camera  Z (forward) → model  X
@@ -615,8 +637,16 @@ class ConeFollowerNode(Node):
 
         Because the kart is at the frame origin with ψ=0 pointing along +X,
         the untransformed midpoints (fwd, left) already map directly to (X, Y)
-        in the bicycle model's local frame — this is the frame that was missing
-        before and causing the oscillation.
+        in the bicycle model's local frame.
+
+        Changes vs original:
+          - CTE is now a *signed* lateral distance (FIX A).
+          - Speed passed to bicycle model is mpc_target_speed, not the actual
+            measured speed clamped to min_speed (FIX B/C).
+          - _nearest_path_point uses a vectorised numpy operation (FIX D).
+          - Lookahead trim includes the first point beyond the threshold so the
+            path tangent at the boundary is well-defined (FIX E).
+          - Cold-start uses maxiter=200; warm-started solves use maxiter=60 (FIX F).
 
         @param cones List of (class_id, fwd, left) tuples in camera_link frame.
         @return Tuple of (steer_rad, speed_mps).
@@ -631,39 +661,49 @@ class ConeFollowerNode(Node):
         # Camera (fwd, left) maps directly to bicycle model (x, y):
         #   model_x = fwd   (forward is +X in bicycle frame)
         #   model_y = left  (left is +Y in bicycle frame)
-        # Trim to mpc_lookahead to avoid distant, noisy points pulling the cost.
+        # FIX E: include the first point that exceeds mpc_lookahead so that
+        # _path_heading has a valid second neighbour at the boundary.
         path: list[tuple[float, float]] = []
         cum = 0.0
         prev = (0.0, 0.0)
         for fwd, left in raw_midpoints:
-            mx, my = fwd, left          # direct mapping — fwd→X, left→Y
-            cum += math.hypot(mx - prev[0], my - prev[1])
-            if cum > self.mpc_lookahead:
-                break
+            mx, my = fwd, left
+            seg = math.hypot(mx - prev[0], my - prev[1])
+            cum += seg
             path.append((mx, my))
             prev = (mx, my)
+            if cum > self.mpc_lookahead:
+                break  # keep this point; now boundary heading is well-defined
 
         if len(path) < 2:
-            # Only one point visible within lookahead — fall back gracefully
             return self._last_steer, self.min_speed
 
-        # Use odometry speed; clamp to operational range
-        v = max(self.min_speed, min(self.max_speed, self._actual_speed))
+        # FIX D: pre-build numpy array once per callback — reused inside the
+        # cost function N×eval_count times without re-allocating.
+        pts_np = np.array(path, dtype=np.float64)
+
+        # FIX B/C: use mpc_target_speed (the intended cruise speed) for the
+        # bicycle model prediction rather than the measured speed clamped to
+        # min_speed.  This decouples the prediction model from transient
+        # acceleration phases (standing start, no-cone recovery) and keeps the
+        # planned trajectory consistent with the commanded speed.
+        v = self.mpc_target_speed
 
         N      = self.mpc_N
         dt     = self.mpc_dt
         bounds = [(-self.max_steer, self.max_steer)] * N
 
         # --- Shifted warm-start ---
-        # Reuse the tail of the previous solution and append the last value,
-        # rather than repeating _last_steer N times.  This gives the optimizer
-        # a much better starting point and dramatically reduces oscillation.
         if self._mpc_prev_solution is not None and len(self._mpc_prev_solution) == N:
             u0 = np.empty(N)
             u0[:-1] = self._mpc_prev_solution[1:]
             u0[-1]  = self._mpc_prev_solution[-1]
         else:
             u0 = np.full(N, self._last_steer)
+
+        # FIX F: allow more iterations on the first (cold) solve so the
+        # optimizer has time to find a good basin before warm-starting begins.
+        maxiter = 200 if self._mpc_first_solve else 60
 
         import time as _time
         _t0 = _time.monotonic()
@@ -674,6 +714,7 @@ class ConeFollowerNode(Node):
                 0.0, 0.0, 0.0,    # x0, y0, psi0 — always at local origin
                 v,
                 path,
+                pts_np,           # FIX D: pass pre-built numpy array
                 N, dt, self.WHEELBASE,
                 self.mpc_w_cte,
                 self.mpc_w_dsteer,
@@ -683,9 +724,12 @@ class ConeFollowerNode(Node):
             ),
             method="SLSQP",
             bounds=bounds,
-            options={"maxiter": 60, "ftol": 1e-4},
+            options={"maxiter": maxiter, "ftol": 1e-4},
         )
         _solve_ms = (_time.monotonic() - _t0) * 1000
+
+        # Mark cold start as done
+        self._mpc_first_solve = False
 
         # Store solution for next warm-start
         self._mpc_prev_solution = result.x.copy()
@@ -699,7 +743,8 @@ class ConeFollowerNode(Node):
 
         self.get_logger().info(
             f"[mpc] steer={steer:.3f} speed={speed:.1f} "
-            f"pts={len(path)} ok={result.success} itr={result.nit} solve={_solve_ms:.1f}ms"
+            f"pts={len(path)} ok={result.success} itr={result.nit} "
+            f"solve={_solve_ms:.1f}ms cold={self._mpc_first_solve}"
         )
         return steer, speed
 
