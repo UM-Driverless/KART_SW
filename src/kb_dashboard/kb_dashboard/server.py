@@ -40,8 +40,9 @@ LOGIN_HTML = """\
 </head><body>
 <form method="POST" action="/login" autocomplete="on">
   <h1>Kart Dashboard</h1>
-  <input type="text" name="username" value="kart" autocomplete="username" style="display:none">
-  <input type="password" name="password" placeholder="Password" autocomplete="current-password" autofocus><br>
+  <input type="text" name="username" id="username" value="kart" autocomplete="username"
+         style="position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden" tabindex="-1" aria-hidden="true">
+  <input type="password" name="password" id="password" placeholder="Password" autocomplete="current-password" autofocus><br>
   <button type="submit">Enter</button>
   $error$
 </form>
