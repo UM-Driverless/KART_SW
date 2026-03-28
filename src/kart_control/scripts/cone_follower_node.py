@@ -200,7 +200,7 @@ class ConeFollowerNode(Node):
         self.declare_parameter("mpc_w_cte",       3.0)
         self.declare_parameter("mpc_w_dsteer",   40.0)
         self.declare_parameter("mpc_w_heading",   2.0)
-        self.declare_parameter("mpc_lookahead",   8.0)
+        self.declare_parameter("mpc_lookahead",   15.0)
 
         det_topic = str(self.get_parameter("detections_topic").value)
         cmd_topic = str(self.get_parameter("cmd_vel_topic").value)
@@ -233,8 +233,8 @@ class ConeFollowerNode(Node):
 
         # neural net weights (loaded for neural or neural_v2)
         self._nn_W1 = self._nn_b1 = self._nn_W2 = self._nn_b2 = None
-        self._nn_max_steer = 0.785  # must match training MAX_STEER
-        self._nn_max_speed = 5.0   # must match training MAX_SPEED
+        self._nn_max_steer = 0.785  # must match training MAX_STEER (current weights)
+        self._nn_max_speed = 5.0   # must match training MAX_SPEED (current weights)
         self._nn_input_size = 8    # v1 default
         self._nn_n_blue = 2        # cones per side for v1
         self._nn_n_yellow = 2
@@ -388,9 +388,6 @@ class ConeFollowerNode(Node):
         """
         self.last_detection_time = self.get_clock().now()
 
-        # Parse detections into (class_id, fwd, left) in camera_link frame.
-        # Filter to match 2D-sim training perception (FOV ±40°, range 15 m)
-        # so the neural nets receive in-distribution inputs.
         cones = []
         for det in msg.detections:
             if not det.results:
@@ -400,12 +397,6 @@ class ConeFollowerNode(Node):
             fwd = pos.z
             left = -pos.x
             if fwd < 0.5:
-                continue
-            dist = math.hypot(fwd, left)
-            if dist > 15.0:
-                continue
-            angle = abs(math.atan2(left, fwd))
-            if angle > 0.6109:  # ±35° in radians (ZED 2i @ VGA = 70° total)
                 continue
             cones.append((class_id, fwd, left))
 
@@ -600,13 +591,29 @@ class ConeFollowerNode(Node):
         if len(raw_midpoints) < 2:
             return self._last_steer, self.min_speed
 
-        # Trim path to mpc_lookahead distance
+        # Densify and trim path to mpc_lookahead distance
         # Camera (fwd, left) maps directly to bicycle model (x, y)
+        # Interpolate between midpoints at ~1m spacing so the MPC has enough
+        # reference points to detect curvature even with sparse cone pairs.
+        dense_path: list[tuple[float, float]] = []
+        INTERP_SPACING = 1.0  # metres between interpolated points
+        for i in range(len(raw_midpoints)):
+            mx, my = raw_midpoints[i]
+            if i == 0:
+                dense_path.append((mx, my))
+                continue
+            px, py = raw_midpoints[i - 1]
+            seg_len = math.hypot(mx - px, my - py)
+            n_interp = max(1, int(seg_len / INTERP_SPACING))
+            for j in range(1, n_interp + 1):
+                t = j / n_interp
+                dense_path.append((px + t * (mx - px), py + t * (my - py)))
+
+        # Trim to mpc_lookahead
         path: list[tuple[float, float]] = []
         cum = 0.0
         prev = (0.0, 0.0)
-        for fwd, left in raw_midpoints:
-            mx, my = fwd, left
+        for mx, my in dense_path:
             cum += math.hypot(mx - prev[0], my - prev[1])
             if cum > self.mpc_lookahead:
                 break
@@ -656,9 +663,13 @@ class ConeFollowerNode(Node):
 
         speed = self._compute_speed(steer)
 
+        # Count cone types for debugging
+        n_blue = sum(1 for c in cones if c[0] == "blue_cone")
+        n_yellow = sum(1 for c in cones if c[0] == "yellow_cone")
         self.get_logger().info(
             f"[mpc] steer={steer:.3f} speed={speed:.1f} "
-            f"pts={len(path)} ok={result.success} itr={result.nit}"
+            f"pts={len(path)}/{len(raw_midpoints)} b={n_blue} y={n_yellow} "
+            f"ok={result.success} itr={result.nit}"
         )
         return steer, speed
 
@@ -702,9 +713,10 @@ class ConeFollowerNode(Node):
 
         self._last_steer = steer
         self.get_logger().info(
-            f"[{self.controller_type}] steer={steer:.3f} cmd_spd={speed:.1f} "
-            f"act_spd={self._actual_speed:.1f} "
-            f"blues={len(blues)} yellows={len(yellows)}"
+            f"[{self.controller_type}] steer={steer:.3f}({math.degrees(steer):.0f}°) "
+            f"spd={speed:.1f} act={self._actual_speed:.1f} "
+            f"b={len(blues)} y={len(yellows)} "
+            f"out=[{out[0]:.2f},{out[1]:.2f}] inp={np.round(inp,2).tolist()}"
         )
         return steer, speed, out
 
