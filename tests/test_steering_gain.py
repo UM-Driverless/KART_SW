@@ -76,6 +76,8 @@ for _name, _mod in [
     ("geometry_msgs.msg", types.ModuleType("geometry_msgs.msg")),
     ("nav_msgs", types.ModuleType("nav_msgs")),
     ("nav_msgs.msg", types.ModuleType("nav_msgs.msg")),
+    ("std_msgs", types.ModuleType("std_msgs")),
+    ("std_msgs.msg", types.ModuleType("std_msgs.msg")),
     ("vision_msgs", types.ModuleType("vision_msgs")),
     ("vision_msgs.msg", types.ModuleType("vision_msgs.msg")),
     ("numpy", None),  # numpy IS available locally
@@ -87,7 +89,7 @@ for _name, _mod in [
 _qos = sys.modules["rclpy.qos"]
 _qos.QoSProfile = type("QoSProfile", (), {"__init__": lambda self, **kw: None})
 _qos.DurabilityPolicy = type("DurabilityPolicy", (), {"VOLATILE": 0})
-_qos.ReliabilityPolicy = type("ReliabilityPolicy", (), {"BEST_EFFORT": 0})
+_qos.ReliabilityPolicy = type("ReliabilityPolicy", (), {"BEST_EFFORT": 0, "RELIABLE": 1})
 
 # Stub Twist
 _geo_msg = sys.modules["geometry_msgs.msg"]
@@ -105,6 +107,11 @@ _geo_msg.Twist = type(
 # Stub Odometry
 _nav_msg = sys.modules["nav_msgs.msg"]
 _nav_msg.Odometry = type("Odometry", (), {})
+
+# Stub Float32, String
+_std_msg = sys.modules["std_msgs.msg"]
+_std_msg.Float32 = type("Float32", (), {"__init__": lambda self, data=0.0: setattr(self, "data", data)})
+_std_msg.String = type("String", (), {"__init__": lambda self, data="": setattr(self, "data", data)})
 
 # Stub Detection3DArray
 _vis_msg = sys.modules["vision_msgs.msg"]
