@@ -413,7 +413,10 @@ class ConeFollowerNode(Node):
         out = hidden @ self._nn_W2 + self._nn_b2
 
         steer = float(np.tanh(out[0])) * self._nn_max_steer
-        speed = float(1.0 / (1.0 + np.exp(-out[1]))) * self._nn_max_speed
+        # Original neural net speed output:
+        # speed = float(1.0 / (1.0 + np.exp(-out[1]))) * self._nn_max_speed
+        # Use same speed profile as geometric instead
+        speed = self.max_speed * (1.0 - self.speed_curve_factor * abs(steer))
         speed = max(self.min_speed, min(self.max_speed, speed))
 
         self._last_steer = steer
