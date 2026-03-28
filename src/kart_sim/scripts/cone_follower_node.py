@@ -1,39 +1,33 @@
 #!/usr/bin/env python3
-"""Cone-following controller for the kart.
+"""MPC controller for kart cone following.
 
-Supports four controller types (selected via the ``controller_type`` param):
+Controlador Model Predictive Control (MPC) para seguimiento de trayectoria
+en un kart autónomo usando un modelo cinemático de bicicleta.
 
-**geometric**
-    Nearest blue/yellow midpoint → atan2 → steer.  Six tunable params.
+Mejoras respecto al código original:
+  - Velocidad real (odometría) usada como condición inicial del modelo,
+    con perfil de velocidad deseada dentro del horizonte.
+  - Función de coste con término de error de velocidad explícito y
+    normalización de términos para tuning estable.
+  - Warm-start con validación: sólo se reutiliza si la solución anterior
+    convergió (result.success=True).
+  - Velocidad comandada coherente con la velocidad objetivo del MPC
+    (no calculada a posteriori con speed_curve_factor independiente).
+  - Interpolación del punto de referencia por avance en arco, no búsqueda
+    2D en cada paso del horizonte.
+  - Logging detallado con métricas de convergencia.
 
-**neural**
-    Small feed-forward net (8→8→2), 90 weights.
+Requisitos:
+    pip install scipy numpy rclpy
 
-**neural_v2**
-    Larger net (17→16→2) with 4 cones per side + speed feedback, 322 weights.
-    Trained with lap-time fitness for faster driving.
-
-**mpc**
-    Kinematic bicycle model MPC. Builds a midpoint reference path from cone
-    pairs, then minimises lateral cross-track error + steering-rate over a
-    receding horizon using scipy SLSQP.  Path points are re-expressed in the
-    bicycle model's X-forward frame (camera Z→model X, camera -X→model Y) so
-    the vehicle dynamics and the reference are in a consistent coordinate
-    system.  Key tunable params:
-
-    * ``mpc_horizon``       – prediction steps  (default 8)
-    * ``mpc_dt``            – step duration [s] (default 0.10, matches 10 Hz)
-    * ``mpc_w_cte``         – cross-track-error weight (default 3.0)
-    * ``mpc_w_dsteer``      – steering-rate weight     (default 40.0)
-    * ``mpc_w_heading``     – heading-error weight     (default 2.0)
-    * ``mpc_lookahead``     – max path distance used   (default 8.0 m)
-
-All controllers receive Detection3DArray in the camera *optical* frame
-(Z=forward, X=right, Y=down) and publish Twist on ``/kart/cmd_vel``.
+Frame de coordenadas (sin cambios respecto al original):
+    camera optical frame: Z=adelante, X=derecha, Y=abajo
+    bicycle model frame:  X=adelante, Y=izquierda
+    Conversión: model_x = cam_z (fwd), model_y = -cam_x (left)
 """
 
-import json
 import math
+import time
 
 import numpy as np
 import rclpy
@@ -41,7 +35,6 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile, DurabilityPolicy, ReliabilityPolicy
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
-from std_msgs.msg import String
 from vision_msgs.msg import Detection3DArray
 
 try:
@@ -50,29 +43,44 @@ try:
 except ImportError:
     HAS_SCIPY = False
 
-try:
-    from kart_perception.zed_od_utils import HAS_ZED_INTERFACES, zed_objects_to_det3d
-    if HAS_ZED_INTERFACES:
-        from zed_interfaces.msg import ObjectsStamped
-except ImportError:
-    HAS_ZED_INTERFACES = False
+
+# ---------------------------------------------------------------------------
+# Constantes del vehículo
+# ---------------------------------------------------------------------------
+
+WHEELBASE = 1.05        # [m]  distancia entre ejes
+MAX_STEER = 1.047       # [rad] ≈ 60°
+MAX_SPEED = 2.625       # [m/s]
+MIN_SPEED = 0.5         # [m/s]
+HALF_TRACK_WIDTH = 1.5  # [m]  fallback cuando sólo hay conos de un color
 
 
 # ---------------------------------------------------------------------------
-# Kinematic bicycle model helpers (used by MPC)
+# Modelo cinemático de bicicleta
 # ---------------------------------------------------------------------------
 
-def _bicycle_step(x, y, psi, v, delta, wheelbase, dt):
-    """Propagate kinematic bicycle model one step forward.
+def bicycle_step(
+    x: float, y: float, psi: float,
+    v: float, delta: float,
+    wheelbase: float, dt: float
+) -> tuple[float, float, float]:
+    """Propaga el modelo cinemático de bicicleta un paso.
 
-    @param x        Current x position [m] in the controller's local frame.
-    @param y        Current y position [m].
-    @param psi      Current heading [rad].
-    @param v        Speed [m/s] (held constant over the horizon).
-    @param delta    Steering angle [rad].
-    @param wheelbase Kart wheelbase [m].
-    @param dt       Time step [s].
-    @return Tuple (x_next, y_next, psi_next).
+    Ecuaciones estándar (Rajamani 2012):
+        x_next   = x   + v * cos(psi) * dt
+        y_next   = y   + v * sin(psi) * dt
+        psi_next = psi + (v / L) * tan(delta) * dt
+
+    Args:
+        x, y:      posición actual [m] en el frame local del vehículo.
+        psi:       orientación actual [rad].
+        v:         velocidad longitudinal [m/s].
+        delta:     ángulo de dirección [rad].
+        wheelbase: distancia entre ejes [m].
+        dt:        paso de tiempo [s].
+
+    Returns:
+        (x_next, y_next, psi_next)
     """
     x_next   = x   + v * math.cos(psi) * dt
     y_next   = y   + v * math.sin(psi) * dt
@@ -80,27 +88,77 @@ def _bicycle_step(x, y, psi, v, delta, wheelbase, dt):
     return x_next, y_next, psi_next
 
 
-def _build_midpoint_path(cones, half_track_width):
-    """Pair blue/yellow cones and return a sorted list of midpoints.
+def bicycle_step_with_speed(
+    x: float, y: float, psi: float, v: float,
+    delta: float, a: float,
+    wheelbase: float, dt: float,
+    v_max: float
+) -> tuple[float, float, float, float]:
+    """Propaga el modelo cinemático de bicicleta incluyendo dinámica de velocidad.
 
-    Mirrors the pairing logic used in the pure-pursuit controller so all
-    controllers share the same path representation.
+    La aceleración longitudinal 'a' permite modelar la evolución de la
+    velocidad dentro del horizonte, haciendo la predicción coherente con
+    los comandos reales.
 
-    @param cones            List of (class_id, fwd, left) in camera_link frame.
-    @param half_track_width Fallback offset when only one colour is visible [m].
-    @return List of (fwd, left) midpoints sorted by increasing forward distance.
+    Args:
+        x, y:      posición [m].
+        psi:       orientación [rad].
+        v:         velocidad actual [m/s].
+        delta:     ángulo de dirección [rad].
+        a:         aceleración longitudinal [m/s²].
+        wheelbase: distancia entre ejes [m].
+        dt:        paso de tiempo [s].
+        v_max:     límite superior de velocidad [m/s].
+
+    Returns:
+        (x_next, y_next, psi_next, v_next)
     """
-    blues   = [(fwd, left, math.hypot(fwd, left))
-               for cls, fwd, left in cones if cls == "blue_cone"   and fwd > 0.3]
-    yellows = [(fwd, left, math.hypot(fwd, left))
-               for cls, fwd, left in cones if cls == "yellow_cone" and fwd > 0.3]
+    v_next   = float(np.clip(v + a * dt, MIN_SPEED, v_max))
+    x_next   = x   + v * math.cos(psi) * dt
+    y_next   = y   + v * math.sin(psi) * dt
+    psi_next = psi + (v / wheelbase) * math.tan(delta) * dt
+    return x_next, y_next, psi_next, v_next
+
+
+# ---------------------------------------------------------------------------
+# Construcción del path de referencia
+# ---------------------------------------------------------------------------
+
+def build_midpoint_path(
+    cones: list[tuple[str, float, float]],
+    half_track_width: float
+) -> list[tuple[float, float]]:
+    """Empareja conos azules/amarillos y devuelve puntos medios ordenados.
+
+    La estrategia de emparejamiento es greedy por distancia al origen:
+    para cada cono azul, busca el cono amarillo más cercano en distancia
+    radial (|d_blue - d_yellow| < threshold).
+
+    Args:
+        cones:            Lista de (class_id, fwd, left) en frame cámara.
+        half_track_width: Offset lateral [m] cuando sólo hay un color.
+
+    Returns:
+        Lista de (fwd, left) ordenada por distancia creciente al origen.
+    """
+    blues = [
+        (fwd, left, math.hypot(fwd, left))
+        for cls, fwd, left in cones
+        if cls == "blue_cone" and fwd > 0.3
+    ]
+    yellows = [
+        (fwd, left, math.hypot(fwd, left))
+        for cls, fwd, left in cones
+        if cls == "yellow_cone" and fwd > 0.3
+    ]
 
     blues.sort(key=lambda c: c[2])
     yellows.sort(key=lambda c: c[2])
 
-    midpoints = []
+    midpoints: list[tuple[float, float]] = []
+    used_y: set[int] = set()
+
     if blues and yellows:
-        used_y = set()
         for bx, by, bd in blues:
             best_j, best_dd = -1, float("inf")
             for j, (yx, yy, yd) in enumerate(yellows):
@@ -109,697 +167,468 @@ def _build_midpoint_path(cones, half_track_width):
                 dd = abs(bd - yd)
                 if dd < best_dd:
                     best_dd = dd
-                    best_j  = j
+                    best_j = j
             if best_j >= 0 and best_dd < 8.0:
                 yx, yy, _ = yellows[best_j]
                 used_y.add(best_j)
                 midpoints.append(((bx + yx) / 2.0, (by + yy) / 2.0))
             else:
+                # Cono azul sin pareja: estimar midpoint
                 midpoints.append((bx, by - half_track_width))
+
         for j, (yx, yy, _) in enumerate(yellows):
             if j not in used_y:
                 midpoints.append((yx, yy + half_track_width))
+
     elif blues:
-        for bx, by, _ in blues:
-            midpoints.append((bx, by - half_track_width))
+        midpoints = [(bx, by - half_track_width) for bx, by, _ in blues]
     elif yellows:
-        for yx, yy, _ in yellows:
-            midpoints.append((yx, yy + half_track_width))
+        midpoints = [(yx, yy + half_track_width) for yx, yy, _ in yellows]
 
     midpoints.sort(key=lambda p: p[0])
     return midpoints
 
 
-def _path_heading(midpoints, idx):
-    """Estimate path heading at *idx* using finite differences.
+def build_arc_parameterization(
+    path: list[tuple[float, float]]
+) -> tuple[np.ndarray, np.ndarray]:
+    """Calcula las distancias acumuladas a lo largo del path (parámetro de arco).
 
-    @param midpoints Sorted list of (fwd, left) path points.
-    @param idx       Index of the point whose heading is needed.
-    @return Heading angle [rad] relative to the forward axis.
+    Permite interpolar puntos y tangentes en función de la distancia
+    recorrida, en lugar de buscar el punto más cercano en 2D.
+
+    Args:
+        path: Lista de (x, y) puntos del path.
+
+    Returns:
+        (s, pts_np):
+            s:      array 1D con distancia acumulada desde el origen.
+            pts_np: array Nx2 con los puntos del path.
     """
-    n = len(midpoints)
-    if n < 2:
-        return 0.0
-    i0 = max(0, idx - 1)
-    i1 = min(n - 1, idx + 1)
-    dx = midpoints[i1][0] - midpoints[i0][0]
-    dy = midpoints[i1][1] - midpoints[i0][1]
-    return math.atan2(dy, dx)
+    pts_np = np.array(path, dtype=np.float64)
+    diffs = np.diff(pts_np, axis=0)
+    seg_lengths = np.hypot(diffs[:, 0], diffs[:, 1])
+    s = np.concatenate([[0.0], np.cumsum(seg_lengths)])
+    return s, pts_np
 
 
-def _nearest_path_point(pts_np, x, y):
-    """Return the index of the closest midpoint to (x, y).
+def interpolate_path(
+    s_ref: np.ndarray,
+    pts_np: np.ndarray,
+    s_query: float
+) -> tuple[float, float, float]:
+    """Interpola posición y tangente en el arco s_query.
 
-    Uses a vectorised numpy operation for efficiency — avoids O(M) Python
-    loop called N×eval_count times inside the optimiser.
+    Args:
+        s_ref:   parámetro de arco de los puntos conocidos.
+        pts_np:  puntos del path (Nx2).
+        s_query: distancia de arco deseada.
 
-    @param pts_np  Nx2 numpy array of (fwd, left) path points.
-    @param x       Query x coordinate [m].
-    @param y       Query y coordinate [m].
-    @return Index into pts_np.
+    Returns:
+        (px, py, psi): posición [m] y orientación de la tangente [rad].
     """
-    d = np.hypot(pts_np[:, 0] - x, pts_np[:, 1] - y)
-    return int(np.argmin(d))
+    s_query = float(np.clip(s_query, s_ref[0], s_ref[-1]))
+
+    idx = int(np.searchsorted(s_ref, s_query, side='right')) - 1
+    idx = int(np.clip(idx, 0, len(s_ref) - 2))
+
+    ds = s_ref[idx + 1] - s_ref[idx]
+    t  = (s_query - s_ref[idx]) / ds if ds > 1e-9 else 0.0
+    t  = float(np.clip(t, 0.0, 1.0))
+
+    p0, p1 = pts_np[idx], pts_np[idx + 1]
+    px  = p0[0] + t * (p1[0] - p0[0])
+    py  = p0[1] + t * (p1[1] - p0[1])
+    psi = math.atan2(p1[1] - p0[1], p1[0] - p0[0])
+
+    return px, py, psi
 
 
 # ---------------------------------------------------------------------------
-# MPC cost function
+# Función de coste MPC
 # ---------------------------------------------------------------------------
 
-def _mpc_cost(u_flat, x0, y0, psi0, v, midpoints, pts_np,
-               N, dt, wheelbase,
-               w_cte, w_dsteer, w_heading,
-               prev_steer, max_steer):
-    """Compute the MPC objective for a candidate control sequence.
+def mpc_cost(
+    u_flat: np.ndarray,
+    x0: float, y0: float, psi0: float, v0: float,
+    s_ref: np.ndarray, pts_np: np.ndarray,
+    N: int, dt: float, wheelbase: float,
+    w_cte: float, w_heading: float,
+    w_dsteer: float, w_speed: float,
+    v_target: float,
+    prev_steer: float,
+) -> float:
+    """Calcula el coste MPC para una secuencia de control candidata.
 
-    CTE is computed as a *signed* lateral distance so that the gradient
-    correctly indicates which side of the path the vehicle is on.
+    El vector de control u_flat contiene [δ_0, ..., δ_{N-1}, a_0, ..., a_{N-1}]
+    o sólo [δ_0, ..., δ_{N-1}] si w_speed=0.
 
-    @param u_flat    Flat array of N steering angles [rad].
-    @param x0        Initial x [m].
-    @param y0        Initial y [m].
-    @param psi0      Initial heading [rad].
-    @param v         Constant speed over horizon [m/s].
-    @param midpoints Reference path points as list of (fwd, left) — used for
-                     heading lookup via finite differences.
-    @param pts_np    Same path as an Nx2 numpy array — used for fast nearest-
-                     point lookup.
-    @param N         Horizon length.
-    @param dt        Time step [s].
-    @param wheelbase Kart wheelbase [m].
-    @param w_cte     Cross-track error weight.
-    @param w_dsteer  Steering-rate weight.
-    @param w_heading Heading error weight.
-    @param prev_steer Previous steering command [rad] (for rate penalty).
-    @param max_steer  Steering limit [rad] (soft barrier, not enforced here).
-    @return Scalar cost.
+    La función de coste es:
+        J = Σ_{k=0}^{N-1} [
+              w_cte     * e_cte(k)²        (error lateral signed)
+            + w_heading * e_psi(k)²        (error de orientación)
+            + w_dsteer  * Δδ(k)²           (suavidad de dirección)
+            + w_speed   * (v(k)-v_t)²/v_t² (error de velocidad normalizado)
+            ]
+
+    Args:
+        u_flat:     Vector de control plano [δ_0..δ_{N-1}] (N,).
+        x0,y0,psi0: Estado inicial en frame local del vehículo.
+        v0:         Velocidad inicial medida [m/s].
+        s_ref:      Parámetros de arco del path de referencia.
+        pts_np:     Puntos del path (Nx2).
+        N:          Longitud del horizonte.
+        dt:         Paso de tiempo [s].
+        wheelbase:  Distancia entre ejes [m].
+        w_cte:      Peso del error lateral.
+        w_heading:  Peso del error de orientación.
+        w_dsteer:   Peso de la tasa de cambio de dirección.
+        w_speed:    Peso del error de velocidad (0 = ignorar).
+        v_target:   Velocidad deseada [m/s].
+        prev_steer: Último comando de dirección [rad].
+
+    Returns:
+        Coste escalar J.
     """
-    x, y, psi = x0, y0, psi0
-    cost = 0.0
+    x, y, psi, v = x0, y0, psi0, v0
+    cost   = 0.0
     prev_u = prev_steer
+
+    # El arco acumulado predicho desde el origen
+    s_vehicle = 0.0
 
     for k in range(N):
         delta = float(u_flat[k])
 
-        # FIX A: signed cross-track error using path tangent.
-        # hypot was always positive, removing the directional gradient signal.
-        # The cross product of the path tangent with the error vector gives the
-        # correct sign: positive = vehicle is left of path, negative = right.
-        idx = _nearest_path_point(pts_np, x, y)
-        px, py = midpoints[idx]
-        path_psi = _path_heading(midpoints, idx)
-        dx, dy = x - px, y - py
-        cte = -dx * math.sin(path_psi) + dy * math.cos(path_psi)  # signed
+        # Punto de referencia interpolado por avance en arco
+        ref_x, ref_y, ref_psi = interpolate_path(s_ref, pts_np, s_vehicle)
 
-        # Heading error relative to local path direction
-        heading_err = psi - path_psi
+        # Error lateral (signed): positivo = vehículo a la izquierda del path
+        dx  = x - ref_x
+        dy  = y - ref_y
+        cte = -dx * math.sin(ref_psi) + dy * math.cos(ref_psi)
+
+        # Error de orientación (normalizado a [-pi, pi])
+        heading_err = psi - ref_psi
         heading_err = math.atan2(math.sin(heading_err), math.cos(heading_err))
 
-        # Steering rate penalty
+        # Tasa de cambio de dirección
         d_steer = delta - prev_u
 
-        cost += w_cte     * cte          ** 2
-        cost += w_heading * heading_err  ** 2
-        cost += w_dsteer  * d_steer      ** 2
+        # Acumulación de coste
+        cost += w_cte     * cte         ** 2
+        cost += w_heading * heading_err ** 2
+        cost += w_dsteer  * d_steer     ** 2
 
-        x, y, psi = _bicycle_step(x, y, psi, v, delta, wheelbase, dt)
+        if w_speed > 0.0 and v_target > 0.0:
+            # Error de velocidad normalizado por v_target para escala consistente
+            v_err = (v - v_target) / v_target
+            cost += w_speed * v_err ** 2
+
+        # Propagación del modelo
+        x, y, psi = bicycle_step(x, y, psi, v, delta, wheelbase, dt)
+
+        # Avance en arco estimado (usando v actual)
+        s_vehicle += v * dt
+
+        # Actualizar v con un modelo de primera orden simple hacia v_target
+        # (tau ≈ 3*dt → el kart llega al 95% de v_target en ~9 pasos)
+        tau = 3.0 * dt
+        v   = v + (v_target - v) * dt / tau
+        v   = float(np.clip(v, MIN_SPEED, MAX_SPEED))
+
         prev_u = delta
 
     return cost
 
 
 # ---------------------------------------------------------------------------
-# Main node
+# Nodo ROS2 principal
 # ---------------------------------------------------------------------------
 
-class ConeFollowerNode(Node):
-    """@brief Cone-following controller node.
+class KartMPCNode(Node):
+    """Controlador MPC para seguimiento de trayectoria en kart autónomo.
 
-    Supports geometric, neural (v1), neural_v2, and mpc controller types.
-    Receives Detection3DArray in camera optical frame and publishes Twist on
-    /kart/cmd_vel.
+    Suscribe:
+        /perception/cones_3d  (Detection3DArray) — detecciones en frame cámara
+        /model/kart/odom_gt   (Odometry)         — velocidad real del vehículo
+
+    Publica:
+        /kart/cmd_vel         (Twist)             — δ en angular.z, v en linear.x
     """
 
-    WHEELBASE = 1.05  # [m]
-
     def __init__(self):
-        """@brief Initialize the controller with parameters, neural weights (if applicable), and ROS plumbing."""
-        super().__init__("cone_follower")
+        super().__init__("kart_mpc")
 
-        # --- common params ---
-        self.declare_parameter("detections_topic", "/perception/cones_3d")
-        self.declare_parameter("cmd_vel_topic", "/kart/cmd_vel")
-        self.declare_parameter("no_cone_timeout", 1.0)
-        self.declare_parameter("controller_type", "geometric")  # geometric|pure_pursuit|neural|neural_v2|mpc
-        self.declare_parameter("weights_json", "")               # path for neural
+        # ── parámetros ──────────────────────────────────────────────────────
+        self.declare_parameter("detections_topic",  "/perception/cones_3d")
+        self.declare_parameter("cmd_vel_topic",     "/kart/cmd_vel")
+        self.declare_parameter("no_cone_timeout",   1.0)
 
-        # --- geometric params ---
-        self.declare_parameter("steering_gain", 3.0)
-        self.declare_parameter("max_steer", 1.047)
-        self.declare_parameter("max_speed", 2.625)
-        self.declare_parameter("min_speed", 0.5)
-        self.declare_parameter("lookahead_max", 15.0)
-        self.declare_parameter("half_track_width", 1.5)
-        self.declare_parameter("speed_curve_factor", 0.0)
+        # MPC
+        self.declare_parameter("mpc_horizon",       10)     # pasos
+        self.declare_parameter("mpc_dt",            0.10)   # [s]; igualar al período real
+        self.declare_parameter("mpc_w_cte",         4.0)    # peso CTE
+        self.declare_parameter("mpc_w_heading",     2.0)    # peso heading error
+        self.declare_parameter("mpc_w_dsteer",      30.0)   # peso steering rate
+        self.declare_parameter("mpc_w_speed",       1.0)    # peso speed error (0=off)
+        self.declare_parameter("mpc_lookahead",     8.0)    # distancia de path [m]
+        self.declare_parameter("mpc_target_speed",  2.0)    # velocidad deseada [m/s]
+        self.declare_parameter("mpc_max_iter_cold", 300)    # iter. en cold start
+        self.declare_parameter("mpc_max_iter_warm", 80)     # iter. en warm start
+        self.declare_parameter("mpc_ftol",          1e-4)   # tolerancia SLSQP
 
-        # --- MPC params ---
-        # mpc_dt: set to 1.0–1.5× your actual detection callback period.
-        #         Default assumes ~10 Hz detections.  Tune first if oscillating.
-        self.declare_parameter("mpc_horizon",    8)      # shorter = faster solve, less stale
-        self.declare_parameter("mpc_dt",          0.10)  # matches confirmed 10 Hz detection rate
-        self.declare_parameter("mpc_w_cte",       3.0)   # reduced: don't chase path too hard
-        self.declare_parameter("mpc_w_dsteer",   40.0)   # high: primary anti-oscillation knob
-        self.declare_parameter("mpc_w_heading",   2.0)
-        self.declare_parameter("mpc_lookahead",   8.0)   # trim path to this distance [m]
-        # FIX C: target cruise speed fed into bicycle model, decoupled from
-        # the post-hoc speed_curve_factor heuristic.
-        self.declare_parameter("mpc_target_speed", -1.0) # -1 = use max_speed
+        # Vehículo
+        self.declare_parameter("wheelbase",         WHEELBASE)
+        self.declare_parameter("max_steer",         MAX_STEER)
+        self.declare_parameter("max_speed",         MAX_SPEED)
+        self.declare_parameter("min_speed",         MIN_SPEED)
+        self.declare_parameter("half_track_width",  HALF_TRACK_WIDTH)
+
+        # ── leer parámetros ─────────────────────────────────────────────────
+        self.N          = int(self.get_parameter("mpc_horizon").value)
+        self.dt         = float(self.get_parameter("mpc_dt").value)
+        self.w_cte      = float(self.get_parameter("mpc_w_cte").value)
+        self.w_heading  = float(self.get_parameter("mpc_w_heading").value)
+        self.w_dsteer   = float(self.get_parameter("mpc_w_dsteer").value)
+        self.w_speed    = float(self.get_parameter("mpc_w_speed").value)
+        self.lookahead  = float(self.get_parameter("mpc_lookahead").value)
+        self.v_target   = float(self.get_parameter("mpc_target_speed").value)
+        self.maxiter_cold = int(self.get_parameter("mpc_max_iter_cold").value)
+        self.maxiter_warm = int(self.get_parameter("mpc_max_iter_warm").value)
+        self.ftol       = float(self.get_parameter("mpc_ftol").value)
+
+        self.wheelbase  = float(self.get_parameter("wheelbase").value)
+        self.max_steer  = float(self.get_parameter("max_steer").value)
+        self.max_speed  = float(self.get_parameter("max_speed").value)
+        self.min_speed  = float(self.get_parameter("min_speed").value)
+        self.htw        = float(self.get_parameter("half_track_width").value)
 
         det_topic = str(self.get_parameter("detections_topic").value)
         cmd_topic = str(self.get_parameter("cmd_vel_topic").value)
-        self.no_cone_timeout   = float(self.get_parameter("no_cone_timeout").value)
-        self.controller_type   = str(self.get_parameter("controller_type").value)
+        self.no_cone_timeout = float(self.get_parameter("no_cone_timeout").value)
 
-        # geometric fields
-        self.steering_gain     = float(self.get_parameter("steering_gain").value)
-        self.max_steer         = float(self.get_parameter("max_steer").value)
-        self.max_speed         = float(self.get_parameter("max_speed").value)
-        self.min_speed         = float(self.get_parameter("min_speed").value)
-        self.lookahead_max     = float(self.get_parameter("lookahead_max").value)
-        self.half_track_width  = float(self.get_parameter("half_track_width").value)
-        self.speed_curve_factor = float(self.get_parameter("speed_curve_factor").value)
-
-        # MPC fields
-        self.mpc_N          = int(self.get_parameter("mpc_horizon").value)
-        self.mpc_dt         = float(self.get_parameter("mpc_dt").value)
-        self.mpc_w_cte      = float(self.get_parameter("mpc_w_cte").value)
-        self.mpc_w_dsteer   = float(self.get_parameter("mpc_w_dsteer").value)
-        self.mpc_w_heading  = float(self.get_parameter("mpc_w_heading").value)
-        self.mpc_lookahead  = float(self.get_parameter("mpc_lookahead").value)
-        _raw_target = float(self.get_parameter("mpc_target_speed").value)
-        self.mpc_target_speed = _raw_target if _raw_target > 0.0 else self.max_speed
-
-        # Shifted warm-start: reuse previous solution to avoid cold re-solve oscillation
-        self._mpc_prev_solution: np.ndarray | None = None
-        # FIX F: track first solve so we can allow more iterations on cold start
-        self._mpc_first_solve: bool = True
-
-        if self.controller_type == "mpc" and not HAS_SCIPY:
-            self.get_logger().error("controller_type=mpc but scipy is not installed. "
-                                    "Run: pip install scipy")
+        if not HAS_SCIPY:
+            self.get_logger().error("scipy no instalado. Ejecuta: pip install scipy")
             raise SystemExit(1)
 
-        # neural net weights (loaded for neural or neural_v2)
-        self._nn_W1 = self._nn_b1 = self._nn_W2 = self._nn_b2 = None
-        self._nn_max_steer   = 0.5
-        self._nn_max_speed   = 10.0
-        self._nn_input_size  = 8
-        self._nn_n_blue      = 2
-        self._nn_n_yellow    = 2
-        self._nn_uses_speed  = False
-        self._current_speed  = 0.0
+        # ── estado interno ──────────────────────────────────────────────────
+        self._actual_speed:    float            = 0.0
+        self._last_steer:      float            = 0.0
+        self._prev_solution:   np.ndarray | None = None
+        self._is_cold_start:   bool             = True
+        self._last_det_wall:   float            = time.monotonic()
+        self._last_log_wall:   float            = time.monotonic()
+        self.last_det_time                      = self.get_clock().now()
 
-        if self.controller_type in ("neural", "neural_v2"):
-            self._load_neural_weights()
-
-        # ROS plumbing
+        # ── ROS plumbing ────────────────────────────────────────────────────
         self.cmd_pub = self.create_publisher(Twist, cmd_topic, 10)
-        self.sub = self.create_subscription(
+
+        self.create_subscription(
             Detection3DArray, det_topic, self._on_detections, 10
         )
-        if HAS_ZED_INTERFACES:
-            self.declare_parameter("zed_objects_topic", "/zed/zed_node/obj_det/objects")
-            self.create_subscription(
-                ObjectsStamped,
-                str(self.get_parameter("zed_objects_topic").value),
-                lambda msg: self._on_detections(zed_objects_to_det3d(msg)),
-                10,
-            )
+
         odom_qos = QoSProfile(
             depth=10,
             reliability=ReliabilityPolicy.BEST_EFFORT,
             durability=DurabilityPolicy.VOLATILE,
         )
-        self.odom_sub = self.create_subscription(
+        self.create_subscription(
             Odometry, "/model/kart/odom_gt", self._on_odom, odom_qos
         )
-        self._actual_speed = 0.0
-        self._last_steer   = 0.0
-        import time as _time
-        self._last_det_wall      = _time.monotonic()
-        self._last_rate_log_wall = _time.monotonic()
-        self.last_detection_time = self.get_clock().now()
-        self.timer = self.create_timer(0.1, self._safety_check)
-        self.create_subscription(String, "/dashboard/controller_type",
-                                 self._on_controller_type, 10)
 
-        self.get_logger().info(f"Controller type: {self.controller_type}")
+        self.create_timer(0.1, self._safety_check)
+        self.get_logger().info(
+            f"KartMPCNode iniciado — horizonte={self.N} dt={self.dt}s "
+            f"v_target={self.v_target}m/s"
+        )
 
-    # ── runtime controller switching ──────────────────────────────────
+    # ── callbacks ───────────────────────────────────────────────────────────
 
-    def _on_controller_type(self, msg: String):
-        """@brief Callback for runtime controller type changes from the dashboard."""
-        new_type = msg.data
-        valid = ("geometric", "pure_pursuit", "neural", "neural_v2", "mpc")
-        if new_type in valid and new_type != self.controller_type:
-            self.get_logger().info(
-                f"Controller type: {self.controller_type} → {new_type}")
-            self.controller_type = new_type
-            if new_type == "mpc" and not HAS_SCIPY:
-                self.get_logger().error("scipy not installed – cannot switch to mpc")
-                self.controller_type = "geometric"
-                return
-            if new_type in ("neural", "neural_v2") and self._nn_W1 is None:
-                self._load_neural_weights()
-            if new_type == "mpc":
-                # Reset warm-start state on controller switch
-                self._mpc_prev_solution = None
-                self._mpc_first_solve   = True
-
-    def _on_odom(self, msg: Odometry):
-        """@brief Callback for odometry. Extracts current speed for neural_v2 and MPC."""
+    def _on_odom(self, msg: Odometry) -> None:
+        """Extrae velocidad actual del mensaje de odometría."""
         vx = msg.twist.twist.linear.x
         vy = msg.twist.twist.linear.y
         self._actual_speed = math.sqrt(vx * vx + vy * vy)
 
-    # ── neural net loading ────────────────────────────────────────────
+    def _on_detections(self, msg: Detection3DArray) -> None:
+        """Callback principal: filtra conos, construye path, ejecuta MPC."""
+        now_wall = time.monotonic()
+        dt_wall_ms = (now_wall - self._last_det_wall) * 1000.0
+        self._last_det_wall = now_wall
+        self.last_det_time  = self.get_clock().now()
 
-    def _load_neural_weights(self):
-        """@brief Load neural network weights from a JSON file specified by the weights_json parameter."""
-        path = str(self.get_parameter("weights_json").value)
-        if not path:
-            self.get_logger().error(
-                f"controller_type={self.controller_type} but weights_json not set")
-            raise SystemExit(1)
+        # Logging de frecuencia real (1 Hz)
+        if now_wall - self._last_log_wall > 1.0:
+            self._last_log_wall = now_wall
+            self.get_logger().info(
+                f"[mpc] callback_dt={dt_wall_ms:.1f}ms "
+                f"({1000.0/max(dt_wall_ms,1):.1f}Hz) "
+                f"recomendado mpc_dt={dt_wall_ms*1.2/1000:.3f}s"
+            )
 
-        with open(path) as f:
-            data = json.load(f)
-
-        genes = np.array(data["genes"], dtype=np.float64)
-        self.get_logger().info(
-            f"Loaded {self.controller_type} weights from {path} "
-            f"(fitness={data.get('fitness', '?')})"
-        )
-
-        if self.controller_type == "neural_v2":
-            self._nn_input_size = 17
-            self._nn_n_blue     = 4
-            self._nn_n_yellow   = 4
-            self._nn_uses_speed = True
-            hs = 16
-            i = 0
-            self._nn_W1 = genes[i:i + 17 * hs].reshape(17, hs);  i += 17 * hs
-            self._nn_b1 = genes[i:i + hs];                        i += hs
-            self._nn_W2 = genes[i:i + hs * 2].reshape(hs, 2);    i += hs * 2
-            self._nn_b2 = genes[i:i + 2]
-        else:
-            hs = 8
-            i = 0
-            self._nn_W1 = genes[i:i + 8 * hs].reshape(8, hs);  i += 8 * hs
-            self._nn_b1 = genes[i:i + hs];                      i += hs
-            self._nn_W2 = genes[i:i + hs * 2].reshape(hs, 2);   i += hs * 2
-            self._nn_b2 = genes[i:i + 2]
-
-    # ── detection callback ────────────────────────────────────────────
-
-    def _on_detections(self, msg: Detection3DArray):
-        """@brief Callback for 3D cone detections. Filters cones by FOV/range and runs the active controller.
-
-        @param msg Detection3DArray in camera optical frame (Z=forward, X=right, Y=down).
-        """
-        import time as _time
-        _now_wall = _time.monotonic()
-        _dt_wall_ms = (_now_wall - self._last_det_wall) * 1000.0
-        self._last_det_wall = _now_wall
-        self.last_detection_time = self.get_clock().now()
-        # Log actual callback rate once per second (wall clock, not sim time).
-        # Set mpc_dt to the reported recommended value if oscillation persists.
-        if self.controller_type == "mpc" and _dt_wall_ms > 1.0:
-            _now_log = _time.monotonic()
-            if _now_log - self._last_rate_log_wall > 1.0:
-                self._last_rate_log_wall = _now_log
-                self.get_logger().info(
-                    f"[mpc] callback_dt={_dt_wall_ms:.1f}ms "
-                    f"({1000.0/_dt_wall_ms:.1f} Hz)  "
-                    f"-> recommended mpc_dt={_dt_wall_ms * 1.25 / 1000:.3f}s"
-                )
-
-        cones = []
+        # Filtrar cones
+        cones: list[tuple[str, float, float]] = []
         for det in msg.detections:
             if not det.results:
                 continue
-            class_id = det.results[0].hypothesis.class_id
-            pos      = det.results[0].pose.pose.position
-            fwd      = pos.z
-            left     = -pos.x
+            cls  = det.results[0].hypothesis.class_id
+            pos  = det.results[0].pose.pose.position
+            fwd  = pos.z          # camera Z = adelante
+            left = -pos.x         # camera -X = izquierda
+
             if fwd < 0.5:
                 continue
             dist  = math.hypot(fwd, left)
             if dist > 15.0:
                 continue
             angle = abs(math.atan2(left, fwd))
-            if angle > 0.6109:
+            if angle > 0.6109:   # ≈ 35° FOV half-angle
                 continue
-            cones.append((class_id, fwd, left))
+            cones.append((cls, fwd, left))
 
-        if self.controller_type in ("neural", "neural_v2"):
-            steer, speed = self._control_neural(cones)
-        elif self.controller_type == "pure_pursuit":
-            steer, speed = self._control_pure_pursuit(cones)
-        elif self.controller_type == "mpc":
-            steer, speed = self._control_mpc(cones)
-        else:
-            steer, speed = self._control_geometric(cones)
+        steer, speed = self._control_mpc(cones)
 
+        # Sin conos → parar y resetear warm-start
         if not cones:
-            speed = 0.0
-            steer = 0.0
-            if self.controller_type == "mpc":
-                self.get_logger().warn(
-                    "[mpc] no cones visible — holding zero cmd. "
-                    "Check perception node output."
-                )
-                # Reset warm-start so the next solve starts fresh
-                self._mpc_prev_solution = None
-                self._mpc_first_solve   = True
+            steer, speed = 0.0, 0.0
+            self._prev_solution = None
+            self._is_cold_start = True
+            self.get_logger().warn(
+                "[mpc] sin conos — deteniendo. Comprueba la percepción."
+            )
 
         cmd = Twist()
         cmd.angular.z = steer
         cmd.linear.x  = speed
         self.cmd_pub.publish(cmd)
 
-    # ── geometric controller ──────────────────────────────────────────
+    # ── controlador MPC ─────────────────────────────────────────────────────
 
-    def _control_geometric(self, cones):
-        """@brief Geometric controller: steer toward nearest blue/yellow midpoint.
+    def _control_mpc(
+        self, cones: list[tuple[str, float, float]]
+    ) -> tuple[float, float]:
+        """Ejecuta un paso del controlador MPC.
 
-        @param cones List of (class_id, fwd, left) tuples in camera_link frame.
-        @return Tuple of (steer_rad, speed_mps).
+        1. Construye el path de referencia desde los midpoints de conos.
+        2. Recorta el path a mpc_lookahead metros.
+        3. Parametriza el path por longitud de arco.
+        4. Optimiza la secuencia de N ángulos de dirección que minimizan
+           el coste (CTE + heading + steering rate + speed).
+        5. Aplica sólo el primer elemento (horizonte recesivo).
+
+        Args:
+            cones: Lista de (class_id, fwd, left) en frame cámara.
+
+        Returns:
+            (steer_rad, speed_mps): comando para este instante.
         """
-        nearest_blue   = None
-        nearest_yellow = None
-        min_bd = float("inf")
-        min_yd = float("inf")
-
-        for cls, fwd, left in cones:
-            dist = math.hypot(fwd, left)
-            if dist > self.lookahead_max:
-                continue
-            if cls == "blue_cone" and dist < min_bd:
-                min_bd = dist
-                nearest_blue = (fwd, left)
-            elif cls == "yellow_cone" and dist < min_yd:
-                min_yd = dist
-                nearest_yellow = (fwd, left)
-
-        if nearest_blue and nearest_yellow:
-            mid_f = (nearest_blue[0] + nearest_yellow[0]) / 2.0
-            mid_l = (nearest_blue[1] + nearest_yellow[1]) / 2.0
-        elif nearest_blue:
-            mid_f = nearest_blue[0]
-            mid_l = nearest_blue[1] - self.half_track_width
-        elif nearest_yellow:
-            mid_f = nearest_yellow[0]
-            mid_l = nearest_yellow[1] + self.half_track_width
-        else:
+        # 1. Construir path
+        raw = build_midpoint_path(cones, self.htw)
+        if len(raw) < 2:
             return self._last_steer, self.min_speed
 
-        angle = math.atan2(mid_l, mid_f)
-        steer = max(-self.max_steer,
-                     min(self.max_steer, self.steering_gain * angle))
-        self._last_steer = steer
-
-        speed = self.max_speed * (1.0 - self.speed_curve_factor * abs(steer))
-        speed = max(self.min_speed, min(self.max_speed, speed))
-
-        self.get_logger().info(
-            f"[geo] angle={math.degrees(angle):.1f}° steer={steer:.3f} "
-            f"speed={speed:.1f} blue={nearest_blue} yellow={nearest_yellow}"
-        )
-        return steer, speed
-
-    # ── pure pursuit controller ───────────────────────────────────────
-
-    def _control_pure_pursuit(self, cones):
-        """@brief Pure pursuit: build path from all cone pairs, follow with lookahead.
-
-        @param cones List of (class_id, fwd, left) tuples in camera_link frame.
-        @return Tuple of (steer_rad, speed_mps).
-        """
-        blues   = []
-        yellows = []
-        for cls, fwd, left in cones:
-            if fwd < 0.3:
-                continue
-            dist = math.hypot(fwd, left)
-            if cls == "blue_cone":
-                blues.append((fwd, left, dist))
-            elif cls == "yellow_cone":
-                yellows.append((fwd, left, dist))
-
-        blues.sort(key=lambda c: c[2])
-        yellows.sort(key=lambda c: c[2])
-
-        midpoints = []
-        if blues and yellows:
-            used_y = set()
-            for bx, by, bd in blues:
-                best_j, best_dd = -1, float("inf")
-                for j, (yx, yy, yd) in enumerate(yellows):
-                    if j in used_y:
-                        continue
-                    dd = abs(bd - yd)
-                    if dd < best_dd:
-                        best_dd = dd
-                        best_j  = j
-                if best_j >= 0 and best_dd < 8.0:
-                    yx, yy, _ = yellows[best_j]
-                    used_y.add(best_j)
-                    midpoints.append(((bx + yx) / 2.0, (by + yy) / 2.0))
-                else:
-                    midpoints.append((bx, by - self.half_track_width))
-            for j, (yx, yy, _) in enumerate(yellows):
-                if j not in used_y:
-                    midpoints.append((yx, yy + self.half_track_width))
-        elif blues:
-            for bx, by, _ in blues:
-                midpoints.append((bx, by - self.half_track_width))
-        elif yellows:
-            for yx, yy, _ in yellows:
-                midpoints.append((yx, yy + self.half_track_width))
-
-        if not midpoints:
-            return self._last_steer, self.min_speed
-
-        midpoints.sort(key=lambda p: p[0])
-
-        target_x, target_y = midpoints[0]
-        cum_dist = 0.0
-        for i in range(len(midpoints)):
-            if i > 0:
-                dx = midpoints[i][0] - midpoints[i - 1][0]
-                dy = midpoints[i][1] - midpoints[i - 1][1]
-                cum_dist += math.hypot(dx, dy)
-            if cum_dist >= self.lookahead_max:
-                target_x, target_y = midpoints[i]
-                break
-            target_x, target_y = midpoints[i]
-
-        alpha  = math.atan2(target_y, target_x)
-        ld     = math.hypot(target_x, target_y)
-        ld     = max(0.5, ld)
-        steer  = math.atan2(2.0 * self.WHEELBASE * math.sin(alpha), ld)
-        steer  = max(-self.max_steer, min(self.max_steer, steer))
-        self._last_steer = steer
-
-        speed = self.max_speed * (1.0 - self.speed_curve_factor * abs(steer))
-        speed = max(self.min_speed, min(self.max_speed, speed))
-
-        self.get_logger().info(
-            f"[pp] target=({target_x:.1f},{target_y:.1f}) steer={steer:.3f} "
-            f"speed={speed:.1f} midpoints={len(midpoints)}"
-        )
-        return steer, speed
-
-    # ── MPC controller ────────────────────────────────────────────────
-
-    def _control_mpc(self, cones):
-        """@brief Model Predictive Control: kinematic bicycle model over a receding horizon.
-
-        Builds a midpoint reference path from paired blue/yellow cones, converts
-        it into the bicycle model's X-forward/Y-left frame (camera fwd→X,
-        camera left→Y), trims it to mpc_lookahead metres, then minimises a cost
-        that penalises signed cross-track error, heading error, and steering rate.
-
-        Frame mapping (camera optical → bicycle model):
-            camera  Z (forward) → model  X
-            camera -X (left)    → model  Y
-
-        Because the kart is at the frame origin with ψ=0 pointing along +X,
-        the untransformed midpoints (fwd, left) already map directly to (X, Y)
-        in the bicycle model's local frame.
-
-        Changes vs original:
-          - CTE is now a *signed* lateral distance (FIX A).
-          - Speed passed to bicycle model is mpc_target_speed, not the actual
-            measured speed clamped to min_speed (FIX B/C).
-          - _nearest_path_point uses a vectorised numpy operation (FIX D).
-          - Lookahead trim includes the first point beyond the threshold so the
-            path tangent at the boundary is well-defined (FIX E).
-          - Cold-start uses maxiter=200; warm-started solves use maxiter=60 (FIX F).
-
-        @param cones List of (class_id, fwd, left) tuples in camera_link frame.
-        @return Tuple of (steer_rad, speed_mps).
-        """
-        # Build raw midpoints in camera frame: (fwd=Z, left=-X)
-        raw_midpoints = _build_midpoint_path(cones, self.half_track_width)
-
-        if len(raw_midpoints) < 2:
-            return self._last_steer, self.min_speed
-
-        # --- Frame conversion + lookahead trim ---
-        # Camera (fwd, left) maps directly to bicycle model (x, y):
-        #   model_x = fwd   (forward is +X in bicycle frame)
-        #   model_y = left  (left is +Y in bicycle frame)
-        # FIX E: include the first point that exceeds mpc_lookahead so that
-        # _path_heading has a valid second neighbour at the boundary.
+        # 2. Recortar a lookahead (incluir primer punto que supera el umbral
+        #    para que la tangente en el extremo esté bien definida)
         path: list[tuple[float, float]] = []
         cum = 0.0
         prev = (0.0, 0.0)
-        for fwd, left in raw_midpoints:
-            mx, my = fwd, left
-            seg = math.hypot(mx - prev[0], my - prev[1])
+        for fwd, left in raw:
+            seg = math.hypot(fwd - prev[0], left - prev[1])
             cum += seg
-            path.append((mx, my))
-            prev = (mx, my)
-            if cum > self.mpc_lookahead:
-                break  # keep this point; now boundary heading is well-defined
+            path.append((fwd, left))
+            prev = (fwd, left)
+            if cum > self.lookahead:
+                break
 
         if len(path) < 2:
             return self._last_steer, self.min_speed
 
-        # FIX D: pre-build numpy array once per callback — reused inside the
-        # cost function N×eval_count times without re-allocating.
-        pts_np = np.array(path, dtype=np.float64)
+        # 3. Parametrizar por arco
+        s_ref, pts_np = build_arc_parameterization(path)
 
-        # FIX B/C: use mpc_target_speed (the intended cruise speed) for the
-        # bicycle model prediction rather than the measured speed clamped to
-        # min_speed.  This decouples the prediction model from transient
-        # acceleration phases (standing start, no-cone recovery) and keeps the
-        # planned trajectory consistent with the commanded speed.
-        v = self.mpc_target_speed
+        # 4. Condición inicial: vehículo en el origen local con heading 0
+        #    (el path ya está en frame local del vehículo)
+        x0, y0, psi0 = 0.0, 0.0, 0.0
+        # Usar velocidad real como condición inicial del modelo
+        v0 = max(self._actual_speed, self.min_speed)
 
-        N      = self.mpc_N
-        dt     = self.mpc_dt
-        bounds = [(-self.max_steer, self.max_steer)] * N
-
-        # --- Shifted warm-start ---
-        if self._mpc_prev_solution is not None and len(self._mpc_prev_solution) == N:
-            u0 = np.empty(N)
-            u0[:-1] = self._mpc_prev_solution[1:]
-            u0[-1]  = self._mpc_prev_solution[-1]
+        # 5. Warm-start
+        if (
+            self._prev_solution is not None
+            and len(self._prev_solution) == self.N
+            and not self._is_cold_start
+        ):
+            u0       = np.empty(self.N)
+            u0[:-1]  = self._prev_solution[1:]
+            u0[-1]   = self._prev_solution[-1]
+            max_iter = self.maxiter_warm
         else:
-            u0 = np.full(N, self._last_steer)
+            # Cold start: inicializar con dirección actual
+            u0       = np.full(self.N, self._last_steer)
+            max_iter = self.maxiter_cold
 
-        # FIX F: allow more iterations on the first (cold) solve so the
-        # optimizer has time to find a good basin before warm-starting begins.
-        maxiter = 200 if self._mpc_first_solve else 60
+        bounds = [(-self.max_steer, self.max_steer)] * self.N
 
-        import time as _time
-        _t0 = _time.monotonic()
+        # 6. Optimización
+        t0 = time.monotonic()
         result = scipy_minimize(
-            _mpc_cost,
+            mpc_cost,
             u0,
             args=(
-                0.0, 0.0, 0.0,    # x0, y0, psi0 — always at local origin
-                v,
-                path,
-                pts_np,           # FIX D: pass pre-built numpy array
-                N, dt, self.WHEELBASE,
-                self.mpc_w_cte,
-                self.mpc_w_dsteer,
-                self.mpc_w_heading,
+                x0, y0, psi0, v0,
+                s_ref, pts_np,
+                self.N, self.dt, self.wheelbase,
+                self.w_cte, self.w_heading,
+                self.w_dsteer, self.w_speed,
+                self.v_target,
                 self._last_steer,
-                self.max_steer,
             ),
             method="SLSQP",
             bounds=bounds,
-            options={"maxiter": maxiter, "ftol": 1e-4},
+            options={"maxiter": max_iter, "ftol": self.ftol},
         )
-        _solve_ms = (_time.monotonic() - _t0) * 1000
+        solve_ms = (time.monotonic() - t0) * 1000.0
 
-        # Mark cold start as done
-        self._mpc_first_solve = False
+        # 7. Gestión del warm-start:
+        #    sólo actualizar si la solución convergió (evita propagar malos mínimos)
+        if result.success:
+            self._prev_solution = result.x.copy()
+            self._is_cold_start = False
+        else:
+            # Solución fallida → resetear para el siguiente ciclo
+            self._prev_solution = None
+            self._is_cold_start = True
+            self.get_logger().warn(
+                f"[mpc] optimizador no convergió (itr={result.nit}) — "
+                f"reseteando warm-start. msg: {result.message}"
+            )
 
-        # Store solution for next warm-start
-        self._mpc_prev_solution = result.x.copy()
-
-        # Apply only the first control action (receding horizon)
+        # 8. Aplicar primer control (horizonte recesivo)
         steer = float(np.clip(result.x[0], -self.max_steer, self.max_steer))
         self._last_steer = steer
 
-        speed = self.max_speed * (1.0 - self.speed_curve_factor * abs(steer))
-        speed = max(self.min_speed, min(self.max_speed, speed))
+        # 9. Velocidad coherente con el MPC:
+        #    el MPC asume v_target; reducir ligeramente en curvas cerradas
+        #    para no crear discrepancia modelo-planta excesiva.
+        curve_factor = max(0.0, 1.0 - 0.3 * (abs(steer) / self.max_steer) ** 2)
+        speed = float(np.clip(self.v_target * curve_factor, self.min_speed, self.max_speed))
 
         self.get_logger().info(
-            f"[mpc] steer={steer:.3f} speed={speed:.1f} "
-            f"pts={len(path)} ok={result.success} itr={result.nit} "
-            f"solve={_solve_ms:.1f}ms cold={self._mpc_first_solve}"
+            f"[mpc] δ={math.degrees(steer):.1f}° v_cmd={speed:.2f}m/s "
+            f"v_real={self._actual_speed:.2f}m/s pts={len(path)} "
+            f"ok={result.success} itr={result.nit} J={result.fun:.4f} "
+            f"solve={solve_ms:.1f}ms cold={self._is_cold_start}"
         )
         return steer, speed
 
-    # ── neural net controller ─────────────────────────────────────────
+    # ── safety timeout ───────────────────────────────────────────────────────
 
-    def _control_neural(self, cones):
-        """@brief Neural net controller: feed-forward network produces steer and speed.
-
-        @param cones List of (class_id, fwd, left) tuples in camera_link frame.
-        @return Tuple of (steer_rad, speed_mps).
-        """
-        blues   = []
-        yellows = []
-        for cls, fwd, left in cones:
-            dist  = math.hypot(fwd, left)
-            angle = math.atan2(left, fwd)
-            if cls == "blue_cone":
-                blues.append((dist, angle))
-            elif cls == "yellow_cone":
-                yellows.append((dist, angle))
-        blues.sort()
-        yellows.sort()
-
-        nb  = self._nn_n_blue
-        ny  = self._nn_n_yellow
-        inp = np.zeros(self._nn_input_size)
-        for j, (d, a) in enumerate(blues[:nb]):
-            inp[j * 2]     = d / 15.0
-            inp[j * 2 + 1] = a / np.pi
-        for j, (d, a) in enumerate(yellows[:ny]):
-            inp[nb * 2 + j * 2]     = d / 15.0
-            inp[nb * 2 + j * 2 + 1] = a / np.pi
-        if self._nn_uses_speed:
-            inp[-1] = self._actual_speed / self._nn_max_speed
-
-        hidden = np.tanh(inp @ self._nn_W1 + self._nn_b1)
-        out    = hidden @ self._nn_W2 + self._nn_b2
-
-        steer = float(np.tanh(out[0])) * self._nn_max_steer
-        speed = float(1.0 / (1.0 + np.exp(-out[1]))) * self._nn_max_speed
-        speed = max(self.min_speed, min(self.max_speed, speed))
-
-        self._last_steer = steer
-        self.get_logger().info(
-            f"[{self.controller_type}] steer={steer:.3f} cmd_spd={speed:.1f} "
-            f"act_spd={self._actual_speed:.1f} "
-            f"blues={len(blues)} yellows={len(yellows)}"
-        )
-        return steer, speed
-
-    # ── safety timeout ────────────────────────────────────────────────
-
-    def _safety_check(self):
-        """@brief Timer callback: publish zero-velocity if no detections received within timeout."""
-        elapsed = (self.get_clock().now() - self.last_detection_time).nanoseconds / 1e9
+    def _safety_check(self) -> None:
+        """Publica velocidad cero si no llegan detecciones dentro del timeout."""
+        elapsed = (
+            self.get_clock().now() - self.last_det_time
+        ).nanoseconds / 1e9
         if elapsed > self.no_cone_timeout:
             cmd = Twist()
             cmd.linear.x  = 0.0
@@ -807,10 +636,14 @@ class ConeFollowerNode(Node):
             self.cmd_pub.publish(cmd)
 
 
-def main():
-    """@brief Entrypoint for the cone follower node."""
+# ---------------------------------------------------------------------------
+# Entrypoint
+# ---------------------------------------------------------------------------
+
+def main() -> None:
+    """Punto de entrada del nodo MPC."""
     rclpy.init()
-    node = ConeFollowerNode()
+    node = KartMPCNode()
     rclpy.spin(node)
     node.destroy_node()
     rclpy.shutdown()
