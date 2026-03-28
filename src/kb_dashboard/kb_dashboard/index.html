@@ -295,7 +295,7 @@ function updateMissionUI() {
 }
 
 function updateAlgoButtons() {
-  document.querySelectorAll('.algo-dropdown').forEach(sel => sel.value = currentControllerType);
+  document.querySelectorAll('.algo-dropdown:not(.speed-algo-dropdown)').forEach(sel => sel.value = currentControllerType);
   document.querySelectorAll('.speed-algo-dropdown').forEach(sel => sel.value = currentSpeedControllerType);
 }
 function onAlgoChange(sel) {
@@ -1536,7 +1536,7 @@ function missionClick(e) {
 }
 
 function updateSteerBar(d, fillId, cmdId) {
-  const maxRad = 0.5;
+  const maxRad = 1.047;
   const pct = Math.max(-1, Math.min(1, d.esp32_steering_rad / maxRad));
   const fill = $(fillId);
   if (pct >= 0) { fill.style.left='50%'; fill.style.width=(pct*50)+'%'; }
