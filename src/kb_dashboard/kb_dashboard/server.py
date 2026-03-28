@@ -288,16 +288,14 @@ async def run_websocket_server(
                 node.get_logger().info(f"Control released by {client_id}")
         elif action == "set_controller":
             ctrl_type = cmd.get("type", "geometric")
-            if ctrl_type in ("geometric", "pure_pursuit", "neural_v2"):
-                state.update("controller_type", ctrl_type)
-                if hasattr(node, "publish_controller_type"):
-                    node.publish_controller_type(ctrl_type)
+            state.update("controller_type", ctrl_type)
+            if hasattr(node, "publish_controller_type"):
+                node.publish_controller_type(ctrl_type)
         elif action == "set_speed_controller":
             speed_type = cmd.get("type", "curve_factor")
-            if speed_type in ("curve_factor", "constant", "neural_v2", "zero"):
-                state.update("speed_controller_type", speed_type)
-                if hasattr(node, "publish_speed_controller_type"):
-                    node.publish_speed_controller_type(speed_type)
+            state.update("speed_controller_type", speed_type)
+            if hasattr(node, "publish_speed_controller_type"):
+                node.publish_speed_controller_type(speed_type)
         elif action == "set_steer_mode":
             mode = cmd.get("mode", "pid")  # "pid" or "pwm"
             if hasattr(node, "publish_steer_mode"):
