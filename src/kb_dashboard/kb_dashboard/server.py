@@ -130,7 +130,7 @@ async def run_websocket_server(
                 resp = (
                     f"HTTP/1.1 303 See Other\r\n"
                     f"Location: /\r\n"
-                    f"Set-Cookie: kart_session={auth_token}; Path=/; HttpOnly; SameSite=Strict\r\n"
+                    f"Set-Cookie: kart_session={auth_token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=31536000\r\n"
                     f"Connection: close\r\n\r\n"
                 ).encode()
             else:
