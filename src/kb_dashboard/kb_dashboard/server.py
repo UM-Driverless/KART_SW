@@ -297,6 +297,11 @@ async def run_websocket_server(
             mode = cmd.get("mode", "pid")  # "pid" or "pwm"
             if hasattr(node, "publish_steer_mode"):
                 node.publish_steer_mode(1 if mode == "pwm" else 0)
+        elif action == "restart":
+            node.get_logger().warn(f"Restart requested by {client_id}")
+            import subprocess
+            subprocess.Popen("echo 0 | sudo -S systemctl restart kart-brain",
+                             shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         elif action == "manual_control":
             # Auto-acquire control on first manual_control if nobody has it
             if controller["holder"] is None:

@@ -563,19 +563,20 @@ body { font-family:'Inter',-apple-system,BlinkMacSystemFont,'SF Pro',system-ui,s
 .ctrl-btn.stop.on { background:#e74c3c; border-color:#e74c3c; color:#fff; }
 .ctrl-btn.ebs { background:transparent; border-color:rgba(243,156,18,0.4); color:#f39c12; }
 .ctrl-btn.ebs.on { background:#f39c12; border-color:#f39c12; color:#fff; }
+.ctrl-btn.restart { background:transparent; border-color:rgba(155,89,182,0.4); color:#9b59b6; font-size:9px; }
+.ctrl-btn.restart:active { background:rgba(155,89,182,0.2); }
 `,
   render() { return `<div class="container">
   <div class="sbar"><div class="spill" id="pillState">IDLE</div><div class="spill" id="pillMission">MANUAL</div><div class="spill" id="pillHb">HB --</div></div>
   <div class="card"><div class="card-t">Mission</div>
     <div class="mis-grid" id="misGrid"><button class="mis-btn sel" data-m="manual">Manual</button><button class="mis-btn" data-m="remote_control">Remote</button><button class="mis-btn" data-m="autonomous">Auto</button><button class="mis-btn" data-m="acceleration">Accel</button><button class="mis-btn" data-m="skidpad">Skidpad</button><button class="mis-btn" data-m="autocross">Autocross</button><button class="mis-btn" data-m="trackdrive">Trackdrive</button><button class="mis-btn" data-m="inspection">Inspect</button></div>
     <div class="algo-select"><div class="algo-label">Algorithm</div><select class="algo-dropdown" onchange="onAlgoChange(this)"><option value="geometric">Geometric</option><option value="pure_pursuit">Pure Pursuit</option><option value="neural_v2">Neural V2</option></select></div>
-    <div class="ctrl-row"><button class="ctrl-btn go" data-st="running" onclick="wsSend({action:'set_state',state:'running'})">Start</button><button class="ctrl-btn stop" data-st="idle" onclick="wsSend({action:'set_state',state:'idle'})">Stop</button><button class="ctrl-btn ebs" data-st="ebs" onclick="wsSend({action:'set_state',state:'ebs'})">EBS</button></div>
+    <div class="ctrl-row"><button class="ctrl-btn go" data-st="running" onclick="wsSend({action:'set_state',state:'running'})">Start</button><button class="ctrl-btn stop" data-st="idle" onclick="wsSend({action:'set_state',state:'idle'})">Stop</button><button class="ctrl-btn ebs" data-st="ebs" onclick="wsSend({action:'set_state',state:'ebs'})">EBS</button><button class="ctrl-btn restart" onclick="if(confirm('Restart kart-brain service?'))wsSend({action:'restart'})">Restart</button></div>
   </div>
   <div class="card"><div class="card-t">Kart State</div>
     <div class="tg"><div class="ti"><div class="tl">Steering</div><div class="tv" id="vSteer">0.0 <span class="tu">°</span></div><div class="ti-bar"><div class="ti-bar-fill" id="steerBarFill" style="width:0%;background:#4a9eff"></div></div></div>
-    <!-- Speed: no sensor yet
     <div class="ti"><div class="tl">Speed</div><div class="tv" id="vSpeed">0.0 <span class="tu">km/h</span></div><div class="ti-bar"><div class="ti-bar-fill" id="speedBarFill" style="width:0%;background:#2ecc71"></div></div></div>
-    --></div>
+    </div>
     <div class="gg-row"><div class="gg-wrap"><canvas class="gg-canvas" id="ggCanvas" width="140" height="140"></canvas></div>
     <div class="gg-labels"><div><div class="gg-vl">Lateral</div><div class="gg-v" id="vALat">0.00 g</div></div><div><div class="gg-vl">Longitudinal</div><div class="gg-v" id="vALon">0.00 g</div></div><div><div class="gg-vl">Total</div><div class="gg-v" id="vATotal">0.00 g</div></div></div></div>
     <div class="ped-row"><div class="ped-item"><div class="ped-lbl">Throttle <span id="vThr">0%</span></div><div class="ped-track"><div class="ped-fill thr" id="thrFill" style="width:0%"></div></div></div>
@@ -599,13 +600,12 @@ body { font-family:'Inter',-apple-system,BlinkMacSystemFont,'SF Pro',system-ui,s
 
   update(d) {
     $('vSteer').innerHTML = `${deg(d.esp32_steering_rad)}<span style="font-size:.55em;vertical-align:super">°</span>` + (d.esp32_steering_raw != null ? ` <span class="tu" style="font-size:.5em;opacity:.6">raw ${d.esp32_steering_raw}</span>` : '');
-    // Speed: no sensor yet
-    // $('vSpeed').innerHTML = `${(d.esp32_speed*3.6).toFixed(1)} <span class="tu">km/h</span>`;
+    $('vSpeed').innerHTML = `${(d.esp32_speed*3.6).toFixed(1)} <span class="tu">km/h</span>`;
     const sPct = Math.max(-1, Math.min(1, d.esp32_steering_rad / 0.5));
     const sf = $('steerBarFill');
     if (sPct >= 0) { sf.style.left='50%'; sf.style.width=(sPct*50)+'%'; }
     else { sf.style.width=(-sPct*50)+'%'; sf.style.left=(50+sPct*50)+'%'; }
-    // $('speedBarFill').style.width = Math.min(d.esp32_speed/30*100,100)+'%';
+    $('speedBarFill').style.width = Math.min(d.esp32_speed/30*100,100)+'%';
     const latG = d.esp32_accel_lat/9.81, lonG = d.esp32_accel_lon/9.81;
     drawGG(latG, lonG, '#2a2a3a', '#6a6a7a40', '#4a9eff', 8);
     $('vALat').textContent = latG.toFixed(2)+' g';
@@ -841,6 +841,8 @@ body::after {
 .abtn-ebs   { background:rgba(0,0,0,0); border:2px solid rgba(255,34,0,0.65); color:#ff2200; box-shadow:0 0 12px rgba(255,34,0,0.18); animation:ebsp 2.5s ease-in-out infinite; }
 .abtn-ebs:active   { background:rgba(255,34,0,0.12); box-shadow:0 0 28px rgba(255,34,0,0.5); }
 .abtn-ebs.on   { background:rgba(255,34,0,0.18); box-shadow:0 0 28px rgba(255,34,0,0.5); }
+.abtn-restart { background:rgba(0,0,0,0); border:2px solid rgba(155,89,182,0.5); color:#9b59b6; box-shadow:0 0 8px rgba(155,89,182,0.15); font-size:11px; }
+.abtn-restart:active { background:rgba(155,89,182,0.12); }
 @keyframes ebsp { 0%,100%{box-shadow:0 0 10px rgba(255,34,0,0.15)} 50%{box-shadow:0 0 20px rgba(255,34,0,0.35), 0 0 40px rgba(255,34,0,0.1)} }
 
 /* LOG */
@@ -981,6 +983,7 @@ body::after {
         <button class="abtn abtn-start" data-st="running" onclick="wsSend({action:'set_state',state:'running'})">START</button>
         <button class="abtn abtn-stop"  data-st="idle" onclick="wsSend({action:'set_state',state:'idle'})">STOP</button>
         <button class="abtn abtn-ebs"   data-st="ebs" onclick="wsSend({action:'set_state',state:'ebs'})">EBS</button>
+        <button class="abtn abtn-restart" onclick="if(confirm('Restart kart-brain service?'))wsSend({action:'restart'})">RESTART</button>
       </div>
     </div>
   </div>
@@ -1242,6 +1245,7 @@ body { font-family:'Inter',sans-serif; background:#0a0a0a; color:#f5f5f5; }
     <button class="t-ctrl go" data-st="running" onclick="wsSend({action:'set_state',state:'running'})">Start</button>
     <button class="t-ctrl stop" data-st="idle" onclick="wsSend({action:'set_state',state:'idle'})">Stop</button>
     <button class="t-ctrl ebs" data-st="ebs" onclick="wsSend({action:'set_state',state:'ebs'})">EBS</button>
+    <button class="t-ctrl restart" onclick="if(confirm('Restart kart-brain service?'))wsSend({action:'restart'})" style="color:#9b59b6;border-color:rgba(155,89,182,0.4)">Restart</button>
   </div>
   <div class="t-sec-label">Sensors</div>
   <div class="t-grid2">
@@ -1435,6 +1439,7 @@ body::before { content:''; position:fixed; inset:0; pointer-events:none; backgro
       <button class="h-ctrl go" data-st="running" onclick="wsSend({action:'set_state',state:'running'})">START</button>
       <button class="h-ctrl stop" data-st="idle" onclick="wsSend({action:'set_state',state:'idle'})">STOP</button>
       <button class="h-ctrl ebs" data-st="ebs" onclick="wsSend({action:'set_state',state:'ebs'})">EBS</button>
+      <button class="h-ctrl restart" onclick="if(confirm('Restart kart-brain service?'))wsSend({action:'restart'})" style="color:#9b59b6;border-color:rgba(155,89,182,0.4)">RESTART</button>
     </div>
   </div>
   <div class="h-footer">UNIVERSIDAD DE MALAGA · FSAE AUTONOMOUS · v2.4.1</div>
