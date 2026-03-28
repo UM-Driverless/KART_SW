@@ -163,7 +163,11 @@ return rx_timeout_.load();
 void SerialDriver::supervisor_loop()
 {
     while (running_) {
-        if (fd_ < 0 && !rx_thread_.joinable() && !tx_thread_.joinable()) {
+        // Join dead RX/TX threads so we can respawn them
+        if (fd_ < 0) {
+            if (rx_thread_.joinable()) rx_thread_.join();
+            if (tx_thread_.joinable()) tx_thread_.join();
+
             std::cerr << "Serial: connecting to " << port_ << "..." << std::endl;
             if (open_port()) {
                 last_rx_ok_time_.store(std::chrono::steady_clock::now());
