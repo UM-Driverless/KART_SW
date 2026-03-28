@@ -294,7 +294,7 @@ async def run_websocket_server(
                     node.publish_controller_type(ctrl_type)
         elif action == "set_speed_controller":
             speed_type = cmd.get("type", "curve_factor")
-            if speed_type in ("curve_factor", "constant", "neural_v2"):
+            if speed_type in ("curve_factor", "constant", "neural_v2", "zero"):
                 state.update("speed_controller_type", speed_type)
                 if hasattr(node, "publish_speed_controller_type"):
                     node.publish_speed_controller_type(speed_type)
