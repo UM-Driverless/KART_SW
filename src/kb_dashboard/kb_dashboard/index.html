@@ -165,6 +165,7 @@ let manualSteerType = 'angle'; // 'angle' or 'pwm'
 let currentMission = 'manual'; // Track mission state locally to show/hide widget
 let currentControllerType = 'geometric';
 let currentSpeedControllerType = 'curve_factor';
+let currentSvoFile = 'live';
 const AUTONOMOUS_MISSIONS = new Set([
   'acceleration','skidpad','autocross','trackdrive',
   'ebs_test','inspection','autonomous','throttle_test'
@@ -441,17 +442,16 @@ function connect() {
       if (lastData.your_id) { myClientId = lastData.your_id; return; }
       if (lastData.svo_files) {
         document.querySelectorAll('.svo-dropdown').forEach(sel => {
-          const cur = sel.value;
           sel.innerHTML = '<option value="live">Live Camera</option>';
           lastData.svo_files.forEach(f => { const o = document.createElement('option'); o.value = f; o.textContent = f; sel.appendChild(o); });
-          sel.value = cur;
+          sel.value = currentSvoFile;
         });
         return;
       }
       if (lastData.mission) { currentMission = lastData.mission; updateJoystickWidget(); updateMissionUI(); }
       if (lastData.controller_type) { currentControllerType = lastData.controller_type; updateAlgoButtons(); }
       if (lastData.speed_controller_type) { currentSpeedControllerType = lastData.speed_controller_type; updateAlgoButtons(); }
-      if (lastData.svo_file) { document.querySelectorAll('.svo-dropdown').forEach(sel => sel.value = lastData.svo_file); }
+      if (lastData.svo_file) { currentSvoFile = lastData.svo_file; document.querySelectorAll('.svo-dropdown').forEach(sel => sel.value = currentSvoFile); }
       // Reflect ESP32 heartbeat in the connection dot (green only when HB alive)
       const d = $('connDot');
       if (d) { if (lastData.esp32_heartbeat) d.classList.add('ok'); else d.classList.remove('ok'); }

@@ -74,6 +74,13 @@ async def run_websocket_server(
     # Derive session token from password so cookies survive server restarts.
     auth_token = hashlib.sha256(password.encode()).hexdigest()[:32]
 
+    # Restore SVO selection from /tmp/kart_svo_path (survives restarts)
+    _svo_path_file = Path("/tmp/kart_svo_path")
+    if _svo_path_file.is_file():
+        _svo_val = _svo_path_file.read_text().strip()
+        if _svo_val:
+            state.update("svo_file", Path(_svo_val).name)
+
     clients: dict[asyncio.StreamWriter, str] = {}  # writer → client_id
     controller: dict = {"holder": None, "id": None}  # who has manual control
     _next_id = [0]
