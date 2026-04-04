@@ -163,8 +163,8 @@ return rx_timeout_.load();
 void SerialDriver::supervisor_loop()
 {
     while (running_) {
-        // Join dead RX/TX threads so we can respawn them
         if (fd_ < 0) {
+            // Join dead RX/TX threads so we can respawn them
             if (rx_thread_.joinable()) rx_thread_.join();
             if (tx_thread_.joinable()) tx_thread_.join();
 
@@ -176,6 +176,19 @@ void SerialDriver::supervisor_loop()
             } else {
                 std::cerr << "Serial: open failed (" << port_ << "): "
                           << strerror(errno) << std::endl;
+            }
+        } else {
+            // Watchdog: force reconnect if no valid frames for WATCHDOG_TIMEOUT
+            auto elapsed = std::chrono::steady_clock::now() - last_rx_ok_time_.load();
+            if (elapsed > WATCHDOG_TIMEOUT) {
+                std::cerr << "Serial: watchdog timeout ("
+                          << std::chrono::duration_cast<std::chrono::seconds>(elapsed).count()
+                          << "s without valid frame), forcing reconnect" << std::endl;
+                // Only close the raw fd — RX thread's read() will fail with EBADF,
+                // then RX thread calls close_port() (no-op) and exits cleanly.
+                // This avoids racing with the RX thread's payload_ vector.
+                int fd = fd_.exchange(-1);
+                if (fd >= 0) ::close(fd);
             }
         }
 
@@ -200,35 +213,39 @@ void SerialDriver::supervisor_loop()
  */
 bool SerialDriver::open_port()
 {
-    
-    fd_ = open(port_.c_str(), O_RDWR | O_NOCTTY);
-    if (fd_ < 0)
+    int fd = open(port_.c_str(), O_RDWR | O_NOCTTY);
+    if (fd < 0)
         return false;
 
     struct termios tty{};
-    if (tcgetattr(fd_, &tty) != 0)
+    if (tcgetattr(fd, &tty) != 0)
     {
-        close_port();
+        ::close(fd);
         return false;
     }
 
-    // Limpia todos los bytes que ya están en el buffer
-    tcflush(fd_, TCIFLUSH);
-    
+    tcflush(fd, TCIFLUSH);
+
     cfmakeraw(&tty);
     cfsetispeed(&tty, baudrate_to_flag(baudrate_));
     cfsetospeed(&tty, baudrate_to_flag(baudrate_));
-    
+
     tty.c_cflag |= (CLOCAL | CREAD);
-    
-    if (tcsetattr(fd_, TCSANOW, &tty) != 0)
+
+    // Return from read() after 200ms even with no data, so the RX loop
+    // can check fd_ and exit cleanly when the watchdog closes the port.
+    tty.c_cc[VMIN]  = 0;
+    tty.c_cc[VTIME] = 2;  // 200ms in deciseconds
+
+    if (tcsetattr(fd, TCSANOW, &tty) != 0)
     {
         std::cerr << "Serial: failed to open " << port_ << std::endl;
-        close_port();
+        ::close(fd);
         return false;
     }
-        
-    std::cerr << "Serial: opened " << port_ << " fd=" << fd_ << std::endl;
+
+    std::cerr << "Serial: opened " << port_ << " fd=" << fd << std::endl;
+    fd_.store(fd);
     return true;
 }
 
@@ -237,14 +254,14 @@ bool SerialDriver::open_port()
  */
 void SerialDriver::close_port()
 {
-    if (fd_ >= 0)
+    int fd = fd_.exchange(-1);
+    if (fd >= 0)
     {
         std::cerr << "Serial: closing " << port_
                   << " (rx_ok=" << rx_ok_.load()
                   << " crc_err=" << rx_crc_error_.load() << ")" << std::endl;
-        tcflush(fd_, TCIFLUSH);
-        close(fd_);
-        fd_ = -1;
+        tcflush(fd, TCIFLUSH);
+        ::close(fd);
     }
 }
 
@@ -276,13 +293,17 @@ void SerialDriver::rx_loop()
 
     while (running_ && fd_ >= 0)
     {
-        ssize_t n = read(fd_, buffer + bytes_in_buffer, sizeof(buffer) - bytes_in_buffer);
+        int fd = fd_.load();
+        if (fd < 0) return;
 
-        if (n <= 0) {
+        ssize_t n = read(fd, buffer + bytes_in_buffer, sizeof(buffer) - bytes_in_buffer);
+
+        if (n < 0) {
             std::cerr << "Serial: read error" << std::endl;
             close_port();
             return;
         }
+        if (n == 0) continue;  // VTIME timeout, no data — recheck loop condition
         bytes_in_buffer += static_cast<uint16_t>(n);
 
         // Process all received bytes
@@ -327,20 +348,24 @@ void SerialDriver::tx_loop()
             return !tx_queue_.empty() || !running_ || fd_ < 0;
         });
 
-        if (!running_)
+        if (!running_ || fd_ < 0)
             return;
+
+        if (tx_queue_.empty())
+            continue;
 
         auto frame = tx_queue_.front();
         tx_queue_.pop();
         lock.unlock();
 
-        if (fd_ >= 0)
         {
-            ssize_t written = write(fd_, frame.data(), frame.size());
-            if (written < 0)
-            {
-                close_port();
-                return;
+            int fd = fd_.load();
+            if (fd >= 0) {
+                ssize_t written = write(fd, frame.data(), frame.size());
+                if (written < 0) {
+                    close_port();
+                    return;
+                }
             }
         }
     }

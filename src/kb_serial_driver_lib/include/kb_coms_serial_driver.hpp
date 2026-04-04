@@ -156,7 +156,7 @@ private:
 
     std::string port_;      /**< Serial device path */
     uint32_t baudrate_;     /**< Configured baudrate */
-    int fd_ = -1;           /**< File descriptor */
+    std::atomic<int> fd_{-1}; /**< File descriptor (atomic for thread-safe close) */
 
     std::atomic<bool> running_{false};
 
