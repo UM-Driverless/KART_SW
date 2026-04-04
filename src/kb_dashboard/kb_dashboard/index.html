@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Kart Dashboard</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&family=Rajdhani:wght@400;500;600;700&family=VT323&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&family=Rajdhani:wght@400;500;600;700&family=VT323&family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 body { min-height: 100vh; -webkit-tap-highlight-color: transparent; }
@@ -1549,6 +1549,201 @@ body::before { content:''; position:fixed; inset:0; pointer-events:none; backgro
 };
 
 // ═══════════════════════════════════════════════════════
+// SKIN: ARTEMIS — NASA Mission Control futuristic
+// ═══════════════════════════════════════════════════════
+const skinArtemis = {
+  name: 'Artemis',
+  css: `
+body { font-family:'JetBrains Mono',monospace; background:#04060b; color:#f1f5f9; background-image:radial-gradient(ellipse at 50% 0%,rgba(0,208,255,0.04) 0%,transparent 60%), linear-gradient(rgba(0,167,204,0.018) 1px,transparent 1px), linear-gradient(90deg,rgba(0,167,204,0.018) 1px,transparent 1px); background-size:100% 100%, 40px 40px, 40px 40px; }
+#topbar { border-bottom:1px solid rgba(0,167,204,0.15); padding-bottom:8px; }
+#healthBar { color:rgba(117,136,163,0.6) !important; font-family:'JetBrains Mono',monospace !important; }
+#dbgToggle { background:rgba(8,14,24,0.95) !important; border-color:rgba(0,167,204,0.15) !important; color:rgba(117,136,163,0.5) !important; border-radius:8px !important; font-family:'JetBrains Mono',monospace !important; }
+#dbgBody { background:rgba(4,6,11,0.95) !important; border-color:rgba(0,167,204,0.15) !important; color:#00d0ff !important; font-family:'JetBrains Mono',monospace !important; border-radius:0 0 8px 8px !important; }
+#topbarTitle { color:#00d0ff; font-family:'Orbitron',monospace; font-weight:900; font-size:14px; letter-spacing:3px; text-transform:uppercase; text-shadow:0 0 20px rgba(0,208,255,0.3); position:relative; padding-bottom:6px; }
+#topbarTitle::after { content:''; position:absolute; bottom:0; left:0; width:60px; height:1px; background:linear-gradient(90deg,#00d0ff,transparent); }
+.conn-dot { background:#ff4444; box-shadow:0 0 8px rgba(255,68,68,0.5); animation:a-blink 2s ease-in-out infinite; }
+.conn-dot.ok { background:#00ff88; box-shadow:0 0 8px rgba(0,255,136,0.5); animation:a-blink 2s ease-in-out infinite; }
+@keyframes a-blink { 0%,100% { opacity:1; } 50% { opacity:0.5; } }
+.skin-btn { background:rgba(0,208,255,0.06); border:1px solid rgba(0,167,204,0.25); border-radius:6px; color:rgba(0,208,255,0.6); font-family:'JetBrains Mono',monospace; font-weight:500; letter-spacing:1px; transition:all 0.2s; }
+.skin-btn:hover { background:rgba(0,208,255,0.12); border-color:rgba(0,167,204,0.4); }
+.skin-dropdown { background:rgba(8,14,24,0.98); border:1px solid rgba(0,167,204,0.25); border-radius:8px; overflow:hidden; backdrop-filter:blur(10px); }
+.skin-option { background:transparent; color:rgba(117,136,163,0.7); font-family:'JetBrains Mono',monospace; font-weight:400; font-size:11px; transition:all 0.15s; }
+.skin-option:hover { background:rgba(0,208,255,0.08); color:#00d0ff; }
+.skin-option.active { color:#00d0ff; }
+#hudStream { border-radius:10px !important; border:1px solid rgba(0,167,204,0.15) !important; }
+
+/* Status strip */
+.a-strip { display:grid; grid-template-columns:repeat(3,1fr); gap:0; border:1px solid rgba(0,167,204,0.25); border-radius:12px; overflow:hidden; margin-bottom:12px; box-shadow:0 0 15px rgba(0,208,255,0.04); }
+.a-cell { background:linear-gradient(180deg,rgba(8,14,24,0.95),rgba(4,8,16,0.95)); padding:12px 6px; text-align:center; border-right:1px solid rgba(0,167,204,0.1); }
+.a-cell:last-child { border-right:none; }
+.a-cell-lbl { font-size:8px; color:rgba(117,136,163,0.5); text-transform:uppercase; letter-spacing:2px; margin-bottom:4px; }
+.a-cell-val { font-size:15px; font-weight:700; color:#00d0ff; text-shadow:0 0 10px rgba(0,208,255,0.3); }
+.a-cell-val.green { color:#00ff88; text-shadow:0 0 8px rgba(0,255,136,0.3); }
+.a-cell-val.red { color:#ff4444; text-shadow:0 0 8px rgba(255,68,68,0.3); }
+.a-cell-val.amber { color:#ffb800; text-shadow:0 0 8px rgba(255,184,0,0.3); }
+
+/* Cards */
+.a-card { background:linear-gradient(180deg,rgba(8,14,24,0.95),rgba(4,8,16,0.95)); border:1px solid rgba(0,167,204,0.25); border-radius:14px; padding:18px; margin-bottom:12px; position:relative; overflow:hidden; box-shadow:0 0 20px rgba(0,208,255,0.04), inset 0 1px 0 rgba(0,208,255,0.08); transition:border-color 0.3s, box-shadow 0.3s; }
+.a-card:hover { border-color:rgba(0,167,204,0.35); box-shadow:0 0 25px rgba(0,208,255,0.07), inset 0 1px 0 rgba(0,208,255,0.1); }
+.a-card::before { content:''; position:absolute; top:0; left:20px; right:20px; height:1px; background:linear-gradient(90deg,transparent,rgba(0,208,255,0.5),transparent); }
+.a-card::after { content:''; position:absolute; top:6px; left:6px; width:12px; height:12px; border-top:1px solid rgba(0,208,255,0.25); border-left:1px solid rgba(0,208,255,0.25); border-radius:2px 0 0 0; pointer-events:none; }
+.a-card-t::after { content:''; position:absolute; bottom:6px; right:6px; width:12px; height:12px; border-bottom:1px solid rgba(0,208,255,0.25); border-right:1px solid rgba(0,208,255,0.25); border-radius:0 0 2px 0; pointer-events:none; }
+.a-card-t { font-family:'Orbitron',monospace; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:3px; color:#00d0ff; margin-bottom:14px; display:flex; align-items:center; gap:8px; text-shadow:0 0 10px rgba(0,208,255,0.3); position:static; }
+.a-card-t::before { content:'//'; color:rgba(0,208,255,0.3); font-family:'JetBrains Mono',monospace; font-weight:400; }
+.a-card-t::after { content:''; position:absolute; bottom:6px; right:6px; width:12px; height:12px; border-bottom:1px solid rgba(0,208,255,0.25); border-right:1px solid rgba(0,208,255,0.25); border-radius:0 0 2px 0; pointer-events:none; }
+
+/* Telemetry grid */
+.a-tg { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.a-ti { background:linear-gradient(180deg,rgba(0,208,255,0.04),rgba(0,208,255,0.01)); border:1px solid rgba(0,167,204,0.12); border-radius:10px; padding:14px; position:relative; overflow:hidden; box-shadow:inset 0 1px 0 rgba(0,208,255,0.06); }
+.a-tl { font-size:8px; color:rgba(117,136,163,0.5); text-transform:uppercase; letter-spacing:2px; font-weight:400; margin-bottom:8px; }
+.a-tv { font-size:32px; font-weight:300; font-variant-numeric:tabular-nums; letter-spacing:-1px; line-height:1; color:#00d0ff; text-shadow:0 0 15px rgba(0,208,255,0.3); }
+.a-tu { font-size:9px; color:rgba(117,136,163,0.4); font-weight:400; letter-spacing:1px; margin-left:2px; }
+.a-ti-bar { position:absolute; bottom:0; left:0; right:0; height:2px; background:rgba(0,167,204,0.1); }
+.a-ti-bar-fill { position:absolute; height:100%; transition:width 0.4s cubic-bezier(0.4,0,0.2,1), left 0.4s cubic-bezier(0.4,0,0.2,1); border-radius:1px; }
+
+/* Section divider */
+.a-divider { height:1px; background:linear-gradient(90deg,transparent,rgba(0,167,204,0.15),transparent); margin:14px 0; }
+
+/* G-G diagram */
+.a-gg-row { display:flex; gap:14px; align-items:center; margin-top:0; }
+.a-gg-wrap { position:relative; width:140px; height:140px; flex-shrink:0; }
+.a-gg-canvas { width:100%; height:100%; border-radius:50%; background:radial-gradient(circle,rgba(0,208,255,0.04),rgba(0,208,255,0.01)); border:1px solid rgba(0,167,204,0.15); box-shadow:0 0 20px rgba(0,208,255,0.05); }
+.a-gg-labels { flex:1; display:flex; flex-direction:column; gap:6px; }
+.a-gg-vl { font-size:8px; color:rgba(117,136,163,0.5); text-transform:uppercase; letter-spacing:2px; font-weight:400; }
+.a-gg-v { font-size:18px; font-weight:300; font-variant-numeric:tabular-nums; letter-spacing:-0.5px; color:#00d0ff; text-shadow:0 0 8px rgba(0,208,255,0.2); }
+
+/* Pedals */
+.a-ped-row { display:flex; gap:10px; margin-top:12px; }
+.a-ped-item { flex:1; }
+.a-ped-lbl { font-size:8px; color:rgba(117,136,163,0.5); text-transform:uppercase; letter-spacing:2px; font-weight:400; margin-bottom:6px; display:flex; justify-content:space-between; align-items:baseline; }
+.a-ped-item:first-child .a-ped-lbl { color:rgba(0,255,136,0.4); }
+.a-ped-item:last-child .a-ped-lbl { color:rgba(255,68,68,0.4); }
+.a-ped-lbl span { color:#00d0ff; font-weight:400; font-size:18px; font-variant-numeric:tabular-nums; letter-spacing:-0.5px; text-shadow:0 0 8px rgba(0,208,255,0.2); }
+.a-ped-track { width:100%; height:6px; background:rgba(0,167,204,0.06); border-radius:3px; overflow:hidden; border:1px solid rgba(0,167,204,0.08); }
+.a-ped-fill { height:100%; border-radius:3px; transition:width 0.4s cubic-bezier(0.4,0,0.2,1); }
+.a-ped-fill.thr { background:linear-gradient(90deg,#00cc6a,#00ff88); box-shadow:0 0 8px rgba(0,255,136,0.3); }
+.a-ped-fill.brk { background:linear-gradient(90deg,#cc3333,#ff4444); box-shadow:0 0 8px rgba(255,68,68,0.3); }
+
+/* Targets */
+.a-trg-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; }
+.a-trg-item { background:linear-gradient(180deg,rgba(0,208,255,0.04),rgba(0,208,255,0.01)); border:1px solid rgba(0,167,204,0.12); border-radius:10px; padding:14px 8px; text-align:center; box-shadow:inset 0 1px 0 rgba(0,208,255,0.06); }
+.a-trg-lbl { font-size:8px; color:rgba(117,136,163,0.5); text-transform:uppercase; letter-spacing:2px; font-weight:400; margin-bottom:8px; }
+.a-trg-val { font-size:26px; font-weight:300; font-variant-numeric:tabular-nums; color:#ffb800; letter-spacing:-0.5px; line-height:1; text-shadow:0 0 12px rgba(255,184,0,0.25); }
+
+/* Mission buttons */
+.a-mis-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:5px; }
+.a-mis-btn { padding:11px 4px; border-radius:8px; border:1px solid rgba(0,167,204,0.12); background:rgba(0,208,255,0.02); color:rgba(117,136,163,0.5); font-size:9px; font-weight:500; letter-spacing:1px; text-transform:uppercase; cursor:pointer; text-align:center; -webkit-user-select:none; user-select:none; font-family:'JetBrains Mono',monospace; transition:all 0.2s; }
+.a-mis-btn:active { transform:scale(0.96); }
+.a-mis-btn:hover { border-color:rgba(0,167,204,0.35); color:rgba(0,208,255,0.6); background:rgba(0,208,255,0.04); }
+.a-mis-btn.sel { border-color:#00d0ff; background:rgba(0,208,255,0.1); color:#00d0ff; box-shadow:0 0 16px rgba(0,208,255,0.15), inset 0 0 12px rgba(0,208,255,0.05); }
+
+/* Control buttons */
+.a-ctrl-row { display:flex; gap:5px; margin-top:10px; }
+.a-ctrl-btn { flex:1; padding:12px 6px; border-radius:10px; border:1px solid; font-size:10px; font-weight:600; letter-spacing:2px; cursor:pointer; text-transform:uppercase; -webkit-user-select:none; user-select:none; font-family:'JetBrains Mono',monospace; transition:all 0.15s; }
+.a-ctrl-btn:active { transform:scale(0.96); }
+.a-ctrl-btn.go { background:transparent; border-color:rgba(0,255,136,0.2); color:rgba(0,255,136,0.6); }
+.a-ctrl-btn.go:hover { border-color:rgba(0,255,136,0.5); }
+.a-ctrl-btn.go.on { background:rgba(0,255,136,0.15); border-color:#00ff88; color:#00ff88; box-shadow:0 0 15px rgba(0,255,136,0.2); }
+.a-ctrl-btn.stop { background:transparent; border-color:rgba(117,136,163,0.2); color:rgba(117,136,163,0.5); }
+.a-ctrl-btn.stop.on { background:rgba(255,68,68,0.15); border-color:#ff4444; color:#ff4444; box-shadow:0 0 15px rgba(255,68,68,0.2); }
+.a-ctrl-btn.ebs { background:transparent; border-color:rgba(255,184,0,0.2); color:rgba(255,184,0,0.6); }
+.a-ctrl-btn.ebs.on { background:rgba(255,184,0,0.15); border-color:#ffb800; color:#ffb800; box-shadow:0 0 15px rgba(255,184,0,0.2); }
+.a-ctrl-btn.restart { background:transparent; border-color:rgba(155,89,182,0.2); color:rgba(155,89,182,0.5); font-size:8px; }
+.a-ctrl-btn.restart:active { background:rgba(155,89,182,0.1); }
+
+/* Steering bar */
+.a-steer-bg { width:100%; height:18px; background:rgba(0,167,204,0.04); border:1px solid rgba(0,167,204,0.12); border-radius:9px; position:relative; overflow:hidden; margin-top:12px; }
+.a-steer-ctr { position:absolute; left:50%; top:0; bottom:0; width:1px; background:rgba(0,167,204,0.3); transform:translateX(-50%); }
+.a-steer-fill { position:absolute; top:2px; bottom:2px; background:#00d0ff; border-radius:6px; transition:left 0.1s, width 0.1s; box-shadow:0 0 8px rgba(0,208,255,0.4); }
+.a-steer-cmd { position:absolute; top:0; bottom:0; width:2px; background:#ffb800; transition:left 0.1s; box-shadow:0 0 6px rgba(255,184,0,0.5); }
+
+/* Algo selects */
+.algo-select { margin:8px 0; }
+.algo-dropdown { background:#060a12; border:1px solid rgba(0,167,204,0.2); border-radius:8px; color:#00d0ff; font-family:'JetBrains Mono',monospace; }
+.algo-dropdown:focus { border-color:#00d0ff; box-shadow:0 0 0 2px rgba(0,208,255,0.15); }
+.algo-dropdown option { background:#060a12; color:#f1f5f9; }
+.algo-label { color:rgba(117,136,163,0.5); font-family:'JetBrains Mono',monospace; }
+
+/* Ambient glow animation */
+@keyframes a-pulse { 0%,100% { opacity:0.15; } 50% { opacity:0.3; } }
+.a-card:first-child { box-shadow:0 0 20px rgba(0,208,255,0.03), inset 0 1px 0 rgba(0,208,255,0.08), 0 0 40px rgba(0,208,255,0.02); }
+`,
+  render() { return `<div class="container">
+  <div class="a-strip">
+    <div class="a-cell"><div class="a-cell-lbl">State</div><div class="a-cell-val" id="pillState">IDLE</div></div>
+    <div class="a-cell"><div class="a-cell-lbl">Mission</div><div class="a-cell-val" id="pillMission">MANUAL</div></div>
+    <div class="a-cell"><div class="a-cell-lbl">Heartbeat</div><div class="a-cell-val" id="pillHb">--</div></div>
+  </div>
+  <div class="a-card"><div class="a-card-t">Mission Control</div>
+    <div class="a-mis-grid" id="misGrid"><button class="a-mis-btn mis-btn sel" data-m="manual">Manual</button><button class="a-mis-btn mis-btn" data-m="remote_control">Remote</button><button class="a-mis-btn mis-btn" data-m="inspection">Inspect</button><button class="a-mis-btn mis-btn" data-m="autonomous">Auto</button><button class="a-mis-btn mis-btn" data-m="acceleration">Accel</button><button class="a-mis-btn mis-btn" data-m="skidpad">Skidpad</button><button class="a-mis-btn mis-btn" data-m="autocross">Autocross</button><button class="a-mis-btn mis-btn" data-m="trackdrive">Trackdrive</button></div>
+    <div class="algo-select svo-select" style="display:none"><div class="algo-label">Video Input</div><select class="algo-dropdown svo-dropdown" onchange="onSvoChange(this)"><option value="live">Live Camera</option></select></div>
+    <div class="algo-select"><div class="algo-label">Steering</div><select class="algo-dropdown" onchange="onAlgoChange(this)"><option value="geometric">Geometric</option><option value="pure_pursuit">Pure Pursuit</option><option value="neural_v2">Neural V2</option><option value="mpc">MPC</option></select></div>
+    <div class="algo-select"><div class="algo-label">Speed</div><select class="algo-dropdown speed-algo-dropdown" onchange="onSpeedAlgoChange(this)"><option value="curve_factor">Curve Factor</option><option value="constant">Constant</option><option value="neural_v2">Neural V2</option><option value="zero">Zero</option></select></div>
+    <div class="a-ctrl-row ctrl-row"><button class="a-ctrl-btn ctrl-btn go" data-st="running" onclick="wsSend({action:'set_state',state:'running'})">Start</button><button class="a-ctrl-btn ctrl-btn stop" data-st="idle" onclick="wsSend({action:'set_state',state:'idle'})">Stop</button><button class="a-ctrl-btn ctrl-btn ebs" data-st="ebs" onclick="wsSend({action:'set_state',state:'ebs'})">EBS</button><button class="a-ctrl-btn ctrl-btn restart" onclick="if(confirm('Restart kart-brain service?'))wsSend({action:'restart'})">Restart</button></div>
+  </div>
+  <div class="a-card"><div class="a-card-t">Telemetry</div>
+    <div class="a-tg">
+      <div class="a-ti"><div class="a-tl">Steering</div><div class="a-tv" id="vSteer">0.0<span class="a-tu">°</span></div><div class="a-ti-bar"><div class="a-ti-bar-fill" id="steerBarFill" style="width:0%;background:#00d0ff;box-shadow:0 0 6px rgba(0,208,255,0.4)"></div></div></div>
+      <div class="a-ti"><div class="a-tl">Speed</div><div class="a-tv" id="vSpeed">0.0<span class="a-tu">km/h</span></div><div class="a-ti-bar"><div class="a-ti-bar-fill" id="speedBarFill" style="width:0%;background:#00ff88;box-shadow:0 0 6px rgba(0,255,136,0.4)"></div></div></div>
+    </div>
+    <div class="a-steer-bg"><div class="a-steer-ctr"></div><div class="a-steer-fill" id="steerFill"></div><div class="a-steer-cmd" id="steerCmd" style="left:50%"></div></div>
+    <div class="a-divider"></div>
+    <div class="a-gg-row"><div class="a-gg-wrap"><canvas class="a-gg-canvas gg-canvas" id="ggCanvas" width="140" height="140"></canvas></div>
+    <div class="a-gg-labels"><div><div class="a-gg-vl">Lateral</div><div class="a-gg-v" id="vALat">0.00 g</div></div><div><div class="a-gg-vl">Longitudinal</div><div class="a-gg-v" id="vALon">0.00 g</div></div><div><div class="a-gg-vl">Total</div><div class="a-gg-v" id="vATotal">0.00 g</div></div></div></div>
+    <div class="a-divider"></div>
+    <div class="a-ped-row"><div class="a-ped-item"><div class="a-ped-lbl">Throttle <span id="vThr">0%</span></div><div class="a-ped-track"><div class="a-ped-fill thr" id="thrFill" style="width:0%"></div></div></div>
+    <div class="a-ped-item"><div class="a-ped-lbl">Brake <span id="vBrk">0%</span></div><div class="a-ped-track"><div class="a-ped-fill brk" id="brkFill" style="width:0%"></div></div></div></div>
+  </div>
+  <div class="a-card"><div class="a-card-t">Actuations</div><div class="a-trg-grid">
+    <div class="a-trg-item"><div class="a-trg-lbl">Steer PWM</div><div class="a-trg-val" id="aPwm">0%</div></div>
+    <div class="a-trg-item"><div class="a-trg-lbl">Throttle</div><div class="a-trg-val" id="aThr">0%</div></div>
+    <div class="a-trg-item"><div class="a-trg-lbl">Brake</div><div class="a-trg-val" id="aBrk">0%</div></div></div></div>
+  <div class="a-card"><div class="a-card-t">Targets</div><div class="a-trg-grid">
+    <div class="a-trg-item"><div class="a-trg-lbl">Steering</div><div class="a-trg-val" id="cSteer">0.0°</div></div>
+    <div class="a-trg-item"><div class="a-trg-lbl">Throttle</div><div class="a-trg-val" id="cThr">0%</div></div>
+    <div class="a-trg-item"><div class="a-trg-lbl">Brake</div><div class="a-trg-val" id="cBrk">0%</div></div></div></div>
+  </div>`; },
+
+  init() {
+    $('misGrid').addEventListener('click', missionClick);
+    drawGG(0, 0, 'rgba(0,167,204,0.2)', 'rgba(0,208,255,0.06)', '#00d0ff', 12);
+    return () => {};
+  },
+
+  update(d) {
+    $('vSteer').innerHTML = `${deg(d.esp32_steering_rad)}<span style="font-size:.5em;vertical-align:super;color:rgba(117,136,163,0.5)">°</span>` + (d.esp32_steering_raw != null ? ` <span class="a-tu" style="font-size:.4em;opacity:.5">raw ${d.esp32_steering_raw}</span>` : '');
+    $('vSpeed').innerHTML = `${(d.esp32_speed*3.6).toFixed(1)} <span class="a-tu">km/h</span>`;
+    const sPct = Math.max(-1, Math.min(1, d.esp32_steering_rad / 0.5));
+    const sf = $('steerBarFill');
+    if (sPct >= 0) { sf.style.left='50%'; sf.style.width=(sPct*50)+'%'; }
+    else { sf.style.width=(-sPct*50)+'%'; sf.style.left=(50+sPct*50)+'%'; }
+    $('speedBarFill').style.width = Math.min(d.esp32_speed/30*100,100)+'%';
+    // Steering detail bar
+    updateSteerBar(d, 'steerFill', 'steerCmd');
+    const latG = d.esp32_accel_lat/9.81, lonG = d.esp32_accel_lon/9.81;
+    drawGG(latG, lonG, 'rgba(0,167,204,0.2)', 'rgba(0,208,255,0.06)', '#00d0ff', 12);
+    $('vALat').textContent = latG.toFixed(2)+' g';
+    $('vALon').textContent = lonG.toFixed(2)+' g';
+    $('vATotal').textContent = Math.sqrt(latG*latG+lonG*lonG).toFixed(2)+' g';
+    updatePedals(d); updateTargets(d); updateArtemisStatus(d); updateMissions(d); updateStateButtons(d);
+    $('aPwm').textContent = (Math.abs(d.esp32_steering_pwm || 0) * 100).toFixed(0) + '%';
+    $('aThr').textContent = ((d.esp32_throttle || 0) * 100).toFixed(0) + '%';
+    $('aBrk').textContent = ((d.esp32_braking || 0) * 100).toFixed(0) + '%';
+  }
+};
+
+function updateArtemisStatus(d) {
+  const ps = $('pillState');
+  ps.textContent = d.state.toUpperCase();
+  ps.className = 'a-cell-val' + (d.state === 'running' ? ' green' : '');
+  $('pillMission').textContent = d.mission.toUpperCase();
+  $('pillMission').className = 'a-cell-val green';
+  const ph = $('pillHb');
+  if (d.esp32_heartbeat_age < 0) { ph.textContent='--'; ph.className='a-cell-val'; }
+  else { ph.textContent = d.esp32_heartbeat ? d.esp32_heartbeat_age+'s' : 'LOST '+d.esp32_heartbeat_age+'s'; ph.className='a-cell-val '+(d.esp32_heartbeat?'green':'red'); }
+}
+
+// ═══════════════════════════════════════════════════════
 // SHARED HELPERS
 // ═══════════════════════════════════════════════════════
 function missionClick(e) {
@@ -1663,7 +1858,7 @@ function drawGGhud(latG, lonG) {
 // ═══════════════════════════════════════════════════════
 // SKIN SYSTEM
 // ═══════════════════════════════════════════════════════
-const SKINS = { default: skinDefault, kitt: skinKitt, tesla: skinTesla, hud: skinHud };
+const SKINS = { default: skinDefault, kitt: skinKitt, tesla: skinTesla, hud: skinHud, artemis: skinArtemis };
 if (!SKINS[currentSkin]) currentSkin = 'default';
 
 function applySkin(id) {
@@ -1674,7 +1869,7 @@ function applySkin(id) {
   $('skinCss').textContent = skin.css;
   $('app').innerHTML = skin.render();
   // Set title per skin
-  const titles = { default:'UM Driverless', kitt:'K·I·T·T', tesla:'UM Driverless', hud:'' };
+  const titles = { default:'UM Driverless', kitt:'K·I·T·T', tesla:'UM Driverless', hud:'', artemis:'UM DRIVERLESS' };
   $('topbarTitle').textContent = titles[id] ?? 'UM Driverless';
   buildSkinMenu();
   skinCleanup = skin.init();
