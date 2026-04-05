@@ -30,7 +30,7 @@ class CmdVelBridgeNode(Node):
         self.declare_parameter("input_topic", "/kart/cmd_vel_muxed")
         self.declare_parameter("rate_hz", 100.0)
         self.declare_parameter("max_speed", 5.0)
-        self.declare_parameter("max_steer", 1.047)
+        self.declare_parameter("max_steer", 1.309)
 
         in_topic = str(self.get_parameter("input_topic").value)
         rate = float(self.get_parameter("rate_hz").value)
