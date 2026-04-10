@@ -132,8 +132,6 @@ class DashboardNode(Node):
         # Steering mode publisher (Frame to ESP32 via kb_coms_micro)
         self.steer_mode_pub = self.create_publisher(Frame, "/orin/steer_mode", 10)
         self._steer_mode = 0  # 0=PID, 1=direct PWM
-        self.declare_parameter("pwm_limit", 0.30)
-        self._pwm_limit = float(self.get_parameter("pwm_limit").value)
         # Pending commands set from asyncio thread, published by ROS timer
         self._pending_manual_cmd = None
         self._manual_cmd_time = 0.0  # monotonic timestamp of last WS manual_control
@@ -370,8 +368,8 @@ class DashboardNode(Node):
         cmd = Twist()
         cmd.linear.x = (throttle - brake) * NOMINAL_MAX_SPEED
         if self._steer_mode == 1:
-            # Direct PWM mode: scale joystick [-1, 1] to [-pwm_limit, pwm_limit]
-            cmd.angular.z = steer * self._pwm_limit
+            # Direct PWM mode: pass joystick [-1, 1] through; ESP32 outputLimit clamps
+            cmd.angular.z = steer
         else:
             # PID mode: scale to radians
             cmd.angular.z = steer * NOMINAL_MAX_STEER
