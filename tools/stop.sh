@@ -1,6 +1,6 @@
 #!/bin/bash
 # Stop all autonomous pipeline processes cleanly.
-# Usage: ./tools/stop_autonomous.sh
+# Usage: ./tools/stop.sh
 
 echo "Stopping autonomous pipeline..."
 
