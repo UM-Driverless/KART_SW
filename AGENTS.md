@@ -13,6 +13,7 @@
 **Consult selectively** (search/grep — these grow over time):
 - **`error-log.md`** — Append-only log of past mistakes and preventions.
 - **`notes.md`** — Design decisions and rationale.
+- **`history.md`** — Chronological audit trail of significant findings and decisions (newest first).
 - **`scratchpad.md`** — Permanent scratchpad. Random notes, no cleanup needed.
 
 **Reference** (read when relevant):
