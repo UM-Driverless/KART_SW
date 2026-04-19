@@ -45,7 +45,7 @@ Assumes Ubuntu 22.04 with ROS 2 Humble already installed and sourced.
 ## Build
 ```bash
 source /opt/ros/humble/setup.bash
-colcon build
+colcon build --symlink-install
 source install/setup.bash
 ```
 
