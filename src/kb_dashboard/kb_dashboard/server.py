@@ -331,6 +331,12 @@ async def run_websocket_server(
             import subprocess
             subprocess.Popen("echo 0 | sudo -S systemctl restart kart-brain",
                              shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        elif action == "shutdown_orin":
+            node.get_logger().warn(f"Orin shutdown requested by {client_id}")
+            import subprocess
+            # Delay a few seconds so the WebSocket response reaches the client before power-off.
+            subprocess.Popen("sleep 3 && echo 0 | sudo -S poweroff",
+                             shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         elif action == "manual_control":
             # Auto-acquire control on first manual_control if nobody has it
             if controller["holder"] is None:
