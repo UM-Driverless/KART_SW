@@ -36,9 +36,10 @@ import numpy as np
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, DurabilityPolicy, ReliabilityPolicy
-from geometry_msgs.msg import Twist
-from nav_msgs.msg import Odometry
-from std_msgs.msg import Float32, String
+from geometry_msgs.msg import PointStamped, Twist
+# from nav_msgs.msg import Odometry  # removed: kart has no speed sensor
+from std_msgs.msg import String
+# from std_msgs.msg import Float32    # removed: kart has no speed sensor
 from vision_msgs.msg import Detection3DArray
 
 try:
@@ -258,21 +259,17 @@ class ConeFollowerNode(Node):
                 lambda msg: self._on_detections(zed_objects_to_det3d(msg)),
                 10,
             )
-        # Subscribe to odometry for actual speed feedback
-        # BEST_EFFORT works with both Gazebo (BEST_EFFORT) and ZED (RELIABLE) publishers
-        odom_qos = QoSProfile(
-            depth=10,
-            reliability=ReliabilityPolicy.BEST_EFFORT,
-            durability=DurabilityPolicy.VOLATILE,
-        )
-        self.odom_sub = self.create_subscription(
-            Odometry, odom_topic, self._on_odom, odom_qos
-        )
-        self.speed_pub = self.create_publisher(Float32, "/kart/speed", 10)
+        # Speed feedback removed: the kart has no speed sensor, and ZED VIO
+        # speed estimation was unreliable. Controllers that referenced
+        # _actual_speed now fall back to max_speed (MPC) or 0.0 (neural_v2).
+        # self.odom_sub = self.create_subscription(Odometry, odom_topic, self._on_odom, odom_qos)
+        # self.speed_pub = self.create_publisher(Float32, "/kart/speed", 10)
         self._actual_speed = 0.0
-        self._prev_odom_pos = None
-        self._prev_odom_time = None
         self._last_steer = 0.0
+        # Controller-selected target (fwd, left) for HUD arrow rendering.
+        # Set by each controller after it picks its aim point.
+        self._last_target = None
+        self.target_pub = self.create_publisher(PointStamped, "/kart/target", 10)
         self.last_detection_time = self.get_clock().now()
         self.timer = self.create_timer(0.1, self._safety_check)
         self.create_subscription(String, "/dashboard/controller_type", self._on_controller_type, 10)
@@ -330,21 +327,20 @@ class ConeFollowerNode(Node):
         speed = self.max_speed * (1.0 - self.speed_curve_factor * abs(steer))
         return max(self.min_speed, min(self.max_speed, speed))
 
-    def _on_odom(self, msg: Odometry):
-        """@brief Callback for odometry. Computes speed from position differentiation."""
-        # ZED ROS2 wrapper doesn't populate twist, so derive velocity from position
-        pos = msg.pose.pose.position
-        t = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
-        if self._prev_odom_pos is not None and self._prev_odom_time is not None:
-            dt = t - self._prev_odom_time
-            if dt > 1e-6:
-                dx = pos.x - self._prev_odom_pos[0]
-                dy = pos.y - self._prev_odom_pos[1]
-                dz = pos.z - self._prev_odom_pos[2]
-                self._actual_speed = math.sqrt(dx*dx + dy*dy + dz*dz) / dt
-        self._prev_odom_pos = (pos.x, pos.y, pos.z)
-        self._prev_odom_time = t
-        self.speed_pub.publish(Float32(data=self._actual_speed))
+    # _on_odom removed: kart has no speed sensor and ZED VIO speed was unreliable.
+    # def _on_odom(self, msg: Odometry):
+    #     pos = msg.pose.pose.position
+    #     t = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
+    #     if self._prev_odom_pos is not None and self._prev_odom_time is not None:
+    #         dt = t - self._prev_odom_time
+    #         if dt > 1e-6:
+    #             dx = pos.x - self._prev_odom_pos[0]
+    #             dy = pos.y - self._prev_odom_pos[1]
+    #             dz = pos.z - self._prev_odom_pos[2]
+    #             self._actual_speed = math.sqrt(dx*dx + dy*dy + dz*dz) / dt
+    #     self._prev_odom_pos = (pos.x, pos.y, pos.z)
+    #     self._prev_odom_time = t
+    #     self.speed_pub.publish(Float32(data=self._actual_speed))
 
     # ── neural net loading ────────────────────────────────────────────
 
@@ -394,6 +390,7 @@ class ConeFollowerNode(Node):
         @param msg Detection3DArray in camera optical frame (Z=forward, X=right, Y=down).
         """
         self.last_detection_time = self.get_clock().now()
+        self._last_target = None  # cleared each frame; set by the active controller
 
         cones = []
         for det in msg.detections:
@@ -428,6 +425,18 @@ class ConeFollowerNode(Node):
         cmd.angular.z = steer
         cmd.linear.x = speed
         self.cmd_pub.publish(cmd)
+
+        # Publish the controller-selected target for HUD rendering. This is
+        # the SAME point the controller aims at, so the dashboard arrow cannot
+        # disagree with the steering command.
+        if self._last_target is not None:
+            tp = PointStamped()
+            tp.header = msg.header
+            fwd, left = self._last_target
+            tp.point.x = -left   # optical frame: x = right (negative of "left")
+            tp.point.y = 0.0     # ground-level approx; HUD projects along the principal row
+            tp.point.z = fwd
+            self.target_pub.publish(tp)
 
     # ── geometric controller ──────────────────────────────────────────
 
@@ -469,6 +478,7 @@ class ConeFollowerNode(Node):
         steer = max(-self.max_steer,
                      min(self.max_steer, self.steering_gain * angle))
         self._last_steer = steer
+        self._last_target = (mid_f, mid_l)
 
         speed = self.max_speed * (1.0 - self.speed_curve_factor * abs(steer))
         speed = max(self.min_speed, min(self.max_speed, speed))
@@ -570,6 +580,7 @@ class ConeFollowerNode(Node):
         steer = self.steering_gain * steer
         steer = max(-self.max_steer, min(self.max_steer, steer))
         self._last_steer = steer
+        self._last_target = (target_x, target_y)
 
         # Speed: same profile as geometric
         speed = self.max_speed * (1.0 - self.speed_curve_factor * abs(steer))
@@ -630,7 +641,8 @@ class ConeFollowerNode(Node):
         if len(path) < 2:
             return self._last_steer, self.min_speed
 
-        v = max(self.min_speed, min(self.max_speed, self._actual_speed))
+        # No speed sensor: plan MPC at max_speed as best-effort assumption.
+        v = self.max_speed
 
         N      = self.mpc_N
         dt     = self.mpc_dt
@@ -667,6 +679,7 @@ class ConeFollowerNode(Node):
 
         steer = float(np.clip(result.x[0], -self.max_steer, self.max_steer))
         self._last_steer = steer
+        self._last_target = path[0] if path else None
 
         speed = self._compute_speed(steer)
 
@@ -710,7 +723,8 @@ class ConeFollowerNode(Node):
             inp[nb * 2 + j * 2] = d / 15.0
             inp[nb * 2 + j * 2 + 1] = a / np.pi
         if self._nn_uses_speed:
-            inp[-1] = self._actual_speed / self._nn_max_speed
+            # No speed sensor: feed 0.0 (neural_v2 was trained with this input).
+            inp[-1] = 0.0
 
         hidden = np.tanh(inp @ self._nn_W1 + self._nn_b1)
         out = hidden @ self._nn_W2 + self._nn_b2
@@ -721,7 +735,7 @@ class ConeFollowerNode(Node):
         self._last_steer = steer
         self.get_logger().info(
             f"[{self.controller_type}] steer={steer:.3f}({math.degrees(steer):.0f}°) "
-            f"spd={speed:.1f} act={self._actual_speed:.1f} "
+            f"spd={speed:.1f} "
             f"b={len(blues)} y={len(yellows)} "
             f"out=[{out[0]:.2f},{out[1]:.2f}] inp={np.round(inp,2).tolist()}"
         )
