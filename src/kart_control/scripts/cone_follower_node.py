@@ -297,20 +297,27 @@ class ConeFollowerNode(Node):
     def _on_speed_controller_type(self, msg: String):
         """@brief Callback for runtime speed controller type changes from the dashboard."""
         new_type = msg.data
-        if new_type in ("curve_factor", "constant", "neural_v2", "zero") and new_type != self.speed_controller_type:
+        if new_type in ("curve_factor", "constant", "constant_stop", "neural_v2", "zero") and new_type != self.speed_controller_type:
             self.get_logger().info(f"Speed controller: {self.speed_controller_type} → {new_type}")
             self.speed_controller_type = new_type
 
-    def _compute_speed(self, steer, nn_out=None):
+    def _compute_speed(self, steer, nn_out=None, cones=None):
         """@brief Compute speed based on the active speed controller type.
 
         @param steer Current steering angle (rad).
         @param nn_out Raw neural net output (2-element array), or None if steering is not neural.
+        @param cones List of (class_id, fwd, left) tuples — used by stop-on-orange modes.
         @return Speed in m/s.
         """
         if self.speed_controller_type == "zero":
             return 0.0
         if self.speed_controller_type == "constant":
+            return self.max_speed
+        if self.speed_controller_type == "constant_stop":
+            if cones:
+                for cls, _fwd, _left in cones:
+                    if cls in ("orange_cone", "large_orange_cone"):
+                        return 0.0
             return self.max_speed
         elif self.speed_controller_type == "neural_v2":
             if nn_out is not None:
@@ -409,7 +416,7 @@ class ConeFollowerNode(Node):
             steer, _ = self._control_mpc(cones)
         else:
             steer, _ = self._control_geometric(cones)
-        speed = self._compute_speed(steer, nn_out)
+        speed = self._compute_speed(steer, nn_out, cones)
 
         # Safety: if no cones visible, slow down and keep last steer
         # (don't hard-stop — cones may reappear after a curve transition)
