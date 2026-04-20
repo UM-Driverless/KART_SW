@@ -61,6 +61,16 @@ body { min-height: 100vh; -webkit-tap-highlight-color: transparent; }
       <button class="skin-btn" id="skinBtn" onclick="toggleSkinMenu()"></button>
       <div class="skin-dropdown" id="skinDropdown"></div>
     </div>
+    <button id="netInfoBtn" onclick="toggleNetInfo()"
+            title="Dashboard connection info (local IPs for offline access)"
+            style="background:transparent;border:1px solid #2a2a3a;color:#888;border-radius:100px;width:22px;height:22px;font-size:11px;cursor:pointer;font-family:sans-serif;line-height:1;padding:0">ⓘ</button>
+    <div id="netInfoPanel" style="display:none;position:absolute;top:44px;right:12px;background:#14141f;border:1px solid #2a2a3a;border-radius:12px;padding:14px 16px;font-size:11px;color:#e0e0e8;font-family:monospace;max-width:320px;z-index:1000;box-shadow:0 8px 24px rgba(0,0,0,0.5)">
+      <div style="font-size:9px;color:#6a6a7a;text-transform:uppercase;letter-spacing:2px;margin-bottom:10px">Connection</div>
+      <div id="netInfoContent" style="line-height:1.8"><i style="color:#6a6a7a">loading…</i></div>
+      <div style="margin-top:10px;padding-top:10px;border-top:1px solid #2a2a3a;font-size:10px;color:#6a6a7a;line-height:1.5">
+        Use a LAN URL when off the internet (same WiFi as the Orin). The Cloudflare URL always works but needs internet.
+      </div>
+    </div>
     <div class="conn-dot" id="connDot"></div>
     <button id="powerOffBtn"
             onclick="if(confirm('POWER OFF the Orin computer? SSH + dashboard will be unreachable until someone physically powers it back on. This does NOT trigger the kart safety shutdown loop.'))wsSend({action:'shutdown_orin'})"
@@ -1803,6 +1813,44 @@ function toggleHealthInfo() {
   const el = $('healthInfo');
   el.style.display = el.style.display === 'none' ? 'block' : 'none';
 }
+
+async function toggleNetInfo() {
+  const panel = $('netInfoPanel');
+  if (panel.style.display === 'block') { panel.style.display = 'none'; return; }
+  panel.style.display = 'block';
+  const content = $('netInfoContent');
+  content.innerHTML = '<i style="color:#6a6a7a">loading…</i>';
+  try {
+    const res = await fetch('/network-info', { cache: 'no-store' });
+    const d = await res.json();
+    const ifaces = (d.interfaces || []).map(
+      i => `<div>${i.iface}: <b style="color:#4a9eff">${i.ip}</b></div>`
+    ).join('');
+    const urls = (d.interfaces || []).map(i =>
+      `<a href="http://${i.ip}:${d.port}" target="_blank" style="color:#2ecc71;text-decoration:none">http://${i.ip}:${d.port}</a>`
+    ).join('<br>');
+    content.innerHTML = `
+      <div><span style="color:#6a6a7a">hostname:</span> ${d.hostname || '?'}</div>
+      <div style="margin-top:8px;color:#6a6a7a">interfaces:</div>
+      ${ifaces || '<i style="color:#6a6a7a">none</i>'}
+      <div style="margin-top:8px;color:#6a6a7a">LAN URLs (same WiFi as Orin):</div>
+      <div>${urls || '<i style="color:#6a6a7a">none</i>'}</div>
+      <div style="margin-top:8px;color:#6a6a7a">Cloudflare (any internet):</div>
+      <div><a href="https://kart.rubenayla.xyz" target="_blank" style="color:#9b59b6;text-decoration:none">https://kart.rubenayla.xyz</a></div>
+    `;
+  } catch (e) {
+    content.innerHTML = '<span style="color:#e74c3c">failed to load: ' + e.message + '</span>';
+  }
+}
+// Close the info panel when clicking outside it.
+document.addEventListener('click', e => {
+  const panel = $('netInfoPanel');
+  const btn = $('netInfoBtn');
+  if (panel && btn && panel.style.display === 'block' &&
+      !panel.contains(e.target) && e.target !== btn) {
+    panel.style.display = 'none';
+  }
+});
 
 function updateHealth(d) {
   const ok='#2ecc71', bad='#e74c3c', dim='#888';

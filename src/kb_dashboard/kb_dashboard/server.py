@@ -219,6 +219,37 @@ async def run_websocket_server(
                 f"Cache-Control: no-cache\r\n\r\n"
             ).encode()
             writer.write(header + body)
+        elif path == "/network-info":
+            # Live read of the Orin's LAN addresses — used by the topbar (i)
+            # tooltip so the fallback URL stays correct even if DHCP changes.
+            import json as _json
+            import socket as _socket
+            import subprocess as _subprocess
+            try:
+                res = _subprocess.run(
+                    ["ip", "-o", "-4", "addr", "show", "scope", "global"],
+                    capture_output=True, text=True, timeout=2,
+                )
+                ifaces = []
+                for line in res.stdout.strip().splitlines():
+                    parts = line.split()
+                    if len(parts) >= 4:
+                        ifaces.append({"iface": parts[1], "ip": parts[3].split("/")[0]})
+            except Exception:
+                ifaces = []
+            info_body = _json.dumps({
+                "hostname": _socket.gethostname(),
+                "interfaces": ifaces,
+                "port": port,
+            }).encode()
+            header = (
+                f"HTTP/1.1 200 OK\r\n"
+                f"Content-Type: application/json\r\n"
+                f"Content-Length: {len(info_body)}\r\n"
+                f"Connection: close\r\n"
+                f"Cache-Control: no-cache\r\n\r\n"
+            ).encode()
+            writer.write(header + info_body)
         else:
             writer.write(
                 b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
