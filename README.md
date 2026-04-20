@@ -22,6 +22,17 @@ Requires [cloudflared](https://developers.cloudflare.com/cloudflare-one/connecti
 
 - **AnyDesk ID**: `721489674` (GUI access)
 
+### Dashboard access
+
+| URL | Needs | Notes |
+|---|---|---|
+| `https://kart.rubenayla.xyz` | Internet | Default. Cloudflare Tunnel; works from anywhere. |
+| `http://<orin-lan-ip>:9090` | Same WiFi/LAN as the Orin | Local fallback — works if internet dies. The ⓘ button in the dashboard topbar shows the Orin's current LAN IPs and one-click links. |
+
+Default password: `0` (set via the `password` ROS param on `kb_dashboard`).
+
+To make the LAN path reliable, give the Orin a **static DHCP reservation** on your router (or set a static IP via NetworkManager on the Orin) so the URL doesn't change between sessions.
+
 ## Hardware
 
 | Component | Details |

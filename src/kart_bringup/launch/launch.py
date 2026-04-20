@@ -11,7 +11,7 @@ from launch.actions import (
 )
 from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import Node
 from ament_index_python.packages import get_package_share_directory
 
@@ -37,6 +37,7 @@ def generate_launch_description():
         description="Use ZED SDK built-in object detection (true) or custom YOLO node (false).",
     )
     use_zed_od = LaunchConfiguration("use_zed_od")
+
 
     # Read SVO path from /tmp/kart_svo_path if it exists (set by dashboard)
     _svo_default = "live"
@@ -138,6 +139,7 @@ def generate_launch_description():
         ],
         condition=IfCondition(perception),
     )
+
 
     # --- Always launched ---
 

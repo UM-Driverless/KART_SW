@@ -1,6 +1,40 @@
 <!-- consult selectively — grep, never read in full -->
 # Notes
 
+## Orin availability — it's a kart computer, not a server
+
+The Orin lives **in the kart**. It is powered off whenever Ruben is not physically at the kart (e.g. working from home). `ssh orin-remote` returning `Connection closed by UNKNOWN port 65535` is usually **"the Orin is off"**, not "the Cloudflare Tunnel has a problem."
+
+**Don't retry in a loop.** Before scheduling a retry or polling SSH:
+- If the user is working from the Mac with no mention of being at the kart → Orin is almost certainly off. Do not deploy. Report the commit is on `origin/dev` and will deploy when they're next at the kart.
+- If the user just said "I'm at the kart" / "I just booted Orin" / similar → then a single retry after a short delay is reasonable.
+
+When deploy is blocked by Orin being off, **that's fine** — code + push is the "done" state for home sessions. Physical-world next step belongs to the human, not the agent.
+
+## colcon `--symlink-install` gotcha (ament_python)
+
+The flag is **misleadingly named**. It only creates symlinks for `ament_cmake` packages (and Python scripts installed via CMake, like `kart_control`). For **`ament_python` packages** — including `kb_dashboard` — it does NOT symlink. Files in `build/<pkg>/<pkg>/` are plain copies refreshed at build time. The egg-link just redirects `import <pkg>` from `install/` to `build/`, which still holds copies.
+
+### Consequences
+- Editing `src/kb_dashboard/kb_dashboard/index.html` (or `server.py`, `dashboard_node.py`) does **not** propagate until you rebuild the package. `git pull` + `systemctl restart kart-brain` alone is NOT enough. This has caused "I don't see my change" confusion multiple times.
+- Editing `src/kart_control/scripts/*.py` DOES propagate without rebuild — `kart_control` is `ament_cmake` and its scripts are real symlinks.
+
+### Fast rebuild loop for dashboard edits on Orin
+```bash
+cd ~/kart_brain && colcon build --symlink-install --packages-select kb_dashboard && sudo systemctl restart kart-brain
+```
+Incremental build is ~3 s; service restart ~4 s. Use `--packages-select` to avoid rebuilding everything.
+
+### How to tell if a ROS 2 install is a copy or a symlink
+```bash
+ls -la install/<pkg>/lib/<pkg>/       # for ament_cmake scripts: symlinks (-> src/...)
+ls -la build/<pkg>/<pkg>/             # for ament_python: always plain copies
+cat install/<pkg>/lib/python3.10/site-packages/*.egg-link  # where imports resolve
+```
+
+### If you see stale UI after a `git pull`
+The most likely cause is this gotcha. Rebuild the affected package, then restart the service. Do NOT assume the browser is caching — hard-refresh is cheap but won't fix a stale served file.
+
 ## Autonomous Agent Orchestrator (idea — 2026-03-14)
 
 Run a headless Claude Code loop that picks tasks from `.agents/tasks.md` autonomously:

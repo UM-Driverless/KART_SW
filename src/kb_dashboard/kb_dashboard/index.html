@@ -61,7 +61,21 @@ body { min-height: 100vh; -webkit-tap-highlight-color: transparent; }
       <button class="skin-btn" id="skinBtn" onclick="toggleSkinMenu()"></button>
       <div class="skin-dropdown" id="skinDropdown"></div>
     </div>
+    <button id="netInfoBtn" onclick="toggleNetInfo()"
+            title="Dashboard connection info (local IPs for offline access)"
+            style="background:transparent;border:1px solid #2a2a3a;color:#888;border-radius:100px;width:22px;height:22px;font-size:11px;cursor:pointer;font-family:sans-serif;line-height:1;padding:0">ⓘ</button>
+    <div id="netInfoPanel" style="display:none;position:absolute;top:44px;right:12px;background:#14141f;border:1px solid #2a2a3a;border-radius:12px;padding:14px 16px;font-size:11px;color:#e0e0e8;font-family:monospace;max-width:320px;z-index:1000;box-shadow:0 8px 24px rgba(0,0,0,0.5)">
+      <div style="font-size:9px;color:#6a6a7a;text-transform:uppercase;letter-spacing:2px;margin-bottom:10px">Connection</div>
+      <div id="netInfoContent" style="line-height:1.8"><i style="color:#6a6a7a">loading…</i></div>
+      <div style="margin-top:10px;padding-top:10px;border-top:1px solid #2a2a3a;font-size:10px;color:#6a6a7a;line-height:1.5">
+        Use a LAN URL when off the internet (same WiFi as the Orin). The Cloudflare URL always works but needs internet.
+      </div>
+    </div>
     <div class="conn-dot" id="connDot"></div>
+    <button id="powerOffBtn"
+            onclick="if(confirm('POWER OFF the Orin computer? SSH + dashboard will be unreachable until someone physically powers it back on. This does NOT trigger the kart safety shutdown loop.'))wsSend({action:'shutdown_orin'})"
+            title="Power off the Orin computer (NOT the kart safety shutdown loop / EBS)"
+            style="background:transparent;border:1px solid rgba(127,29,29,0.6);color:#ff6b6b;border-radius:100px;font-size:9px;font-weight:600;letter-spacing:1.5px;padding:5px 10px;cursor:pointer;font-family:'Inter',-apple-system,sans-serif">POWER OFF</button>
   </div>
 </div>
 <div id="healthBar" style="max-width:480px;margin:0 auto;padding:0 12px 4px;display:flex;gap:6px;font-size:10px;font-family:monospace;opacity:0.7">
@@ -597,7 +611,7 @@ body { font-family:'Inter',-apple-system,BlinkMacSystemFont,'SF Pro',system-ui,s
   <div class="card"><div class="card-t">Mission</div>
     <div class="mis-grid" id="misGrid"><button class="mis-btn sel" data-m="manual">Manual</button><button class="mis-btn" data-m="remote_control">Remote</button><button class="mis-btn" data-m="inspection">Inspect</button><button class="mis-btn" data-m="autonomous">Auto</button><button class="mis-btn" data-m="acceleration">Accel</button><button class="mis-btn" data-m="skidpad">Skidpad</button><button class="mis-btn" data-m="autocross">Autocross</button><button class="mis-btn" data-m="trackdrive">Trackdrive</button></div>
     <div class="algo-select svo-select" style="display:none"><div class="algo-label">Video Input</div><select class="algo-dropdown svo-dropdown" onchange="onSvoChange(this)"><option value="live">Live Camera</option></select></div>
-    <div class="algo-select"><div class="algo-label">Steering</div><select class="algo-dropdown" onchange="onAlgoChange(this)"><option value="geometric">Geometric</option><option value="pure_pursuit">Pure Pursuit</option><option value="neural_v2">Neural V2</option><option value="mpc">MPC</option></select></div>
+    <div class="algo-select"><div class="algo-label">Steering</div><select class="algo-dropdown" onchange="onAlgoChange(this)"><option value="geometric">Geometric</option><option value="pure_pursuit">Pure Pursuit</option><option value="stanley">Stanley</option><option value="neural_v2">Neural V2</option><option value="mpc">MPC</option></select></div>
     <div class="algo-select"><div class="algo-label">Speed</div><select class="algo-dropdown speed-algo-dropdown" onchange="onSpeedAlgoChange(this)"><option value="curve_factor">Curve Factor</option><option value="constant">Constant</option><option value="constant_stop">Constant + Stop</option><option value="neural_v2">Neural V2</option><option value="zero">Zero</option></select></div>
     <div class="ctrl-row"><button class="ctrl-btn go" data-st="running" onclick="wsSend({action:'set_state',state:'running'})">Start</button><button class="ctrl-btn stop" data-st="idle" onclick="wsSend({action:'set_state',state:'idle'})">Stop</button><button class="ctrl-btn ebs" data-st="ebs" onclick="wsSend({action:'set_state',state:'ebs'})">EBS</button><button class="ctrl-btn restart" onclick="if(confirm('Restart kart-brain service?'))wsSend({action:'restart'})">Restart</button></div>
   </div>
@@ -1005,7 +1019,7 @@ body::after {
       </div>
       <div class="algo-select">
         <div class="algo-label">Steering</div>
-        <select class="algo-dropdown" onchange="onAlgoChange(this)"><option value="geometric">Geometric</option><option value="pure_pursuit">Pure Pursuit</option><option value="neural_v2">Neural V2</option><option value="mpc">MPC</option></select>
+        <select class="algo-dropdown" onchange="onAlgoChange(this)"><option value="geometric">Geometric</option><option value="pure_pursuit">Pure Pursuit</option><option value="stanley">Stanley</option><option value="neural_v2">Neural V2</option><option value="mpc">MPC</option></select>
       </div>
       <div class="algo-select">
         <div class="algo-label">Speed</div>
@@ -1272,7 +1286,7 @@ body { font-family:'Inter',sans-serif; background:#0a0a0a; color:#f5f5f5; }
     <button class="t-mis-btn sel" data-m="manual">Manual</button><button class="t-mis-btn" data-m="remote_control">Remote</button><button class="t-mis-btn" data-m="inspection">Inspect</button><button class="t-mis-btn" data-m="autonomous">Auto</button>
     <button class="t-mis-btn" data-m="acceleration">Accel</button><button class="t-mis-btn" data-m="skidpad">Skidpad</button><button class="t-mis-btn" data-m="autocross">Autocross</button><button class="t-mis-btn" data-m="trackdrive">Trackdrive</button>
   </div>
-  <div class="algo-select"><div class="algo-label">Algorithm</div><select class="algo-dropdown" onchange="onAlgoChange(this)"><option value="geometric">Geometric</option><option value="pure_pursuit">Pure Pursuit</option><option value="neural_v2">Neural V2</option><option value="mpc">MPC</option></select></div>
+  <div class="algo-select"><div class="algo-label">Algorithm</div><select class="algo-dropdown" onchange="onAlgoChange(this)"><option value="geometric">Geometric</option><option value="pure_pursuit">Pure Pursuit</option><option value="stanley">Stanley</option><option value="neural_v2">Neural V2</option><option value="mpc">MPC</option></select></div>
   <div class="algo-select svo-select" style="display:none"><div class="algo-label">Video Input</div><select class="algo-dropdown svo-dropdown" onchange="onSvoChange(this)"><option value="live">Live Camera</option></select></div>
   <div class="t-ctrl-row">
     <button class="t-ctrl go" data-st="running" onclick="wsSend({action:'set_state',state:'running'})">Start</button>
@@ -1467,7 +1481,7 @@ body::before { content:''; position:fixed; inset:0; pointer-events:none; backgro
       <button class="h-mis-btn sel" data-m="manual">MANUAL</button><button class="h-mis-btn" data-m="remote_control">REMOTE</button><button class="h-mis-btn" data-m="inspection">INSPECT</button>
       <button class="h-mis-btn" data-m="autonomous">AUTO</button><button class="h-mis-btn" data-m="acceleration">ACCEL</button><button class="h-mis-btn" data-m="skidpad">SKIDPAD</button><button class="h-mis-btn" data-m="autocross">AUTOCROSS</button><button class="h-mis-btn" data-m="trackdrive">TRACKDRIVE</button>
     </div>
-    <div class="algo-select"><div class="algo-label">Steering</div><select class="algo-dropdown" onchange="onAlgoChange(this)"><option value="geometric">Geometric</option><option value="pure_pursuit">Pure Pursuit</option><option value="neural_v2">Neural V2</option><option value="mpc">MPC</option></select></div>
+    <div class="algo-select"><div class="algo-label">Steering</div><select class="algo-dropdown" onchange="onAlgoChange(this)"><option value="geometric">Geometric</option><option value="pure_pursuit">Pure Pursuit</option><option value="stanley">Stanley</option><option value="neural_v2">Neural V2</option><option value="mpc">MPC</option></select></div>
     <div class="algo-select"><div class="algo-label">Speed</div><select class="algo-dropdown speed-algo-dropdown" onchange="onSpeedAlgoChange(this)"><option value="curve_factor">Curve Factor</option><option value="constant">Constant</option><option value="constant_stop">Constant + Stop</option><option value="neural_v2">Neural V2</option><option value="zero">Zero</option></select></div>
     <div class="algo-select svo-select" style="display:none"><div class="algo-label">Video Input</div><select class="algo-dropdown svo-dropdown" onchange="onSvoChange(this)"><option value="live">Live Camera</option></select></div>
     <div class="h-ctrl-row">
@@ -1677,7 +1691,7 @@ body { font-family:'JetBrains Mono',monospace; background:#04060b; color:#f1f5f9
   <div class="a-card"><div class="a-card-t">Mission Control</div>
     <div class="a-mis-grid" id="misGrid"><button class="a-mis-btn mis-btn sel" data-m="manual">Manual</button><button class="a-mis-btn mis-btn" data-m="remote_control">Remote</button><button class="a-mis-btn mis-btn" data-m="inspection">Inspect</button><button class="a-mis-btn mis-btn" data-m="autonomous">Auto</button><button class="a-mis-btn mis-btn" data-m="acceleration">Accel</button><button class="a-mis-btn mis-btn" data-m="skidpad">Skidpad</button><button class="a-mis-btn mis-btn" data-m="autocross">Autocross</button><button class="a-mis-btn mis-btn" data-m="trackdrive">Trackdrive</button></div>
     <div class="algo-select svo-select" style="display:none"><div class="algo-label">Video Input</div><select class="algo-dropdown svo-dropdown" onchange="onSvoChange(this)"><option value="live">Live Camera</option></select></div>
-    <div class="algo-select"><div class="algo-label">Steering</div><select class="algo-dropdown" onchange="onAlgoChange(this)"><option value="geometric">Geometric</option><option value="pure_pursuit">Pure Pursuit</option><option value="neural_v2">Neural V2</option><option value="mpc">MPC</option></select></div>
+    <div class="algo-select"><div class="algo-label">Steering</div><select class="algo-dropdown" onchange="onAlgoChange(this)"><option value="geometric">Geometric</option><option value="pure_pursuit">Pure Pursuit</option><option value="stanley">Stanley</option><option value="neural_v2">Neural V2</option><option value="mpc">MPC</option></select></div>
     <div class="algo-select"><div class="algo-label">Speed</div><select class="algo-dropdown speed-algo-dropdown" onchange="onSpeedAlgoChange(this)"><option value="curve_factor">Curve Factor</option><option value="constant">Constant</option><option value="constant_stop">Constant + Stop</option><option value="neural_v2">Neural V2</option><option value="zero">Zero</option></select></div>
     <div class="a-ctrl-row ctrl-row"><button class="a-ctrl-btn ctrl-btn go" data-st="running" onclick="wsSend({action:'set_state',state:'running'})">Start</button><button class="a-ctrl-btn ctrl-btn stop" data-st="idle" onclick="wsSend({action:'set_state',state:'idle'})">Stop</button><button class="a-ctrl-btn ctrl-btn ebs" data-st="ebs" onclick="wsSend({action:'set_state',state:'ebs'})">EBS</button><button class="a-ctrl-btn ctrl-btn restart" onclick="if(confirm('Restart kart-brain service?'))wsSend({action:'restart'})">Restart</button></div>
   </div>
@@ -1799,6 +1813,44 @@ function toggleHealthInfo() {
   const el = $('healthInfo');
   el.style.display = el.style.display === 'none' ? 'block' : 'none';
 }
+
+async function toggleNetInfo() {
+  const panel = $('netInfoPanel');
+  if (panel.style.display === 'block') { panel.style.display = 'none'; return; }
+  panel.style.display = 'block';
+  const content = $('netInfoContent');
+  content.innerHTML = '<i style="color:#6a6a7a">loading…</i>';
+  try {
+    const res = await fetch('/network-info', { cache: 'no-store' });
+    const d = await res.json();
+    const ifaces = (d.interfaces || []).map(
+      i => `<div>${i.iface}: <b style="color:#4a9eff">${i.ip}</b></div>`
+    ).join('');
+    const urls = (d.interfaces || []).map(i =>
+      `<a href="http://${i.ip}:${d.port}" target="_blank" style="color:#2ecc71;text-decoration:none">http://${i.ip}:${d.port}</a>`
+    ).join('<br>');
+    content.innerHTML = `
+      <div><span style="color:#6a6a7a">hostname:</span> ${d.hostname || '?'}</div>
+      <div style="margin-top:8px;color:#6a6a7a">interfaces:</div>
+      ${ifaces || '<i style="color:#6a6a7a">none</i>'}
+      <div style="margin-top:8px;color:#6a6a7a">LAN URLs (same WiFi as Orin):</div>
+      <div>${urls || '<i style="color:#6a6a7a">none</i>'}</div>
+      <div style="margin-top:8px;color:#6a6a7a">Cloudflare (any internet):</div>
+      <div><a href="https://kart.rubenayla.xyz" target="_blank" style="color:#9b59b6;text-decoration:none">https://kart.rubenayla.xyz</a></div>
+    `;
+  } catch (e) {
+    content.innerHTML = '<span style="color:#e74c3c">failed to load: ' + e.message + '</span>';
+  }
+}
+// Close the info panel when clicking outside it.
+document.addEventListener('click', e => {
+  const panel = $('netInfoPanel');
+  const btn = $('netInfoBtn');
+  if (panel && btn && panel.style.display === 'block' &&
+      !panel.contains(e.target) && e.target !== btn) {
+    panel.style.display = 'none';
+  }
+});
 
 function updateHealth(d) {
   const ok='#2ecc71', bad='#e74c3c', dim='#888';

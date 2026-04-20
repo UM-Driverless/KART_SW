@@ -20,7 +20,7 @@ import cv2
 import rclpy
 from cv_bridge import CvBridge
 from rclpy.node import Node
-from geometry_msgs.msg import Twist
+from geometry_msgs.msg import PointStamped, Twist
 from sensor_msgs.msg import CameraInfo, Image
 from std_msgs.msg import Float32
 from vision_msgs.msg import Detection2DArray, Detection3DArray
@@ -83,6 +83,8 @@ class SteeringHudNode(Node):
         self.latest_cmd = Twist()
         self.latest_cones = None
         self.latest_cones_time = 0.0
+        self.latest_target_opt = None   # (x, y, z) in camera optical frame, from /kart/target
+        self.latest_target_time = 0.0
         self.fx = self.fy = self.cx = self.cy = None
         self.camera_info_ready = False
         self._fps_prev_time = time.monotonic()
@@ -140,6 +142,11 @@ class SteeringHudNode(Node):
         self.create_subscription(
             Float32, "/perception/yolo/fps", self._on_yolo_fps, 10
         )
+        # Arrow target comes directly from whichever controller is active,
+        # so the HUD arrow cannot diverge from the actual steering command.
+        self.create_subscription(
+            PointStamped, "/kart/target", self._on_target, 10
+        )
 
         self._hud_frame_skip = 0
 
@@ -172,6 +179,11 @@ class SteeringHudNode(Node):
         """
         self.latest_cones = msg
         self.latest_cones_time = time.monotonic()
+
+    def _on_target(self, msg: PointStamped):
+        """@brief Cache the controller's current aim point in camera optical frame."""
+        self.latest_target_opt = (msg.point.x, msg.point.y, msg.point.z)
+        self.latest_target_time = time.monotonic()
 
     def _on_camera_info(self, msg: CameraInfo):
         """@brief Extract and cache camera intrinsics from camera info (once).
@@ -258,26 +270,19 @@ class SteeringHudNode(Node):
         else:
             status = "STALE"
 
-        # Compute midpoint in optical frame
-        mid_opt = None
-        if nearest_blue and nearest_yellow:
-            bx, by, bz, _ = nearest_blue
-            yx, yy, yz, _ = nearest_yellow
-            mid_opt = ((bx + yx) / 2.0, (by + yy) / 2.0, (bz + yz) / 2.0)
-        elif nearest_blue:
-            bx, by, bz, _ = nearest_blue
-            mid_opt = (bx + self.half_track_width, by, bz)
-        elif nearest_yellow:
-            yx, yy, yz, _ = nearest_yellow
-            mid_opt = (yx - self.half_track_width, yy, yz)
+        # Arrow target comes from the active controller (via /kart/target),
+        # not from an independent HUD computation. This guarantees the arrow
+        # cannot disagree with the commanded steering direction.
+        target_fresh = (now - self.latest_target_time) < self.cone_staleness
 
         if self.camera_info_ready:
             if nearest_blue:
                 self._draw_cone(img, nearest_blue, BLUE_CONE_COLOR, "B")
             if nearest_yellow:
                 self._draw_cone(img, nearest_yellow, YELLOW_CONE_COLOR, "Y")
-            if mid_opt is not None and mid_opt[2] > 0:
-                mu, mv = self._project(mid_opt[0], mid_opt[1], mid_opt[2])
+            if target_fresh and self.latest_target_opt is not None and self.latest_target_opt[2] > 0:
+                tx, ty, tz = self.latest_target_opt
+                mu, mv = self._project(tx, ty, tz)
                 mu, mv = int(mu), int(mv)
                 size = 15
                 cv2.line(img, (mu - size, mv), (mu + size, mv), GREEN, 2)
@@ -377,7 +382,7 @@ class SteeringHudNode(Node):
                       DARK_BG, -1)
         center_x = gauge_x0 + gauge_w // 2
         cv2.line(img, (center_x, gauge_y - 8), (center_x, gauge_y + 8), WHITE, 1)
-        frac = max(-1.0, min(1.0, -steer_rad / 1.309))
+        frac = max(-1.0, min(1.0, -steer_rad / 1.222))
         ind_x = int(center_x + frac * (gauge_w // 2))
         cv2.circle(img, (ind_x, gauge_y), 7, RED, -1)
         cv2.circle(img, (ind_x, gauge_y), 7, WHITE, 1)
