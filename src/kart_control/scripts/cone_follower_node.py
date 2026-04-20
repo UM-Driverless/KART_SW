@@ -188,7 +188,7 @@ class ConeFollowerNode(Node):
 
         # --- geometric params ---
         self.declare_parameter("steering_gain", 3.0)
-        self.declare_parameter("max_steer", 1.309)
+        self.declare_parameter("max_steer", 1.222)
         self.declare_parameter("max_speed", 2.625)
         self.declare_parameter("min_speed", 0.5)
         self.declare_parameter("lookahead_max", 15.0)

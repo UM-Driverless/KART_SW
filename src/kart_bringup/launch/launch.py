@@ -38,12 +38,6 @@ def generate_launch_description():
     )
     use_zed_od = LaunchConfiguration("use_zed_od")
 
-    use_stanley_arg = DeclareLaunchArgument(
-        "use_stanley",
-        default_value="false",
-        description="Use the new Stanley controller node instead of default cone_follower.",
-    )
-    use_stanley = LaunchConfiguration("use_stanley")
 
     # Read SVO path from /tmp/kart_svo_path if it exists (set by dashboard)
     _svo_default = "live"
@@ -143,32 +137,9 @@ def generate_launch_description():
                 "max_speed": 2.625,
             }
         ],
-        condition=IfCondition(
-            PythonExpression(
-                ["'", perception, "' == 'true' and '", use_stanley, "' == 'false'"]
-            )
-        ),
+        condition=IfCondition(perception),
     )
 
-    stanley_controller = Node(
-        package="kart_control",
-        executable="stanley_controller_node.py",
-        name="stanley_controller",
-        output="screen",
-        parameters=[
-            {
-                "stanley_k": 1.5,
-                "stanley_ks": 0.5,
-                "base_speed": 2.0,
-                "max_steer_angle": 0.4,
-            }
-        ],
-        condition=IfCondition(
-            PythonExpression(
-                ["'", perception, "' == 'true' and '", use_stanley, "' == 'true'"]
-            )
-        ),
-    )
 
     # --- Always launched ---
 
@@ -217,7 +188,6 @@ def generate_launch_description():
             perception_arg,
             steering_gain_arg,
             use_zed_od_arg,
-            use_stanley_arg,
             svo_path_arg,
             set_ld_path,
             # Perception (only when perception:=true)
@@ -227,7 +197,6 @@ def generate_launch_description():
             perception_custom,
             steering_hud,
             cone_follower,
-            stanley_controller,
             # Always
             state_machine,
             cmd_vel_bridge,

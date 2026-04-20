@@ -382,7 +382,7 @@ class SteeringHudNode(Node):
                       DARK_BG, -1)
         center_x = gauge_x0 + gauge_w // 2
         cv2.line(img, (center_x, gauge_y - 8), (center_x, gauge_y + 8), WHITE, 1)
-        frac = max(-1.0, min(1.0, -steer_rad / 1.309))
+        frac = max(-1.0, min(1.0, -steer_rad / 1.222))
         ind_x = int(center_x + frac * (gauge_w // 2))
         cv2.circle(img, (ind_x, gauge_y), 7, RED, -1)
         cv2.circle(img, (ind_x, gauge_y), 7, WHITE, 1)
