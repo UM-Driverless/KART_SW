@@ -215,7 +215,7 @@ class ConeFollowerNode(Node):
 
         # --- geometric params ---
         self.declare_parameter("steering_gain", 3.0)
-        self.declare_parameter("max_steer", 1.222)
+        self.declare_parameter("max_steer", 1.309)
         self.declare_parameter("max_speed", 2.625)
         self.declare_parameter("min_speed", 0.5)
         self.declare_parameter("lookahead_max", 15.0)
@@ -479,12 +479,10 @@ class ConeFollowerNode(Node):
         elif self.controller_type == "mpc":
             steer, _ = self._control_mpc(cones)
         elif self.controller_type == "stanley":
-            steer, speed = self._control_stanley(cones)
+            steer, _ = self._control_stanley(cones)
         else:
             steer, _ = self._control_geometric(cones)
-
-        if self.controller_type != "stanley":
-            speed = self._compute_speed(steer, nn_out, cones)
+        speed = self._compute_speed(steer, nn_out, cones)
 
         # Safety: if no cones visible, slow down and keep last steer
         # (don't hard-stop — cones may reappear after a curve transition)
@@ -790,7 +788,7 @@ class ConeFollowerNode(Node):
         """
         midpoints = _build_midpoint_path(cones, self.half_track_width)
         if not midpoints:
-            return self._last_steer, self.stanley_assumed_speed
+            return self._last_steer, None
 
         # Closest path point to the kart (origin in its own frame)
         min_idx = 0
@@ -843,7 +841,7 @@ class ConeFollowerNode(Node):
             f"theta_e={theta_e:.2f} e_fa={e_fa:.2f} "
             f"target=({cx:.1f},{cy:.1f}) midpts={len(midpoints)}"
         )
-        return steer, self.stanley_assumed_speed
+        return steer, None
 
     # ── neural net controller ─────────────────────────────────────────
 
