@@ -46,13 +46,23 @@
 - **Use background tasks for long-running ops.** Builds (~30s–100s), flashing, serial reads, SSH commands — run these in the background and check results later.
 - **Don't block on things you can parallelize.** If you need to edit 3 files and deploy, edit them all, then deploy. If you need info from 2 different places, query both at once.
 
+## Branch Workflow (READ THIS)
+
+**All day-to-day work happens on `dev`.** `main` is a protected release branch — it only receives merges from `dev` (or feature branches) *after* the change has been physically validated on the kart. This applies to every UM-Driverless repo (`kart_brain`, `kart_medulla`, `kart_docs`, etc.).
+
+- **Default working branch on the Mac, the Orin, and the VM is `dev`.** Every `git checkout` / `git pull` you do should be on `dev` unless you have a specific reason (e.g. inspecting `main`).
+- **Commit and push to `dev` first**, every time. Never push directly to `main`, even for "trivial" changes — `main`'s protection will reject you anyway, and a rejected push after a merge/cherry-pick creates annoying recovery work.
+- **Merge `dev` → `main` only after validating** the change drives the kart without regressions. Open a PR (`gh pr create --base main --head dev`), get at least 1 approval from a teammate (the admin-bypass setting lets you self-merge but peer review is strongly preferred), then merge.
+- **Feature branches off `dev`** for exploratory work (`feature/xyz`), merged back into `dev` via PR or fast-forward. `main` is not the target for in-progress work.
+- **`dev` is expected to be a tiny bit ahead of `main` most of the time.** If you discover `main` is *ahead of* `dev` (e.g. someone pushed straight to main), merge `main` into `dev` immediately before adding new commits so `dev` remains the "latest + in-progress" snapshot.
+
 ## Definition of Done
 A change is NOT done until it's **validated on the target machine**:
-- Code pushed? → **Pull on Orin/VM too.**
+- Code pushed to `dev`? → **Pull on Orin/VM too.**
 - ESP32 firmware? → **Flash it.**
 - Python/launch change? → **Restart the affected nodes.**
 - Never claim something is fixed if you only pushed — deploy and verify.
-- **Don't push to main until the change is confirmed working on hardware.** Push to a feature branch, deploy, test, then merge.
+- **Only then merge `dev` → `main` via PR.** `main` represents "validated on the kart", not "code looks good to me".
 
 ## Critical Rules
 - **Don't trust auto-memory for technical state.** Auto-memory (`~/.claude/.../memory/`) goes stale fast — file paths, parameter values, launch files, firmware settings all change between conversations. **Always read the actual file or SSH to check** before quoting any value. Treat memory as "might have been true once" not "is true now". `.agents/` docs and the code itself are the source of truth.
