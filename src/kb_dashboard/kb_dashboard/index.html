@@ -286,9 +286,16 @@ function updateJoystickWidget() {
 
 function updateMissionUI() {
   const isAuto = AUTONOMOUS_MISSIONS.has(currentMission);
-  document.querySelectorAll('.act-grid, .ctrl-row, .t-ctrl-row, .h-ctrl-row').forEach(
-    el => el.style.display = isAuto ? '' : 'none'
-  );
+  // Hide each control row's children individually so the Shutdown button
+  // (classList includes 'shutdown') stays reachable regardless of mission —
+  // powering off the Orin is a physical-machine concern, not an autonomy one.
+  document.querySelectorAll('.act-grid, .ctrl-row, .t-ctrl-row, .h-ctrl-row').forEach(row => {
+    Array.from(row.children).forEach(child => {
+      if (!child.classList.contains('shutdown')) {
+        child.style.display = isAuto ? '' : 'none';
+      }
+    });
+  });
   document.querySelectorAll('.algo-select').forEach(el => {
     if (el.classList.contains('svo-select')) {
       el.style.display = currentMission === 'inspection' ? 'block' : 'none';
@@ -1016,7 +1023,7 @@ body::after {
         <button class="abtn abtn-stop"  data-st="idle" onclick="wsSend({action:'set_state',state:'idle'})">STOP</button>
         <button class="abtn abtn-ebs"   data-st="ebs" onclick="wsSend({action:'set_state',state:'ebs'})">EBS</button>
         <button class="abtn abtn-restart" onclick="if(confirm('Restart kart-brain service?'))wsSend({action:'restart'})">RESTART</button>
-        <button class="abtn abtn-shutdown" onclick="if(confirm('POWER OFF the Orin? You will lose SSH + dashboard access until someone physically powers it back on.'))wsSend({action:'shutdown_orin'})" style="background:#7f1d1d;color:#fff">SHUTDOWN</button>
+        <button class="abtn abtn-shutdown shutdown" onclick="if(confirm('POWER OFF the Orin? You will lose SSH + dashboard access until someone physically powers it back on.'))wsSend({action:'shutdown_orin'})" style="background:#7f1d1d;color:#fff">SHUTDOWN</button>
       </div>
     </div>
   </div>
