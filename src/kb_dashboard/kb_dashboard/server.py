@@ -112,6 +112,16 @@ async def run_websocket_server(
                 k, v = line_str.split(": ", 1)
                 headers[k.lower()] = v.strip()
 
+        # Detect whether the original client used HTTPS. The Orin server itself
+        # speaks plain HTTP; TLS terminates at cloudflared, which forwards to
+        # 127.0.0.1 and sets X-Forwarded-Proto. Only trust that header when the
+        # peer is loopback — otherwise a LAN client could spoof it.
+        peer = writer.get_extra_info("peername")
+        peer_host = peer[0] if peer else ""
+        trust_xfp = peer_host in ("127.0.0.1", "::1", "::ffff:127.0.0.1")
+        is_https = trust_xfp and headers.get("x-forwarded-proto", "http").lower() == "https"
+        cookie_secure = "; Secure" if is_https else ""
+
         # --- Auth check ---
         def _is_authenticated() -> bool:
             if not password:
@@ -136,7 +146,7 @@ async def run_websocket_server(
                 resp = (
                     f"HTTP/1.1 303 See Other\r\n"
                     f"Location: /\r\n"
-                    f"Set-Cookie: kart_session={auth_token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000; Secure\r\n"
+                    f"Set-Cookie: kart_session={auth_token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000{cookie_secure}\r\n"
                     f"Connection: close\r\n\r\n"
                 ).encode()
             else:
