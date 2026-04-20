@@ -278,3 +278,11 @@ echo "0" | sudo -S bash -c "echo 0 > /sys/bus/usb/devices/2-3.2/authorized && sl
 **Prevention added:**
 - Rule: **Before saving anything, check if it's already in `.agents/`.** Read AGENTS.md first. If it's already documented, say so — don't duplicate it.
 - Rule: **Project-specific workflows, processes, and conventions go in `.agents/` files, never in auto-memory.** Auto-memory is only for user preferences and cross-project info.
+
+## 2026-04-20 - Pushed to `main` in kart_medulla instead of `dev`
+**What happened:** After flashing the ESP32 with the steering PWM bump (0.35 → 0.65), I ran `git commit && git push` on the Orin while on `main`. Push rejected by branch protection. User had to correct me: "deberías usar dev. Está documentado claramente." I had to reset local main, merge origin/main into dev, cherry-pick the commit onto dev, push dev.
+**Root cause:** Didn't verify the current branch before committing on `~/kart_medulla` on the Orin — it happened to be on `main`. The convention (dev is working branch, main only receives validated merges) exists for `kart_brain` in `AGENTS.md` but `kart_medulla`'s AGENTS.md didn't have it prominently documented. Auto-memory mentions `dev` on both repos but I didn't consult it.
+**Prevention added:**
+- Added a "Branch Workflow (READ THIS)" section near the top of AGENTS.md in BOTH `kart_brain` and `kart_medulla` so it's impossible to miss on a read-in-full pass.
+- Rule: **Before any `git commit` on the Orin (or anywhere), run `git branch --show-current`.** If it's `main`, switch to `dev` first. Never commit directly on `main` unless doing an explicit revert/hotfix.
+- Rule: **Push to `dev` first. Merge `dev` → `main` only after the user confirms the change drove the kart correctly.** Admins can bypass approval but the validation step is non-negotiable. Ask the user if they forget to signal "it works, merge to main".
