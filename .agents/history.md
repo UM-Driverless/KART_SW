@@ -5,6 +5,30 @@ Chronological audit trail: *what* we found, *when*, *why* we decided things. App
 
 ---
 
+## 2026-04-20 — GitHub org & branch-protection config after Alberto self-merged to main
+
+Alberto merged his own PR #3 (Stanley controller) straight into `main` without review. Root cause was the org's **Base permissions = Admin**, which meant every org member had admin on every repo, including the ability to bypass any branch rule. Audit-trail of what's now configured:
+
+**Branch protection (`main` only):**
+- Require a pull request before merging — **on**
+- Required approving reviews — **1**
+- Dismiss stale approvals on new commits — **on**
+- `require_code_owner_reviews` — off
+- `require_last_push_approval` — off
+- Enforce for administrators — **off** (admins can self-merge and push directly; intentional)
+- Force push / branch deletion — blocked for non-admins
+- No status-check requirements (no CI yet)
+
+**Other branches (`dev`, `MPC_controller`, `autoresearch/mar15`, `feature/microros-integration`):** unprotected. Contributors can push / force-push / rebase freely.
+
+**Org roles (`UM-Driverless`):** 20 members total. Owners visible in the People page sweep: `93Urbano`, `Alvar0P`, `rubenayla`, likely others. All rest are Members. Owners are the only people who can override branch protection regardless of repo-level role.
+
+**Org Base permissions:** at time of writing still **Admin** — user was about to change it to **Write**, which will make the branch-protection rule actually effective for non-owners. Re-verify with `gh api repos/UM-Driverless/kart_brain/collaborators` after the change to confirm members drop to Write.
+
+**Why this setup:** user is OK with self-merging *their own* PRs as admin, but wants at least peer review among contributors (two non-admins can approve each other's PRs — GitHub doesn't require approvers to be admins). No automatic notification is sent to users whose role changes, so any downgrade should be announced in team chat.
+
+**Also this session:** Alberto's Stanley commit was cherry-picked onto `dev` (preserving him as author, commit `7e66399`) and the merge was reverted on `main` via `git revert -m 1 d33dd4a` (commit `c200e56`), which keeps PR #3 recorded as merged-then-reverted rather than force-rewriting history.
+
 ## 2026-04-20 — Pure pursuit arrow/wheel mismatch: architectural fix, not yet re-tested
 
 User reported: with pure_pursuit, dashboard green arrow pointed right while the physical steering wheel turned left. Initial investigation of `_control_pure_pursuit` (`src/kart_control/scripts/cone_follower_node.py:484-582`) found no sign bug — same `(fwd, left = -pos.x)` convention as the working geometric controller. Ruled out the downstream pipeline too: `cmd_vel_bridge_node.py:67` applies no sign flip, and geometric works end-to-end through it.
