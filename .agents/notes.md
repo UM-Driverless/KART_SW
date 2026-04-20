@@ -1,6 +1,16 @@
 <!-- consult selectively — grep, never read in full -->
 # Notes
 
+## Orin availability — it's a kart computer, not a server
+
+The Orin lives **in the kart**. It is powered off whenever Ruben is not physically at the kart (e.g. working from home). `ssh orin-remote` returning `Connection closed by UNKNOWN port 65535` is usually **"the Orin is off"**, not "the Cloudflare Tunnel has a problem."
+
+**Don't retry in a loop.** Before scheduling a retry or polling SSH:
+- If the user is working from the Mac with no mention of being at the kart → Orin is almost certainly off. Do not deploy. Report the commit is on `origin/dev` and will deploy when they're next at the kart.
+- If the user just said "I'm at the kart" / "I just booted Orin" / similar → then a single retry after a short delay is reasonable.
+
+When deploy is blocked by Orin being off, **that's fine** — code + push is the "done" state for home sessions. Physical-world next step belongs to the human, not the agent.
+
 ## colcon `--symlink-install` gotcha (ament_python)
 
 The flag is **misleadingly named**. It only creates symlinks for `ament_cmake` packages (and Python scripts installed via CMake, like `kart_control`). For **`ament_python` packages** — including `kb_dashboard` — it does NOT symlink. Files in `build/<pkg>/<pkg>/` are plain copies refreshed at build time. The egg-link just redirects `import <pkg>` from `install/` to `build/`, which still holds copies.
