@@ -62,6 +62,10 @@ body { min-height: 100vh; -webkit-tap-highlight-color: transparent; }
       <div class="skin-dropdown" id="skinDropdown"></div>
     </div>
     <div class="conn-dot" id="connDot"></div>
+    <button id="powerOffBtn"
+            onclick="if(confirm('POWER OFF the Orin computer? SSH + dashboard will be unreachable until someone physically powers it back on. This does NOT trigger the kart safety shutdown loop.'))wsSend({action:'shutdown_orin'})"
+            title="Power off the Orin computer (NOT the kart safety shutdown loop / EBS)"
+            style="background:transparent;border:1px solid rgba(127,29,29,0.6);color:#ff6b6b;border-radius:100px;font-size:9px;font-weight:600;letter-spacing:1.5px;padding:5px 10px;cursor:pointer;font-family:'Inter',-apple-system,sans-serif">POWER OFF</button>
   </div>
 </div>
 <div id="healthBar" style="max-width:480px;margin:0 auto;padding:0 12px 4px;display:flex;gap:6px;font-size:10px;font-family:monospace;opacity:0.7">
@@ -286,16 +290,9 @@ function updateJoystickWidget() {
 
 function updateMissionUI() {
   const isAuto = AUTONOMOUS_MISSIONS.has(currentMission);
-  // Hide each control row's children individually so the Shutdown button
-  // (classList includes 'shutdown') stays reachable regardless of mission —
-  // powering off the Orin is a physical-machine concern, not an autonomy one.
-  document.querySelectorAll('.act-grid, .ctrl-row, .t-ctrl-row, .h-ctrl-row').forEach(row => {
-    Array.from(row.children).forEach(child => {
-      if (!child.classList.contains('shutdown')) {
-        child.style.display = isAuto ? '' : 'none';
-      }
-    });
-  });
+  document.querySelectorAll('.act-grid, .ctrl-row, .t-ctrl-row, .h-ctrl-row').forEach(
+    el => el.style.display = isAuto ? '' : 'none'
+  );
   document.querySelectorAll('.algo-select').forEach(el => {
     if (el.classList.contains('svo-select')) {
       el.style.display = currentMission === 'inspection' ? 'block' : 'none';
@@ -606,7 +603,7 @@ body { font-family:'Inter',-apple-system,BlinkMacSystemFont,'SF Pro',system-ui,s
     <div class="algo-select svo-select" style="display:none"><div class="algo-label">Video Input</div><select class="algo-dropdown svo-dropdown" onchange="onSvoChange(this)"><option value="live">Live Camera</option></select></div>
     <div class="algo-select"><div class="algo-label">Steering</div><select class="algo-dropdown" onchange="onAlgoChange(this)"><option value="geometric">Geometric</option><option value="pure_pursuit">Pure Pursuit</option><option value="stanley">Stanley</option><option value="neural_v2">Neural V2</option><option value="mpc">MPC</option></select></div>
     <div class="algo-select"><div class="algo-label">Speed</div><select class="algo-dropdown speed-algo-dropdown" onchange="onSpeedAlgoChange(this)"><option value="curve_factor">Curve Factor</option><option value="constant">Constant</option><option value="constant_stop">Constant + Stop</option><option value="neural_v2">Neural V2</option><option value="zero">Zero</option></select></div>
-    <div class="ctrl-row"><button class="ctrl-btn go" data-st="running" onclick="wsSend({action:'set_state',state:'running'})">Start</button><button class="ctrl-btn stop" data-st="idle" onclick="wsSend({action:'set_state',state:'idle'})">Stop</button><button class="ctrl-btn ebs" data-st="ebs" onclick="wsSend({action:'set_state',state:'ebs'})">EBS</button><button class="ctrl-btn restart" onclick="if(confirm('Restart kart-brain service?'))wsSend({action:'restart'})">Restart</button><button class="ctrl-btn shutdown" onclick="if(confirm('POWER OFF the Orin? You will lose SSH + dashboard access until someone physically powers it back on.'))wsSend({action:'shutdown_orin'})" style="background:#7f1d1d;color:#fff">Shutdown</button></div>
+    <div class="ctrl-row"><button class="ctrl-btn go" data-st="running" onclick="wsSend({action:'set_state',state:'running'})">Start</button><button class="ctrl-btn stop" data-st="idle" onclick="wsSend({action:'set_state',state:'idle'})">Stop</button><button class="ctrl-btn ebs" data-st="ebs" onclick="wsSend({action:'set_state',state:'ebs'})">EBS</button><button class="ctrl-btn restart" onclick="if(confirm('Restart kart-brain service?'))wsSend({action:'restart'})">Restart</button></div>
   </div>
   <div class="card"><div class="card-t">Kart State</div>
     <div class="tg"><div class="ti"><div class="tl">Steering</div><div class="tv" id="vSteer">0.0 <span class="tu">°</span></div><div class="ti-bar"><div class="ti-bar-fill" id="steerBarFill" style="width:0%;background:#4a9eff"></div></div></div>
@@ -1023,7 +1020,6 @@ body::after {
         <button class="abtn abtn-stop"  data-st="idle" onclick="wsSend({action:'set_state',state:'idle'})">STOP</button>
         <button class="abtn abtn-ebs"   data-st="ebs" onclick="wsSend({action:'set_state',state:'ebs'})">EBS</button>
         <button class="abtn abtn-restart" onclick="if(confirm('Restart kart-brain service?'))wsSend({action:'restart'})">RESTART</button>
-        <button class="abtn abtn-shutdown shutdown" onclick="if(confirm('POWER OFF the Orin? You will lose SSH + dashboard access until someone physically powers it back on.'))wsSend({action:'shutdown_orin'})" style="background:#7f1d1d;color:#fff">SHUTDOWN</button>
       </div>
     </div>
   </div>
@@ -1287,7 +1283,6 @@ body { font-family:'Inter',sans-serif; background:#0a0a0a; color:#f5f5f5; }
     <button class="t-ctrl stop" data-st="idle" onclick="wsSend({action:'set_state',state:'idle'})">Stop</button>
     <button class="t-ctrl ebs" data-st="ebs" onclick="wsSend({action:'set_state',state:'ebs'})">EBS</button>
     <button class="t-ctrl restart" onclick="if(confirm('Restart kart-brain service?'))wsSend({action:'restart'})" style="color:#9b59b6;border-color:rgba(155,89,182,0.4)">Restart</button>
-    <button class="t-ctrl shutdown" onclick="if(confirm('POWER OFF the Orin? You will lose SSH + dashboard access until someone physically powers it back on.'))wsSend({action:'shutdown_orin'})" style="color:#ff6b6b;border-color:rgba(127,29,29,0.6)">Shutdown</button>
   </div>
   <div class="t-sec-label">Sensors</div>
   <div class="t-grid2">
@@ -1484,7 +1479,6 @@ body::before { content:''; position:fixed; inset:0; pointer-events:none; backgro
       <button class="h-ctrl stop" data-st="idle" onclick="wsSend({action:'set_state',state:'idle'})">STOP</button>
       <button class="h-ctrl ebs" data-st="ebs" onclick="wsSend({action:'set_state',state:'ebs'})">EBS</button>
       <button class="h-ctrl restart" onclick="if(confirm('Restart kart-brain service?'))wsSend({action:'restart'})" style="color:#9b59b6;border-color:rgba(155,89,182,0.4)">RESTART</button>
-      <button class="h-ctrl shutdown" onclick="if(confirm('POWER OFF the Orin? You will lose SSH + dashboard access until someone physically powers it back on.'))wsSend({action:'shutdown_orin'})" style="color:#ff6b6b;border-color:rgba(127,29,29,0.6)">SHUTDOWN</button>
     </div>
   </div>
   <div class="h-footer">UNIVERSIDAD DE MALAGA · FSAE AUTONOMOUS · v2.4.1</div>
@@ -1689,7 +1683,7 @@ body { font-family:'JetBrains Mono',monospace; background:#04060b; color:#f1f5f9
     <div class="algo-select svo-select" style="display:none"><div class="algo-label">Video Input</div><select class="algo-dropdown svo-dropdown" onchange="onSvoChange(this)"><option value="live">Live Camera</option></select></div>
     <div class="algo-select"><div class="algo-label">Steering</div><select class="algo-dropdown" onchange="onAlgoChange(this)"><option value="geometric">Geometric</option><option value="pure_pursuit">Pure Pursuit</option><option value="stanley">Stanley</option><option value="neural_v2">Neural V2</option><option value="mpc">MPC</option></select></div>
     <div class="algo-select"><div class="algo-label">Speed</div><select class="algo-dropdown speed-algo-dropdown" onchange="onSpeedAlgoChange(this)"><option value="curve_factor">Curve Factor</option><option value="constant">Constant</option><option value="constant_stop">Constant + Stop</option><option value="neural_v2">Neural V2</option><option value="zero">Zero</option></select></div>
-    <div class="a-ctrl-row ctrl-row"><button class="a-ctrl-btn ctrl-btn go" data-st="running" onclick="wsSend({action:'set_state',state:'running'})">Start</button><button class="a-ctrl-btn ctrl-btn stop" data-st="idle" onclick="wsSend({action:'set_state',state:'idle'})">Stop</button><button class="a-ctrl-btn ctrl-btn ebs" data-st="ebs" onclick="wsSend({action:'set_state',state:'ebs'})">EBS</button><button class="a-ctrl-btn ctrl-btn restart" onclick="if(confirm('Restart kart-brain service?'))wsSend({action:'restart'})">Restart</button><button class="a-ctrl-btn ctrl-btn shutdown" onclick="if(confirm('POWER OFF the Orin? You will lose SSH + dashboard access until someone physically powers it back on.'))wsSend({action:'shutdown_orin'})" style="background:#7f1d1d;color:#fff">Shutdown</button></div>
+    <div class="a-ctrl-row ctrl-row"><button class="a-ctrl-btn ctrl-btn go" data-st="running" onclick="wsSend({action:'set_state',state:'running'})">Start</button><button class="a-ctrl-btn ctrl-btn stop" data-st="idle" onclick="wsSend({action:'set_state',state:'idle'})">Stop</button><button class="a-ctrl-btn ctrl-btn ebs" data-st="ebs" onclick="wsSend({action:'set_state',state:'ebs'})">EBS</button><button class="a-ctrl-btn ctrl-btn restart" onclick="if(confirm('Restart kart-brain service?'))wsSend({action:'restart'})">Restart</button></div>
   </div>
   <div class="a-card"><div class="a-card-t">Telemetry</div>
     <div class="a-tg">
