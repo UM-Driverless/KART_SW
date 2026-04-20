@@ -37,19 +37,23 @@ import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, DurabilityPolicy, ReliabilityPolicy
 from geometry_msgs.msg import PointStamped, Twist
+
 # from nav_msgs.msg import Odometry  # removed: kart has no speed sensor
 from std_msgs.msg import String
+
 # from std_msgs.msg import Float32    # removed: kart has no speed sensor
 from vision_msgs.msg import Detection3DArray
 
 try:
     from scipy.optimize import minimize as scipy_minimize
+
     HAS_SCIPY = True
 except ImportError:
     HAS_SCIPY = False
 
 try:
     from kart_perception.zed_od_utils import HAS_ZED_INTERFACES, zed_objects_to_det3d
+
     if HAS_ZED_INTERFACES:
         from zed_interfaces.msg import ObjectsStamped
 except ImportError:
@@ -60,20 +64,27 @@ except ImportError:
 # Kinematic bicycle model helpers (used by MPC)
 # ---------------------------------------------------------------------------
 
+
 def _bicycle_step(x, y, psi, v, delta, wheelbase, dt):
     """Propagate kinematic bicycle model one step forward."""
-    x_next   = x   + v * math.cos(psi) * dt
-    y_next   = y   + v * math.sin(psi) * dt
+    x_next = x + v * math.cos(psi) * dt
+    y_next = y + v * math.sin(psi) * dt
     psi_next = psi + (v / wheelbase) * math.tan(delta) * dt
     return x_next, y_next, psi_next
 
 
 def _build_midpoint_path(cones, half_track_width):
     """Pair blue/yellow cones and return a sorted list of (fwd, left) midpoints."""
-    blues   = [(fwd, left, math.hypot(fwd, left))
-               for cls, fwd, left in cones if cls == "blue_cone"   and fwd > 0.3]
-    yellows = [(fwd, left, math.hypot(fwd, left))
-               for cls, fwd, left in cones if cls == "yellow_cone" and fwd > 0.3]
+    blues = [
+        (fwd, left, math.hypot(fwd, left))
+        for cls, fwd, left in cones
+        if cls == "blue_cone" and fwd > 0.3
+    ]
+    yellows = [
+        (fwd, left, math.hypot(fwd, left))
+        for cls, fwd, left in cones
+        if cls == "yellow_cone" and fwd > 0.3
+    ]
 
     blues.sort(key=lambda c: c[2])
     yellows.sort(key=lambda c: c[2])
@@ -89,7 +100,7 @@ def _build_midpoint_path(cones, half_track_width):
                 dd = abs(bd - yd)
                 if dd < best_dd:
                     best_dd = dd
-                    best_j  = j
+                    best_j = j
             if best_j >= 0 and best_dd < 8.0:
                 yx, yy, _ = yellows[best_j]
                 used_y.add(best_j)
@@ -133,10 +144,22 @@ def _nearest_path_point(midpoints, x, y):
     return best_i
 
 
-def _mpc_cost(u_flat, x0, y0, psi0, v, midpoints,
-               N, dt, wheelbase,
-               w_cte, w_dsteer, w_heading,
-               prev_steer, max_steer):
+def _mpc_cost(
+    u_flat,
+    x0,
+    y0,
+    psi0,
+    v,
+    midpoints,
+    N,
+    dt,
+    wheelbase,
+    w_cte,
+    w_dsteer,
+    w_heading,
+    prev_steer,
+    max_steer,
+):
     """Compute the MPC objective for a candidate control sequence."""
     x, y, psi = x0, y0, psi0
     cost = 0.0
@@ -154,9 +177,9 @@ def _mpc_cost(u_flat, x0, y0, psi0, v, midpoints,
 
         d_steer = delta - prev_u
 
-        cost += w_cte    * cte          ** 2
-        cost += w_heading * heading_err ** 2
-        cost += w_dsteer  * d_steer     ** 2
+        cost += w_cte * cte**2
+        cost += w_heading * heading_err**2
+        cost += w_dsteer * d_steer**2
 
         x, y, psi = _bicycle_step(x, y, psi, v, delta, wheelbase, dt)
         prev_u = delta
@@ -182,9 +205,13 @@ class ConeFollowerNode(Node):
         self.declare_parameter("cmd_vel_topic", "/kart/cmd_vel")
         self.declare_parameter("odom_topic", "/zed/zed_node/odom")
         self.declare_parameter("no_cone_timeout", 1.0)
-        self.declare_parameter("controller_type", "geometric")  # geometric|pure_pursuit|neural|neural_v2|mpc|stanley
-        self.declare_parameter("speed_controller_type", "curve_factor")  # curve_factor|constant|neural_v2
-        self.declare_parameter("weights_json", "")               # path for neural
+        self.declare_parameter(
+            "controller_type", "geometric"
+        )  # geometric|pure_pursuit|neural|neural_v2|mpc|stanley
+        self.declare_parameter(
+            "speed_controller_type", "curve_factor"
+        )  # curve_factor|constant|neural_v2
+        self.declare_parameter("weights_json", "")  # path for neural
 
         # --- geometric params ---
         self.declare_parameter("steering_gain", 3.0)
@@ -204,19 +231,21 @@ class ConeFollowerNode(Node):
         self.declare_parameter("stanley_assumed_speed", 2.0)
 
         # --- MPC params ---
-        self.declare_parameter("mpc_horizon",    8)
-        self.declare_parameter("mpc_dt",          0.10)
-        self.declare_parameter("mpc_w_cte",       3.0)
-        self.declare_parameter("mpc_w_dsteer",   40.0)
-        self.declare_parameter("mpc_w_heading",   2.0)
-        self.declare_parameter("mpc_lookahead",   15.0)
+        self.declare_parameter("mpc_horizon", 8)
+        self.declare_parameter("mpc_dt", 0.10)
+        self.declare_parameter("mpc_w_cte", 3.0)
+        self.declare_parameter("mpc_w_dsteer", 40.0)
+        self.declare_parameter("mpc_w_heading", 2.0)
+        self.declare_parameter("mpc_lookahead", 15.0)
 
         det_topic = str(self.get_parameter("detections_topic").value)
         cmd_topic = str(self.get_parameter("cmd_vel_topic").value)
         odom_topic = str(self.get_parameter("odom_topic").value)
         self.no_cone_timeout = float(self.get_parameter("no_cone_timeout").value)
         self.controller_type = str(self.get_parameter("controller_type").value)
-        self.speed_controller_type = str(self.get_parameter("speed_controller_type").value)
+        self.speed_controller_type = str(
+            self.get_parameter("speed_controller_type").value
+        )
 
         # geometric fields
         self.steering_gain = float(self.get_parameter("steering_gain").value)
@@ -229,15 +258,17 @@ class ConeFollowerNode(Node):
 
         # Stanley fields
         self.stanley_k = float(self.get_parameter("stanley_k").value)
-        self.stanley_assumed_speed = float(self.get_parameter("stanley_assumed_speed").value)
+        self.stanley_assumed_speed = float(
+            self.get_parameter("stanley_assumed_speed").value
+        )
 
         # MPC fields
-        self.mpc_N          = int(self.get_parameter("mpc_horizon").value)
-        self.mpc_dt         = float(self.get_parameter("mpc_dt").value)
-        self.mpc_w_cte      = float(self.get_parameter("mpc_w_cte").value)
-        self.mpc_w_dsteer   = float(self.get_parameter("mpc_w_dsteer").value)
-        self.mpc_w_heading  = float(self.get_parameter("mpc_w_heading").value)
-        self.mpc_lookahead  = float(self.get_parameter("mpc_lookahead").value)
+        self.mpc_N = int(self.get_parameter("mpc_horizon").value)
+        self.mpc_dt = float(self.get_parameter("mpc_dt").value)
+        self.mpc_w_cte = float(self.get_parameter("mpc_w_cte").value)
+        self.mpc_w_dsteer = float(self.get_parameter("mpc_w_dsteer").value)
+        self.mpc_w_heading = float(self.get_parameter("mpc_w_heading").value)
+        self.mpc_lookahead = float(self.get_parameter("mpc_lookahead").value)
         self._mpc_prev_solution: np.ndarray | None = None
 
         if self.controller_type == "mpc" and not HAS_SCIPY:
@@ -247,9 +278,9 @@ class ConeFollowerNode(Node):
         # neural net weights (loaded for neural or neural_v2)
         self._nn_W1 = self._nn_b1 = self._nn_W2 = self._nn_b2 = None
         self._nn_max_steer = 0.785  # must match training MAX_STEER (current weights)
-        self._nn_max_speed = 5.0   # must match training MAX_SPEED (current weights)
-        self._nn_input_size = 8    # v1 default
-        self._nn_n_blue = 2        # cones per side for v1
+        self._nn_max_speed = 5.0  # must match training MAX_SPEED (current weights)
+        self._nn_input_size = 8  # v1 default
+        self._nn_n_blue = 2  # cones per side for v1
         self._nn_n_yellow = 2
         self._nn_uses_speed = False
         self._current_speed = 0.0
@@ -284,17 +315,28 @@ class ConeFollowerNode(Node):
         self.target_pub = self.create_publisher(PointStamped, "/kart/target", 10)
         self.last_detection_time = self.get_clock().now()
         self.timer = self.create_timer(0.1, self._safety_check)
-        self.create_subscription(String, "/dashboard/controller_type", self._on_controller_type, 10)
-        self.create_subscription(String, "/dashboard/speed_controller_type", self._on_speed_controller_type, 10)
+        self.create_subscription(
+            String, "/dashboard/controller_type", self._on_controller_type, 10
+        )
+        self.create_subscription(
+            String,
+            "/dashboard/speed_controller_type",
+            self._on_speed_controller_type,
+            10,
+        )
 
-        self.get_logger().info(f"Controller: steer={self.controller_type} speed={self.speed_controller_type}")
+        self.get_logger().info(
+            f"Controller: steer={self.controller_type} speed={self.speed_controller_type}"
+        )
 
     def _on_controller_type(self, msg: String):
         """@brief Callback for runtime controller type changes from the dashboard."""
         new_type = msg.data
         valid = ("geometric", "pure_pursuit", "neural_v2", "mpc", "stanley")
         if new_type in valid and new_type != self.controller_type:
-            self.get_logger().info(f"Controller type: {self.controller_type} → {new_type}")
+            self.get_logger().info(
+                f"Controller type: {self.controller_type} → {new_type}"
+            )
             self.controller_type = new_type
             if new_type == "mpc" and not HAS_SCIPY:
                 self.get_logger().error("scipy not installed – cannot switch to mpc")
@@ -306,8 +348,14 @@ class ConeFollowerNode(Node):
     def _on_speed_controller_type(self, msg: String):
         """@brief Callback for runtime speed controller type changes from the dashboard."""
         new_type = msg.data
-        if new_type in ("curve_factor", "constant", "constant_stop", "neural_v2", "zero") and new_type != self.speed_controller_type:
-            self.get_logger().info(f"Speed controller: {self.speed_controller_type} → {new_type}")
+        if (
+            new_type
+            in ("curve_factor", "constant", "constant_stop", "neural_v2", "zero")
+            and new_type != self.speed_controller_type
+        ):
+            self.get_logger().info(
+                f"Speed controller: {self.speed_controller_type} → {new_type}"
+            )
             self.speed_controller_type = new_type
 
     def _compute_speed(self, steer, nn_out=None, cones=None):
@@ -361,7 +409,8 @@ class ConeFollowerNode(Node):
         path = str(self.get_parameter("weights_json").value)
         if not path:
             self.get_logger().error(
-                f"controller_type={self.controller_type} but weights_json not set")
+                f"controller_type={self.controller_type} but weights_json not set"
+            )
             raise SystemExit(1)
 
         with open(path) as f:
@@ -381,18 +430,24 @@ class ConeFollowerNode(Node):
             self._nn_uses_speed = True
             hs = 16
             i = 0
-            self._nn_W1 = genes[i:i + 17 * hs].reshape(17, hs);  i += 17 * hs
-            self._nn_b1 = genes[i:i + hs];                        i += hs
-            self._nn_W2 = genes[i:i + hs * 2].reshape(hs, 2);    i += hs * 2
-            self._nn_b2 = genes[i:i + 2]
+            self._nn_W1 = genes[i : i + 17 * hs].reshape(17, hs)
+            i += 17 * hs
+            self._nn_b1 = genes[i : i + hs]
+            i += hs
+            self._nn_W2 = genes[i : i + hs * 2].reshape(hs, 2)
+            i += hs * 2
+            self._nn_b2 = genes[i : i + 2]
         else:
             # 8→8→2: W1 (8×8), b1 (8), W2 (8×2), b2 (2) — 90 genes
             hs = 8
             i = 0
-            self._nn_W1 = genes[i:i + 8 * hs].reshape(8, hs);  i += 8 * hs
-            self._nn_b1 = genes[i:i + hs];                      i += hs
-            self._nn_W2 = genes[i:i + hs * 2].reshape(hs, 2);   i += hs * 2
-            self._nn_b2 = genes[i:i + 2]
+            self._nn_W1 = genes[i : i + 8 * hs].reshape(8, hs)
+            i += 8 * hs
+            self._nn_b1 = genes[i : i + hs]
+            i += hs
+            self._nn_W2 = genes[i : i + hs * 2].reshape(hs, 2)
+            i += hs * 2
+            self._nn_b2 = genes[i : i + 2]
 
     # ── detection callback ────────────────────────────────────────────
 
@@ -424,10 +479,12 @@ class ConeFollowerNode(Node):
         elif self.controller_type == "mpc":
             steer, _ = self._control_mpc(cones)
         elif self.controller_type == "stanley":
-            steer, _ = self._control_stanley(cones)
+            steer, speed = self._control_stanley(cones)
         else:
             steer, _ = self._control_geometric(cones)
-        speed = self._compute_speed(steer, nn_out, cones)
+
+        if self.controller_type != "stanley":
+            speed = self._compute_speed(steer, nn_out, cones)
 
         # Safety: if no cones visible, slow down and keep last steer
         # (don't hard-stop — cones may reappear after a curve transition)
@@ -447,8 +504,10 @@ class ConeFollowerNode(Node):
             tp = PointStamped()
             tp.header = msg.header
             fwd, left = self._last_target
-            tp.point.x = -left   # optical frame: x = right (negative of "left")
-            tp.point.y = 0.0     # ground-level approx; HUD projects along the principal row
+            tp.point.x = -left  # optical frame: x = right (negative of "left")
+            tp.point.y = (
+                0.0  # ground-level approx; HUD projects along the principal row
+            )
             tp.point.z = fwd
             self.target_pub.publish(tp)
 
@@ -489,8 +548,7 @@ class ConeFollowerNode(Node):
             return self._last_steer, self.min_speed
 
         angle = math.atan2(mid_l, mid_f)
-        steer = max(-self.max_steer,
-                     min(self.max_steer, self.steering_gain * angle))
+        steer = max(-self.max_steer, min(self.max_steer, self.steering_gain * angle))
         self._last_steer = steer
         self._last_target = (mid_f, mid_l)
 
@@ -532,7 +590,7 @@ class ConeFollowerNode(Node):
             elif cls == "yellow_cone":
                 yellows.append((fwd, left))
 
-        blues.sort(key=lambda c: c[0])    # sort by forward distance
+        blues.sort(key=lambda c: c[0])  # sort by forward distance
         yellows.sort(key=lambda c: c[0])
 
         # Pair blue/yellow cones by nearest 2D distance
@@ -540,7 +598,7 @@ class ConeFollowerNode(Node):
         if blues and yellows:
             used_y = set()
             for bx, by in blues:
-                best_j, best_dd = -1, float('inf')
+                best_j, best_dd = -1, float("inf")
                 for j, (yx, yy) in enumerate(yellows):
                     if j in used_y:
                         continue
@@ -577,7 +635,7 @@ class ConeFollowerNode(Node):
 
         # Pick the midpoint closest to the lookahead distance from the kart
         target_x, target_y = midpoints[0]
-        best_diff = float('inf')
+        best_diff = float("inf")
         for mx, my in midpoints:
             d = math.hypot(mx, my)
             diff = abs(d - lookahead)
@@ -658,15 +716,15 @@ class ConeFollowerNode(Node):
         # No speed sensor: plan MPC at max_speed as best-effort assumption.
         v = self.max_speed
 
-        N      = self.mpc_N
-        dt     = self.mpc_dt
+        N = self.mpc_N
+        dt = self.mpc_dt
         bounds = [(-self.max_steer, self.max_steer)] * N
 
         # Shifted warm-start from previous solution
         if self._mpc_prev_solution is not None and len(self._mpc_prev_solution) == N:
             u0 = np.empty(N)
             u0[:-1] = self._mpc_prev_solution[1:]
-            u0[-1]  = self._mpc_prev_solution[-1]
+            u0[-1] = self._mpc_prev_solution[-1]
         else:
             u0 = np.full(N, self._last_steer)
 
@@ -674,10 +732,14 @@ class ConeFollowerNode(Node):
             _mpc_cost,
             u0,
             args=(
-                0.0, 0.0, 0.0,    # x0, y0, psi0 — always at local origin
+                0.0,
+                0.0,
+                0.0,  # x0, y0, psi0 — always at local origin
                 v,
                 path,
-                N, dt, self.WHEELBASE,
+                N,
+                dt,
+                self.WHEELBASE,
                 self.mpc_w_cte,
                 self.mpc_w_dsteer,
                 self.mpc_w_heading,
@@ -728,7 +790,7 @@ class ConeFollowerNode(Node):
         """
         midpoints = _build_midpoint_path(cones, self.half_track_width)
         if not midpoints:
-            return self._last_steer, None
+            return self._last_steer, self.stanley_assumed_speed
 
         # Closest path point to the kart (origin in its own frame)
         min_idx = 0
@@ -742,7 +804,9 @@ class ConeFollowerNode(Node):
 
         # Heading error: path tangent vs. kart heading (0 in its own frame)
         path_psi = _path_heading(midpoints, min_idx)
-        theta_e = math.atan2(math.sin(path_psi), math.cos(path_psi))  # normalize to [-pi, pi]
+        theta_e = math.atan2(
+            math.sin(path_psi), math.cos(path_psi)
+        )  # normalize to [-pi, pi]
 
         # Cross-track error: signed distance from kart to path (project onto path normal)
         if min_idx < len(midpoints) - 1:
@@ -779,7 +843,7 @@ class ConeFollowerNode(Node):
             f"theta_e={theta_e:.2f} e_fa={e_fa:.2f} "
             f"target=({cx:.1f},{cy:.1f}) midpts={len(midpoints)}"
         )
-        return steer, None
+        return steer, self.stanley_assumed_speed
 
     # ── neural net controller ─────────────────────────────────────────
 
@@ -825,7 +889,7 @@ class ConeFollowerNode(Node):
             f"[{self.controller_type}] steer={steer:.3f}({math.degrees(steer):.0f}°) "
             f"spd={speed:.1f} "
             f"b={len(blues)} y={len(yellows)} "
-            f"out=[{out[0]:.2f},{out[1]:.2f}] inp={np.round(inp,2).tolist()}"
+            f"out=[{out[0]:.2f},{out[1]:.2f}] inp={np.round(inp, 2).tolist()}"
         )
         return steer, speed, out
 
