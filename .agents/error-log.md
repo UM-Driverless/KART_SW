@@ -271,3 +271,10 @@ echo "0" | sudo -S bash -c "echo 0 > /sys/bus/usb/devices/2-3.2/authorized && sl
 **Prevention added:**
 - Rule: **When the user says "validate", do the actual validation — don't take shortcuts.** If the change affects boot behavior, reboot. If it affects a build, build. Don't check stale state and call it validated.
 - Rule: **"Validate then push" means the push is conditional on validation passing.** Do not push first and validate after.
+
+## 2026-04-05 - Saved project workflow to auto-memory instead of .agents/
+**What happened:** User asked to note the dev→main merge workflow. Despite AGENTS.md line 7 saying "Never rely on auto-memory for project-specific technical state" and the git workflow already being documented at AGENTS.md lines 124-127, I saved a memory file to `~/.claude/.../memory/` instead of checking `.agents/` first. User had to correct me twice.
+**Root cause:** Didn't read AGENTS.md before acting. The rules about where to store project knowledge were right there — both in AGENTS.md and in the global CLAUDE.md instructions.
+**Prevention added:**
+- Rule: **Before saving anything, check if it's already in `.agents/`.** Read AGENTS.md first. If it's already documented, say so — don't duplicate it.
+- Rule: **Project-specific workflows, processes, and conventions go in `.agents/` files, never in auto-memory.** Auto-memory is only for user preferences and cross-project info.
