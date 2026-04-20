@@ -590,6 +590,17 @@ body { font-family:'Inter',-apple-system,BlinkMacSystemFont,'SF Pro',system-ui,s
 .trg-lbl { font-size:9px; color:#6a6a7a; text-transform:uppercase; letter-spacing:1px; font-weight:500; margin-bottom:8px; }
 .trg-val { font-size:26px; font-weight:300; font-variant-numeric:tabular-nums; color:#f39c12; letter-spacing:-0.5px; line-height:1; }
 
+.ctrl-xy { display:grid; grid-template-columns:auto 1fr; gap:14px; align-items:center; }
+.ctrl-pad { background:#0a0a0f; border:1px solid #2a2a3a; border-radius:12px; width:220px; height:220px; flex-shrink:0; }
+.ctrl-nums { display:flex; flex-direction:column; gap:6px; font-variant-numeric:tabular-nums; min-width:0; }
+.ctrl-nr { display:grid; grid-template-columns:1fr 1fr 0.9fr 1.15fr; gap:6px; align-items:baseline; }
+.ctrl-nr > span:nth-child(1) { color:#f39c12; text-align:right; font-size:14px; font-weight:400; }
+.ctrl-nr > span:nth-child(2) { color:#4a9eff; text-align:right; font-size:14px; font-weight:400; }
+.ctrl-nr > span:nth-child(3) { color:#6a6a7a; text-align:right; font-size:12px; }
+.ctrl-nr > span:nth-child(4) { color:#6a6a7a; text-align:left; font-size:10px; text-transform:uppercase; letter-spacing:1px; font-weight:500; padding-left:4px; }
+.ctrl-nr-hdr > span { color:#6a6a7a !important; font-size:9px !important; text-transform:uppercase; letter-spacing:1.5px; font-weight:500; text-align:right; }
+.ctrl-nr-hdr > span:nth-child(4) { text-align:left; padding-left:4px; }
+
 .mis-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:5px; }
 .mis-btn { padding:10px 4px; border-radius:12px; border:1px solid #2a2a3a; background:#0a0a0f; color:#6a6a7a; font-size:9px; font-weight:500; letter-spacing:1px; text-transform:uppercase; cursor:pointer; text-align:center; -webkit-user-select:none; user-select:none; font-family:'Inter',sans-serif; }
 .mis-btn:active { transform:scale(0.96); }
@@ -624,19 +635,24 @@ body { font-family:'Inter',-apple-system,BlinkMacSystemFont,'SF Pro',system-ui,s
     <div class="ped-row"><div class="ped-item"><div class="ped-lbl">Throttle <span id="vThr">0%</span></div><div class="ped-track"><div class="ped-fill thr" id="thrFill" style="width:0%"></div></div></div>
     <div class="ped-item"><div class="ped-lbl">Brake <span id="vBrk">0%</span></div><div class="ped-track"><div class="ped-fill brk" id="brkFill" style="width:0%"></div></div></div></div>
   </div>
-  <div class="card"><div class="card-t">Actuations</div><div class="trg-grid">
-    <div class="trg-item"><div class="trg-lbl">Steering PWM</div><div class="trg-val" id="aPwm">0%</div></div>
-    <div class="trg-item"><div class="trg-lbl">Throttle DAC</div><div class="trg-val" id="aThr">0%</div></div>
-    <div class="trg-item"><div class="trg-lbl">Brake DAC</div><div class="trg-val" id="aBrk">0%</div></div></div></div>
-  <div class="card"><div class="card-t">Targets</div><div class="trg-grid">
-    <div class="trg-item"><div class="trg-lbl">Steering</div><div class="trg-val" id="cSteer">0.0°</div></div>
-    <div class="trg-item"><div class="trg-lbl">Throttle</div><div class="trg-val" id="cThr">0%</div></div>
-    <div class="trg-item"><div class="trg-lbl">Brake</div><div class="trg-val" id="cBrk">0%</div></div></div></div>
+  <div class="card"><div class="card-t">Control — Target vs Actual</div>
+    <div class="ctrl-xy">
+      <canvas class="ctrl-pad" id="ctrlPad" width="220" height="220"></canvas>
+      <div class="ctrl-nums">
+        <div class="ctrl-nr ctrl-nr-hdr"><span>TGT</span><span>ACT</span><span>Δ</span><span></span></div>
+        <div class="ctrl-nr"><span id="cnTgtSt">0°</span><span id="cnActSt">0°</span><span id="cnDSt">0°</span><span>Steer</span></div>
+        <div class="ctrl-nr"><span id="cnTgtTh">0%</span><span id="cnActTh">0%</span><span id="cnDTh">0%</span><span>Throttle</span></div>
+        <div class="ctrl-nr"><span id="cnTgtBr">0%</span><span id="cnActBr">0%</span><span id="cnDBr">0%</span><span>Brake</span></div>
+        <div class="ctrl-nr"><span>—</span><span id="cnPwm">0%</span><span>—</span><span>Str PWM</span></div>
+      </div>
+    </div>
+  </div>
   </div>`; },
 
   init() {
     $('misGrid').addEventListener('click', missionClick);
     drawGG(0, 0, '#2a2a3a', '#6a6a7a40', '#4a9eff', 8);
+    drawControlPad(0, 0, 0, 0, 0.5);
     return () => {};
   },
 
@@ -653,11 +669,8 @@ body { font-family:'Inter',-apple-system,BlinkMacSystemFont,'SF Pro',system-ui,s
     $('vALat').textContent = latG.toFixed(2)+' g';
     $('vALon').textContent = lonG.toFixed(2)+' g';
     $('vATotal').textContent = Math.sqrt(latG*latG+lonG*lonG).toFixed(2)+' g';
-    updatePedals(d); updateTargets(d); updatePills(d); updateMissions(d); updateStateButtons(d);
-    // Actuations
-    $('aPwm').textContent = (Math.abs(d.esp32_steering_pwm || 0) * 100).toFixed(0) + '%';
-    $('aThr').textContent = ((d.esp32_throttle || 0) * 100).toFixed(0) + '%';
-    $('aBrk').textContent = ((d.esp32_braking || 0) * 100).toFixed(0) + '%';
+    updatePedals(d); updatePills(d); updateMissions(d); updateStateButtons(d);
+    updateControlPanel(d);
   }
 };
 
@@ -1875,6 +1888,82 @@ function updateHealth(d) {
     hf.textContent = 'YOLO '+d.yolo_fps.toFixed(1)+'Hz';
     hf.style.color = d.yolo_fps >= 30 ? ok : d.yolo_fps >= 15 ? '#f39c12' : bad;
   }
+}
+
+// Control XY pad (Default skin) — steering vs accel, target (orange) vs actual (blue)
+function updateControlPanel(d) {
+  const maxSteer = 0.5;  // rad, matches the steering-bar scale
+  const actSt = d.esp32_steering_rad || 0;
+  const tgtSt = d.orin_cmd_steering_rad || 0;
+  const actTh = d.esp32_throttle || 0;
+  const actBr = d.esp32_braking || 0;
+  const tgtTh = d.orin_cmd_throttle || 0;
+  const tgtBr = d.orin_cmd_brake || 0;
+  const actAx = actTh - actBr;   // signed accel: +throttle / -brake
+  const tgtAx = tgtTh - tgtBr;
+  drawControlPad(actSt, actAx, tgtSt, tgtAx, maxSteer);
+  const pct = v => Math.round(v*100)+'%';
+  $('cnTgtSt').textContent = deg(tgtSt)+'°';
+  $('cnActSt').textContent = deg(actSt)+'°';
+  $('cnDSt').textContent  = (tgtSt-actSt>=0?'+':'') + deg(tgtSt-actSt)+'°';
+  $('cnTgtTh').textContent = pct(tgtTh);
+  $('cnActTh').textContent = pct(actTh);
+  $('cnDTh').textContent  = (tgtTh-actTh>=0?'+':'') + pct(tgtTh-actTh);
+  $('cnTgtBr').textContent = pct(tgtBr);
+  $('cnActBr').textContent = pct(actBr);
+  $('cnDBr').textContent  = (tgtBr-actBr>=0?'+':'') + pct(tgtBr-actBr);
+  $('cnPwm').textContent  = Math.round(Math.abs(d.esp32_steering_pwm || 0)*100)+'%';
+}
+
+function drawControlPad(actSt, actAx, tgtSt, tgtAx, maxSteer) {
+  const canvas = $('ctrlPad'); if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const PAD = 14;
+  const CX = W/2, CY = H/2;
+  const RX = (W-2*PAD)/2, RY = (H-2*PAD)/2;
+  ctx.clearRect(0,0,W,H);
+  // Frame + crosshairs
+  ctx.strokeStyle = '#2a2a3a'; ctx.lineWidth = 1;
+  ctx.strokeRect(PAD+0.5, PAD+0.5, W-2*PAD-1, H-2*PAD-1);
+  ctx.beginPath(); ctx.moveTo(PAD, CY); ctx.lineTo(W-PAD, CY); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(CX, PAD); ctx.lineTo(CX, H-PAD); ctx.stroke();
+  // 50% magnitude ring
+  ctx.strokeStyle = 'rgba(106,106,122,0.3)';
+  ctx.beginPath(); ctx.arc(CX, CY, Math.min(RX,RY)*0.5, 0, Math.PI*2); ctx.stroke();
+  // Axis labels
+  ctx.fillStyle = '#5a5a6a'; ctx.font = '9px Inter,sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('THR', CX, PAD+10);
+  ctx.fillText('BRK', CX, H-PAD-2);
+  ctx.textAlign = 'left';   ctx.fillText('R', W-PAD+3, CY+3);
+  ctx.textAlign = 'right';  ctx.fillText('L', PAD-3, CY+3);
+  // Map to canvas coords (X: +steer_rad is a LEFT turn per REP 103 -> left of pad; Y: +accel -> up)
+  const clip = v => Math.max(-1, Math.min(1, v));
+  const nAx = clip(actSt/maxSteer), nAy = clip(actAx);
+  const nTx = clip(tgtSt/maxSteer), nTy = clip(tgtAx);
+  const xA = CX - nAx*RX, yA = CY - nAy*RY;
+  const xT = CX - nTx*RX, yT = CY - nTy*RY;
+  // Error line
+  ctx.strokeStyle = 'rgba(243,156,18,0.45)'; ctx.lineWidth = 1;
+  ctx.setLineDash([3,3]);
+  ctx.beginPath(); ctx.moveTo(xA, yA); ctx.lineTo(xT, yT); ctx.stroke();
+  ctx.setLineDash([]);
+  // Target marker (orange crosshair + dot)
+  ctx.strokeStyle = '#f39c12'; ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(xT-7, yT); ctx.lineTo(xT+7, yT);
+  ctx.moveTo(xT, yT-7); ctx.lineTo(xT, yT+7);
+  ctx.stroke();
+  ctx.fillStyle = '#f39c12';
+  ctx.beginPath(); ctx.arc(xT, yT, 2.5, 0, Math.PI*2); ctx.fill();
+  // Actual marker (blue filled dot with glow ring)
+  ctx.fillStyle = '#4a9eff';
+  ctx.shadowColor = '#4a9eff'; ctx.shadowBlur = 10;
+  ctx.beginPath(); ctx.arc(xA, yA, 6, 0, Math.PI*2); ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = 'rgba(74,158,255,0.35)'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.arc(xA, yA, 10, 0, Math.PI*2); ctx.stroke();
 }
 
 // G-G diagram for Default skin
