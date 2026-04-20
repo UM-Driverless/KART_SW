@@ -93,7 +93,7 @@ class StanleyControllerNode(Node):
             "stanley_ks", 0.5
         )  # Softening gain (to avoid singularity at zero speed)
         self.declare_parameter("base_speed", 2.0)  # Base speed to command
-        self.declare_parameter("max_steer_angle", 0.4)  # ~23 degrees
+        self.declare_parameter("max_steer_angle", 1.222)  # ~70 degrees
 
         det_topic = self.get_parameter("detections_topic").value
         cmd_topic = self.get_parameter("cmd_vel_topic").value
