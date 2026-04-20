@@ -182,7 +182,7 @@ class ConeFollowerNode(Node):
         self.declare_parameter("cmd_vel_topic", "/kart/cmd_vel")
         self.declare_parameter("odom_topic", "/zed/zed_node/odom")
         self.declare_parameter("no_cone_timeout", 1.0)
-        self.declare_parameter("controller_type", "geometric")  # geometric|pure_pursuit|neural|neural_v2|mpc
+        self.declare_parameter("controller_type", "geometric")  # geometric|pure_pursuit|neural|neural_v2|mpc|stanley
         self.declare_parameter("speed_controller_type", "curve_factor")  # curve_factor|constant|neural_v2
         self.declare_parameter("weights_json", "")               # path for neural
 
@@ -194,6 +194,14 @@ class ConeFollowerNode(Node):
         self.declare_parameter("lookahead_max", 15.0)
         self.declare_parameter("half_track_width", 1.5)
         self.declare_parameter("speed_curve_factor", 0.0)
+
+        # --- Stanley params ---
+        self.declare_parameter("stanley_k", 1.5)
+        # TODO: once the PCB/hall-sensor speed reading is available, replace
+        # stanley_assumed_speed with the live speed topic — Stanley's
+        # cross-track term is speed-dependent and self-normalizes at higher
+        # speeds when fed a real v.
+        self.declare_parameter("stanley_assumed_speed", 2.0)
 
         # --- MPC params ---
         self.declare_parameter("mpc_horizon",    8)
@@ -218,6 +226,10 @@ class ConeFollowerNode(Node):
         self.lookahead_max = float(self.get_parameter("lookahead_max").value)
         self.half_track_width = float(self.get_parameter("half_track_width").value)
         self.speed_curve_factor = float(self.get_parameter("speed_curve_factor").value)
+
+        # Stanley fields
+        self.stanley_k = float(self.get_parameter("stanley_k").value)
+        self.stanley_assumed_speed = float(self.get_parameter("stanley_assumed_speed").value)
 
         # MPC fields
         self.mpc_N          = int(self.get_parameter("mpc_horizon").value)
@@ -280,7 +292,7 @@ class ConeFollowerNode(Node):
     def _on_controller_type(self, msg: String):
         """@brief Callback for runtime controller type changes from the dashboard."""
         new_type = msg.data
-        valid = ("geometric", "pure_pursuit", "neural_v2", "mpc")
+        valid = ("geometric", "pure_pursuit", "neural_v2", "mpc", "stanley")
         if new_type in valid and new_type != self.controller_type:
             self.get_logger().info(f"Controller type: {self.controller_type} → {new_type}")
             self.controller_type = new_type
@@ -411,6 +423,8 @@ class ConeFollowerNode(Node):
             steer, _ = self._control_pure_pursuit(cones)
         elif self.controller_type == "mpc":
             steer, _ = self._control_mpc(cones)
+        elif self.controller_type == "stanley":
+            steer, _ = self._control_stanley(cones)
         else:
             steer, _ = self._control_geometric(cones)
         speed = self._compute_speed(steer, nn_out, cones)
@@ -692,6 +706,80 @@ class ConeFollowerNode(Node):
             f"ok={result.success} itr={result.nit}"
         )
         return steer, speed
+
+    # ── Stanley controller ────────────────────────────────────────────
+
+    def _control_stanley(self, cones):
+        """@brief Stanley controller: heading error + cross-track error, speed-normalized.
+
+        Classical Stanley law:
+            delta = theta_e + atan2(k * e_fa, v + ks)
+        where theta_e is path-heading error, e_fa is signed cross-track error
+        at the front axle, k is the cross-track gain, v is forward speed, and
+        ks softens the term near zero speed.
+
+        Origin Alberto Rodríguez Blanco (commit 7e66399, standalone node).
+        Folded into the cone_follower dispatcher so it participates in the
+        runtime Steering dropdown, /kart/target publisher, and speed-controller
+        mux like the other algorithms.
+
+        @param cones List of (class_id, fwd, left) tuples in camera_link frame.
+        @return Tuple of (steer_rad, None) — outer _compute_speed sets speed.
+        """
+        midpoints = _build_midpoint_path(cones, self.half_track_width)
+        if not midpoints:
+            return self._last_steer, None
+
+        # Closest path point to the kart (origin in its own frame)
+        min_idx = 0
+        min_dist = float("inf")
+        for i, (px, py) in enumerate(midpoints):
+            d = math.hypot(px, py)
+            if d < min_dist:
+                min_dist = d
+                min_idx = i
+        cx, cy = midpoints[min_idx]
+
+        # Heading error: path tangent vs. kart heading (0 in its own frame)
+        path_psi = _path_heading(midpoints, min_idx)
+        theta_e = math.atan2(math.sin(path_psi), math.cos(path_psi))  # normalize to [-pi, pi]
+
+        # Cross-track error: signed distance from kart to path (project onto path normal)
+        if min_idx < len(midpoints) - 1:
+            dx = midpoints[min_idx + 1][0] - midpoints[min_idx][0]
+            dy = midpoints[min_idx + 1][1] - midpoints[min_idx][1]
+        elif min_idx > 0:
+            dx = midpoints[min_idx][0] - midpoints[min_idx - 1][0]
+            dy = midpoints[min_idx][1] - midpoints[min_idx - 1][1]
+        else:
+            dx, dy = 1.0, 0.0  # single-point path, straight-ahead fallback
+        length = math.hypot(dx, dy)
+        if length > 1e-3:
+            nx, ny = -dy / length, dx / length  # left-pointing normal
+        else:
+            nx, ny = 0.0, 1.0
+        e_fa = cx * nx + cy * ny
+
+        # TODO: switch to real speed from the hall sensor on the kart_medulla
+        # PCB once it's wired. Until then, Stanley assumes a constant speed —
+        # self-normalization is lost but behaviour is predictable at the
+        # operating speed we actually run at.
+        v = self.stanley_assumed_speed
+        ks = 0.5  # softening; literal since we don't run at zero speed
+
+        cross_track_steer = math.atan2(self.stanley_k * e_fa, v + ks)
+        steer = theta_e + cross_track_steer
+        steer = max(-self.max_steer, min(self.max_steer, steer))
+
+        self._last_steer = steer
+        self._last_target = (cx, cy)
+
+        self.get_logger().info(
+            f"[stanley] steer={steer:.3f}({math.degrees(steer):.0f}°) "
+            f"theta_e={theta_e:.2f} e_fa={e_fa:.2f} "
+            f"target=({cx:.1f},{cy:.1f}) midpts={len(midpoints)}"
+        )
+        return steer, None
 
     # ── neural net controller ─────────────────────────────────────────
 
