@@ -21,6 +21,7 @@ from rclpy.qos import QoSProfile, ReliabilityPolicy
 from kb_interfaces.msg import Frame
 from sensor_msgs.msg import Image, Imu
 from std_msgs.msg import Float32, String
+from vision_msgs.msg import Detection3DArray
 
 from geometry_msgs.msg import Twist
 
@@ -90,6 +91,15 @@ class DashboardNode(Node):
         # ZED2 IMU — uses BEST_EFFORT to match the ZED ROS2 wrapper's default QoS
         self.create_subscription(
             Imu, "/zed/zed_node/imu/data", self._on_zed_imu, qos_best_effort
+        )
+
+        # Pitch/roll-corrected cones from ground_plane_localizer_node — drives the
+        # top-down (cenital) view in the default skin.
+        self.create_subscription(
+            Detection3DArray,
+            "/perception/cones_3d_ground",
+            self._on_cones_3d_ground,
+            qos_reliable,
         )
 
         # Orin → ESP32 commands (to show what we're sending)
@@ -220,6 +230,27 @@ class DashboardNode(Node):
         self.state.update(
             "esp32_accel_lat", -msg.linear_acceleration.y
         )  # flip: y=left → positive=right
+
+    def _on_cones_3d_ground(self, msg: Detection3DArray):
+        """@brief Callback for IMU-corrected cone detections. Stores a flat list
+        of {"x": lateral_m, "z": forward_m, "c": class_name} for the cenital view.
+
+        The browser-side renderer reads x as lateral offset and z as forward
+        distance, mapping them onto a top-down canvas.
+        """
+        cones = []
+        for det in msg.detections:
+            if not det.results:
+                continue
+            p = det.bbox.center.position
+            cones.append(
+                {
+                    "x": float(p.x),
+                    "z": float(p.z),
+                    "c": det.results[0].hypothesis.class_id,
+                }
+            )
+        self.state.update("cones_3d_ground", cones)
 
     def _on_esp_health(self, msg: Frame):
         """@brief Callback for ESP32 health status frames. Updates magnet, I2C, heap fields."""

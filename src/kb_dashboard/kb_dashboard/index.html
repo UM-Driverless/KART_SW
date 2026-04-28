@@ -593,6 +593,8 @@ body { font-family:'Inter',-apple-system,BlinkMacSystemFont,'SF Pro',system-ui,s
 .ctrl-xy { display:grid; grid-template-columns:auto 1fr; gap:14px; align-items:center; }
 .ctrl-pad { background:#0a0a0f; border:1px solid #2a2a3a; border-radius:12px; width:220px; height:220px; flex-shrink:0; }
 .ctrl-nums { display:flex; flex-direction:column; gap:6px; font-variant-numeric:tabular-nums; min-width:0; }
+.cen-row { display:flex; justify-content:center; }
+.cen-pad { background:#0a0a0f; border:1px solid #2a2a3a; border-radius:12px; width:220px; height:220px; }
 .ctrl-nr { display:grid; grid-template-columns:1fr 1fr 0.9fr 1.15fr; gap:6px; align-items:baseline; }
 .ctrl-nr > span { text-align:left; }
 .ctrl-nr > span:nth-child(1) { color:#f39c12; font-size:14px; font-weight:400; }
@@ -648,12 +650,18 @@ body { font-family:'Inter',-apple-system,BlinkMacSystemFont,'SF Pro',system-ui,s
       </div>
     </div>
   </div>
+  <div class="card"><div class="card-t">Perception — Top-down</div>
+    <div class="cen-row">
+      <canvas class="cen-pad" id="cenitalPad" width="220" height="220"></canvas>
+    </div>
+  </div>
   </div>`; },
 
   init() {
     $('misGrid').addEventListener('click', missionClick);
     drawGG(0, 0, '#2a2a3a', '#6a6a7a40', '#4a9eff', 8);
     drawControlPad(0, 0, 0, 0, 0.5);
+    drawCenital($('cenitalPad'), []);
     return () => {};
   },
 
@@ -672,6 +680,7 @@ body { font-family:'Inter',-apple-system,BlinkMacSystemFont,'SF Pro',system-ui,s
     $('vATotal').textContent = Math.sqrt(latG*latG+lonG*lonG).toFixed(2)+' g';
     updatePedals(d); updatePills(d); updateMissions(d); updateStateButtons(d);
     updateControlPanel(d);
+    updateCenitalPanel(d);
   }
 };
 
@@ -1965,6 +1974,77 @@ function drawControlPad(actSt, actAx, tgtSt, tgtAx, maxSteer) {
   ctx.shadowBlur = 0;
   ctx.strokeStyle = 'rgba(74,158,255,0.35)'; ctx.lineWidth = 1.5;
   ctx.beginPath(); ctx.arc(xA, yA, 10, 0, Math.PI*2); ctx.stroke();
+}
+
+// Cenital (top-down) cone view (Default skin) — driven by /perception/cones_3d_ground.
+// Constants are workshop-tunable: if the workshop test shows cones mirrored or
+// rotated 90°, flip the relevant *_SIGN or swap *_AXIS — no rebuild needed since
+// index.html is reloaded fresh each time.
+const CENITAL_RANGE_FORWARD_M = 15.0;   // top of canvas = this many m ahead of kart
+const CENITAL_RANGE_LATERAL_M = 7.5;    // ±this many m left/right (canvas width)
+const CENITAL_LATERAL_AXIS = 'x';       // which message field is "lateral"; could be 'x' or 'z'
+const CENITAL_LATERAL_SIGN = +1;        // flip if right-positive comes out left-positive
+const CENITAL_FORWARD_AXIS = 'z';       // which field is "forward"
+const CENITAL_FORWARD_SIGN = +1;        // flip if forward-positive comes out as behind
+
+const CENITAL_CONE_COLORS = {
+  blue_cone: '#2a6fff',
+  yellow_cone: '#f5d300',
+  orange_cone: '#ff8a1a',
+  large_orange_cone: '#ff4500',
+};
+
+function updateCenitalPanel(d) {
+  const canvas = $('cenitalPad'); if (!canvas) return;
+  drawCenital(canvas, d.cones_3d_ground || []);
+}
+
+function drawCenital(canvas, cones) {
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const KART_X = W/2, KART_Y = H - 10;          // kart marker at bottom-center
+  ctx.clearRect(0, 0, W, H);
+  // Frame
+  ctx.strokeStyle = '#2a2a3a'; ctx.lineWidth = 1;
+  ctx.strokeRect(0.5, 0.5, W-1, H-1);
+  // Range rings (5, 10, 15 m) — half-circles centered on the kart, opening forward (up)
+  const px_per_m_fwd = (KART_Y - 4) / CENITAL_RANGE_FORWARD_M;
+  ctx.strokeStyle = 'rgba(74,158,255,0.18)';
+  ctx.fillStyle = '#5a5a6a';
+  ctx.font = '9px Inter,sans-serif';
+  ctx.textAlign = 'left';
+  for (const r_m of [5, 10, 15]) {
+    const r_px = r_m * px_per_m_fwd;
+    ctx.beginPath();
+    ctx.arc(KART_X, KART_Y, r_px, Math.PI, 2*Math.PI);
+    ctx.stroke();
+    ctx.fillText(r_m + ' m', KART_X + 4, KART_Y - r_px + 9);
+  }
+  // Heading line
+  ctx.strokeStyle = '#222';
+  ctx.beginPath(); ctx.moveTo(KART_X, 0); ctx.lineTo(KART_X, H); ctx.stroke();
+  // Cones
+  const px_per_m_lat = (W/2 - 4) / CENITAL_RANGE_LATERAL_M;
+  for (const c of (cones || [])) {
+    const lat = (c[CENITAL_LATERAL_AXIS] || 0) * CENITAL_LATERAL_SIGN;
+    const fwd = (c[CENITAL_FORWARD_AXIS] || 0) * CENITAL_FORWARD_SIGN;
+    if (Math.abs(lat) > CENITAL_RANGE_LATERAL_M) continue;
+    if (fwd < 0 || fwd > CENITAL_RANGE_FORWARD_M) continue;
+    const px = KART_X + lat * px_per_m_lat;
+    const py = KART_Y - fwd * px_per_m_fwd;
+    ctx.fillStyle = CENITAL_CONE_COLORS[c.c] || '#999';
+    ctx.beginPath(); ctx.arc(px, py, 4, 0, 2*Math.PI); ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(px, py, 4, 0, 2*Math.PI); ctx.stroke();
+  }
+  // Kart marker (small upward triangle)
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.moveTo(KART_X, KART_Y - 8);
+  ctx.lineTo(KART_X - 5, KART_Y + 2);
+  ctx.lineTo(KART_X + 5, KART_Y + 2);
+  ctx.closePath(); ctx.fill();
 }
 
 // G-G diagram for Default skin
