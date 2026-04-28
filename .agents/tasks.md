@@ -9,31 +9,50 @@ See `AGENTS.md` → Task Management for conventions.
 - [ ] **Pure pursuit arrow/steering mismatch — still unverified after HUD refactor** — Symptom reported 2026-04-19: with `pure_pursuit` active, the dashboard green arrow pointed right while the physical steering wheel moved left. Commit `316b5cd` eliminated *one* possible cause by making the HUD draw its arrow from the controller's actual aim point (`/kart/target`, PointStamped) instead of the HUD's independent nearest-pair midpoint — so the arrow can no longer disagree with pure pursuit's target. Not yet re-tested on the kart after that change. If the symptom persists, the mismatch is between `cmd.angular.z` and the actuator (not between arrow and controller) — which should be impossible since the geometric controller works fine through the same `cmd_vel_bridge_node.py:67` path with no sign flip. Code review of `_control_pure_pursuit` (`src/kart_control/scripts/cone_follower_node.py:484-582`) found no sign bug; `atan2(target_y, target_x)` uses the same `left` convention as geometric. Suspects if the problem returns: (a) far-lookahead target on the opposite side of a curve entry, (b) positive-feedback adaptive lookahead loop using `_last_steer` at line ~552, (c) `steering_gain=3.0` multiplying PP's already-valid angle into ±`max_steer` saturation (line ~570), (d) wide-straight cross-pairing with the 6 m cutoff (line ~527). Diagnostic: log `self._last_target` alongside nearest-pair midpoint on each frame, compare. Do NOT just disable pure pursuit — the user wants to use it, and the HUD fix may already be sufficient.
 - [ ] **Validate ZED neural net inference via TensorRT** — Build ZED SDK with TensorRT support (check submodules), test that the custom YOLO model runs through ZED's built-in neural detection module instead of a separate Python node. Compare latency vs current ultralytics pipeline.
 - [ ] **Benchmark C/C++ vs Python for YOLO node** — The current `yolo_detector_node.py` runs inference in Python (ultralytics). Investigate whether a C++ ROS2 node using TensorRT C API or ZED SDK's detection API gives meaningful FPS improvement. Check: inference time, pre/postprocessing overhead, GIL contention.
-- [ ] **Use the ZED's fused orientation to put cone positions on a level ground plane** — Today the perception pipeline (the ZED Object Detection path, `perception_zed_od.launch.py`) hands the MPC controller cone `(x, y, z)` in the ZED's *optical* frame, with whatever pitch and roll the camera is doing right now. Under braking pitch, that introduces meters of distance bias at competition range — it's the single biggest accuracy problem we have, and it's a *bias*, which the MPC handles much worse than noise.
-
-    **The fix:** subscribe to `/zed/zed_node/imu/data`, read the fused-orientation quaternion (the ZED's onboard chip already runs the sensor fusion — we don't pay for it on the Jetson), use it to define a ground plane in real time, and transform every cone position through that plane before publishing. Result: cone positions in a kart-relative frame that doesn't lurch when the kart pitches.
-
-    **Implementation outline.**
-    - **Inputs:** `/zed/zed_node/imu/data` (fused orientation quaternion, already published); existing cone 3D positions from the ZED Object Detection topic; the camera-mount-height-above-ground (tape-measure calibration, ~5 cm precision is fine).
-    - **Math per cone:** quaternion → rotation matrix → "down" direction in camera frame → plane equation. Then either project the cone position onto that plane, or simply rotate it through the inverse camera attitude into a kart-level frame. Both work; the rotation-only version is simpler.
-    - **Compute cost:** ~30 FLOPS per cone, ~300 per frame. CPU only. Zero GPU load.
-    - **Code size:** ~100-150 lines of Python. Subscriber, time-sync (pick the IMU sample closest to each detection timestamp — the IMU runs faster than the camera), the math, and a published `/perception/cones_3d_ground` topic.
-    - **Validation:** record a rosbag with hard braking on a known cone layout. Replay through the new node. Compare to the raw ZED Object Detection positions + tape-measure ground truth. Worst-case error under braking should drop from meters to sub-meter.
-
-    **What stays simple.** Distance source remains stereo, via the existing ZED Object Detection module. We do **not** add a second monocular pipeline (cone-height triangulation) — its only real win is at 25-30 m, where the controller doesn't need precision anyway, and its failure mode (wrong YOLO class → biased distance) is worse for the MPC than stereo's noise. Add monocular *only* if we measure a concrete problem at long range that needs it.
-
-    **Known weakness.** The ZED's fused orientation is biased during sustained linear acceleration: the accelerometer reads "gravity + kart deceleration" mixed together, and the fusion can't fully separate them. Under hard braking the estimated "down" tilts toward the deceleration direction. Ship the first version against the ZED's stock fusion, measure the bias on real braking events, and only optimize if it actually hurts the controller. Mitigation paths if needed: gyro-dominant complementary filter weighting (short-term gyro trust), or — once wheel-speed comes online with the interface PCB — subtract known longitudinal acceleration from the accelerometer reading to recover cleaner gravity.
-
-    **What this replaces.** Three smaller tasks that previously appeared here, now folded in:
-    - "Cone localizer: properly transform cone positions from camera frame to vehicle frame" — same fix, now phrased as the IMU-driven ground plane.
-    - "Monocular cone distance — pick technique and port from previous repo" — *dropped*. Stereo + IMU-corrected frame gives the controller what it needs; monocular is speculative until measured.
-    - The math half of the cenital-view task — falls out of this task's `/perception/cones_3d_ground` topic. Rendering half remains separate below.
 - [ ] **Per-cone depth: confirm and document the fast path** — Two perception launch files exist: (a) `perception_3d.launch.py` runs `yolo_detector_node` + `cone_depth_localizer_node` and consumes the **full** depth image from the ZED ROS 2 wrapper (`/zed/zed_node/depth/depth_registered`), then samples it at YOLO bounding-box centers; (b) `perception_zed_od.launch.py` uses the ZED SDK's built-in object-detection module (publishes `ObjectsStamped`, consumed via `zed_od_utils.zed_objects_to_det3d`), where the SDK runs the custom YOLO model on-device and returns 3D bounding boxes directly — the full depth image is never published to ROS in this path (commit `4b4fc0b` "Add ZED SDK built-in object detection support with custom YOLO model"). Path (b) is the actual fast path running on the kart. Two open questions: (1) is path (a) still used anywhere, or can `cone_depth_localizer_node.py` and `yolo_detector_node.py` be retired? (2) Does the SDK's object-detection path internally compute a full depth pass anyway and just hide it from us, or is it really only computing depth at detected objects? Related to the existing task at line 10 ("Validate ZED neural-net inference via TensorRT"). Document whichever path is canonical in `architecture.md` so future content posts don't have to re-derive it.
-- [ ] **Render the top-down (cenital) view of detected cones** — *Rendering half only — the math is folded into the IMU ground-plane task above, which produces the per-cone `(x, y)` this view consumes.* Show a top-down map of detected cones below or alongside the camera feed in the dashboard. Cones as colored dots, kart at the origin, near cones at the bottom, far cones at the top. The previous repo had this: `src/driverless/visualization_utils/visualizer_yolo_det.py:114 _print_cenital_map()` draws the inset on the image using `cv2.circle` with cone colors. Implementation options for `kart_brain`: (1) port `_print_cenital_map` into `kart_perception/steering_hud_node.py` so it appears as an overlay on the YOLO-annotated camera image; (2) make it a separate dashboard panel (HTML + canvas) rendered in `kb_dashboard` from the new IMU-corrected `/perception/cones_3d_ground` topic — fits the phone-as-dashboard angle. **Diagnostic value:** fastest way to spot perception bugs visually — mis-classified colors, missing cones, distance errors — without staring at numbers.
 
 - [ ] **In-person verify: LAN-IP dashboard login after Secure-cookie fix** — Fix committed in `31d4bb7` on 2026-04-20 makes the session cookie's `Secure` flag conditional on `X-Forwarded-Proto: https` from a loopback peer (cloudflared). Not yet tested on-kart because Orin is off when Ruben is at home. Next time at the kart, after `git pull` + `sudo systemctl restart kart-brain` on Orin: (1) visit `http://<orin-lan-ip>:9090` from a phone on the same Wi-Fi, type password `0`, confirm the dashboard actually loads (not the login page again); (2) visit `https://kart.rubenayla.xyz`, confirm login still works there (regression check); (3) in Chrome/Safari devtools, inspect the `kart_session` cookie — LAN path should show `Secure: false`, Cloudflare path `Secure: true`. Close the task only after both paths are confirmed.
 
 ## In Progress
+
+### Code shipped, awaiting on-kart validation — branch `feature/imu-corrected-ground-plane`
+
+Both items below are coded, committed, pushed (commits `71dbdeb`, `6c50400`, `cec790d`). The remaining work is at the workshop. Boot order on the Orin:
+
+```bash
+git fetch && git checkout feature/imu-corrected-ground-plane
+colcon build --packages-select kart_perception kb_dashboard --symlink-install
+source install/setup.bash
+# Terminal 1
+ros2 launch kart_perception perception_zed_od_ground.launch.py
+# Terminal 2
+ros2 launch kb_dashboard dashboard.launch.py
+# Browser
+http://<orin-ip>:9090
+```
+
+- [ ] **(workshop) Validate the IMU-corrected ground plane** — `ground_plane_localizer_node` subscribes to `/zed/zed_node/imu/data` and `/zed/zed_node/obj_det/objects`, applies a swing-twist correction (strips yaw about gravity, keeps the residual pitch+roll), and republishes cones on `/perception/cones_3d_ground`. Validation:
+    1. **Static, level kart** — `/perception/cones_3d_markers` (raw, in optical frame) and `/perception/cones_3d_ground_markers` (corrected, cyan/orange shades) should overlap exactly in RViz. If they diverge at rest, math/convention is off. First fix to try: set `invert_correction:=true` in the launch params. Second: change `gravity_axis` from `[0,0,1]` to whatever the wrapper actually publishes against.
+    2. **Hand-tilt the camera ±10°** — original markers swing forward/back with the tilt; ground-corrected markers should stay roughly fixed in space. If they swing the same direction as the originals, flip `invert_correction`.
+    3. **Drive forward + slam the brakes** — original cone distances will drop systematically (kart pitches forward → camera looks down → cones look closer). Corrected positions should hold roughly constant. Record a rosbag of this run — it's the receipt for the LinkedIn dashboard post and the migration evidence for the MPC controller.
+    4. **Sanity-check the IMU bias under sustained braking** — `ros2 topic echo /zed/zed_node/imu/data --field orientation` during the slam-brake test. If the quaternion swings noticeably more than the kart's actual pitch, the ZED's stock fusion is biased by linear deceleration. <30% extra: ship as-is. >50% extra: file follow-up to add gyro-dominant complementary filter weighting.
+    - Only after the first three pass, mark this Done and start a separate PR migrating `cone_follower_node.py` (the MPC) to consume `/perception/cones_3d_ground`.
+    - Rosbag to record at the workshop:
+      ```bash
+      ros2 bag record -o ground_plane_validation \
+        /zed/zed_node/imu/data \
+        /zed/zed_node/obj_det/objects \
+        /perception/cones_3d \
+        /perception/cones_3d_ground
+      ```
+
+- [ ] **(workshop) Validate the top-down (cenital) cone panel in the dashboard** — Default skin now shows a "Perception — Top-down" card with cones from `/perception/cones_3d_ground` rendered as colored dots, kart at the bottom, range rings at 5/10/15 m. Validation:
+    1. **Empty FOV** — only the range rings, heading line, and white kart triangle. No stray dots.
+    2. **One cone at ~3 m, slightly right** — should appear ~⅕ of the way up the canvas, slightly right of center. Color should match the cone's class (blue/yellow/orange/large-orange).
+    3. **Cone wall at known 5 m / 10 m / 15 m** — dots should land near the corresponding range ring.
+    4. **Tilt the camera by hand** — dots should NOT move. If they do, the IMU correction (above task) isn't doing its job; that's the failure to debug, not the panel.
+    5. **Wrong direction?** If cones appear *behind* the kart (below the canvas) or mirrored left-right, edit the `CENITAL_*_SIGN` / `CENITAL_*_AXIS` constants at the top of `drawCenital` in `src/kb_dashboard/kb_dashboard/index.html` and reload the browser. No rebuild — `index.html` is served fresh on each page load.
+    - Mark Done when the static + cone-wall + tilt tests all behave as expected on at least one phone or laptop.
 
 ## Blocked
 
