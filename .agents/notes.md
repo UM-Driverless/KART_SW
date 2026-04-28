@@ -1,6 +1,38 @@
 <!-- consult selectively — grep, never read in full -->
 # Notes
 
+## Steering planetary reducer — filament picks for nylon planet gears
+
+Context: the failing part on the steering planetary is the **nylon sun gear** (D-flat on motor shaft rounds out under direction-reversal impacts — see history.md 2026-04-21). Plan is brass sun + printed nylon planets. Planet gears mesh against the brass sun and a nylon ring, so planet material needs low creep, good wear against brass, and low moisture swelling. See history.md 2026-04-21 entry for the full wear-distribution reasoning.
+
+### Printer constraints
+- Bambu Lab with **hardened nozzle** — confirmed 2026-04-21. CF filaments are fine.
+- User has a filament drier — use it (nylons are hygroscopic; wet nylon prints as foam).
+- Enclosed chamber needed for nylons (X1C / P1S fine; A1-series would warp).
+
+### Filament ranking for planet gears (best → baseline)
+| Tier | Filament | Approx €/kg | Notes |
+|---|---|---|---|
+| **Top pick** | Bambu Lab **PAHT-CF** | 75–90 | Tuned profile in Bambu Studio, RFID, "just press print." CF-reinforced PA, dramatically lower creep than plain nylon. |
+| **Cost-effective** | Polymaker **PolyMide PA6-CF** | 55–70 | Same performance tier, generic CF-nylon profile, well-regarded. |
+| Alt | Polymaker **PolyMide PA6-GF** or Fiberlogy **Nylon PA12 CF15** | 50–70 | GF is gentler on the nozzle than CF; performance close to CF-nylons for gears. |
+| Budget | **eSUN ePA-CF** / **Sunlu PA-CF** | 30–50 | OK first attempt; expect more QC variation. |
+| Baseline | plain **PA6 / PA12 nylon** | 25–40 | What's currently in use. Creeps under sustained torque — don't pick this if there's a filled alternative available. |
+| **Avoid** | PLA, PETG, ABS | — | PLA + PETG creep badly under load; ABS wears too fast. Not for high-cycle gears. |
+
+### Why not POM/Delrin (the "industrially correct" answer)
+POM is the textbook plastic for meshing with brass (self-lubricating, near-zero creep, 0.2% moisture). But it is **effectively unprintable on FDM** — very low surface energy (won't stick to anything), heavy warp on cooling, poor layer adhesion. Bambu has no profile. **If you want POM, you machine it.** If we ever CNC the sun anyway, machining 3 POM planets on the same setup is the ideal long-term solution.
+
+### Print settings (rules of thumb for planet gears)
+- **Dry** filament 8 h at 70 °C before load; keep in drier during print.
+- **Profile**: start with factory/default, don't tune from scratch.
+- **Walls**: ≥5. **Infill**: 80–100% (parts are tiny; filament saving is pennies, solid wears better).
+- **Orientation**: gear axis **vertical**, so tooth loads are in-plane, not peeling layers apart.
+- Batch-print a few spares per session — consumables.
+
+### Decision gate
+Current status (2026-04-21): **not buying yet.** Current nylon planets are adequate; if they start failing after brass sun is installed, revisit and pick one of the filled-nylon options above. Top two candidates: **Bambu PAHT-CF** (zero-setup) or **Polymaker PA6-CF** (cheaper).
+
 ## Orin availability — it's a kart computer, not a server
 
 The Orin lives **in the kart**. It is powered off whenever Ruben is not physically at the kart (e.g. working from home). `ssh orin-remote` returning `Connection closed by UNKNOWN port 65535` is usually **"the Orin is off"**, not "the Cloudflare Tunnel has a problem."
@@ -52,6 +84,18 @@ done
 ```
 
 Could also explore: GitHub Agentic Workflows, `/loop` skill, or a custom MCP-based orchestrator (e.g. AGINEAR, Flux). Key question: how to handle tasks that need human feedback (Blocked state) without stalling the loop.
+
+## ESP32-S3 module to buy — ESP32-S3-WROOM-1-N8R2 (R8 BANNED)
+
+Exact part number for the next-revision Kart Medulla PCB: **ESP32-S3-WROOM-1-N8R2** (8 MB flash, 2 MB quad PSRAM).
+
+**Octal-PSRAM (R8) variants are BANNED, not "fallback."** On R8 modules the 8 MB octal PSRAM is hard-wired inside the module package to GPIO 33–37. Espressif's datasheet marks those pins as "not available" on R8 variants. This is a physical constraint: disabling PSRAM in firmware does NOT reclaim the pins. Treating an R8 board as if it were an R2 board is a hardware error.
+
+**GPIO 33–37 are NOT reserved by our pinout.** We try to leave them free where convenient, but that is a courtesy, not a commitment, and it is not the standard we follow. Therefore the module must be a non-R8 variant — always.
+
+**Valid upgrade path if flash fills up: ESP32-S3-WROOM-1-N16R2** (16 MB flash, 2 MB quad PSRAM — zero GPIO cost, zero pinout change). **Never N16R8.**
+
+Decision recorded in `kart_docs/.agents/history.md` (2026-04-23), `kart_docs/docs/assembly/electronics/bom.yaml`, and `kart_docs/docs/assembly/electronics/kart-medulla/index.md`.
 
 ## ESP32 ↔ Orin Serial Protocol
 
