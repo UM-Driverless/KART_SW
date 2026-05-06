@@ -53,7 +53,7 @@ The flag is **misleadingly named**. It only creates symlinks for `ament_cmake` p
 
 ### Fast rebuild loop for dashboard edits on Orin
 ```bash
-cd ~/kart_brain && colcon build --symlink-install --packages-select kb_dashboard && sudo systemctl restart kart-brain
+cd ~/kart-brain && colcon build --symlink-install --packages-select kb_dashboard && sudo systemctl restart kart-brain
 ```
 Incremental build is ~3 s; service restart ~4 s. Use `--packages-select` to avoid rebuilding everything.
 

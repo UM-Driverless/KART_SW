@@ -822,7 +822,7 @@ class ConeFollowerNode(Node):
             nx, ny = 0.0, 1.0
         e_fa = cx * nx + cy * ny
 
-        # TODO: switch to real speed from the hall sensor on the kart_medulla
+        # TODO: switch to real speed from the hall sensor on the kart-medulla
         # PCB once it's wired. Until then, Stanley assumes a constant speed —
         # self-normalization is lost but behaviour is predictable at the
         # operating speed we actually run at.

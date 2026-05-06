@@ -64,7 +64,7 @@ ssh orin-local 'echo "0" | sudo -S <command>'
 The following are already in `~/.bashrc` and sourced automatically on login/terminal:
 ```bash
 source /opt/ros/humble/setup.bash
-source ~/kart_brain/install/setup.bash
+source ~/kart-brain/install/setup.bash
 export IGN_GAZEBO_RESOURCE_PATH=$(ros2 pkg prefix kart_sim 2>/dev/null)/share/kart_sim/models
 ```
 
@@ -78,8 +78,8 @@ export LD_LIBRARY_PATH=/usr/local/cuda-12.6/targets/aarch64-linux/lib:$(find ~/.
 ## Workspace
 | Path | Description |
 |---|---|
-| `/home/orin/kart_brain` | Main ROS2 workspace (this repo) |
-| `~/Desktop/kart_medulla` | ESP32 firmware (PlatformIO project) |
+| `/home/orin/kart-brain` | Main ROS2 workspace (this repo) |
+| `~/Desktop/kart-medulla` | ESP32 firmware (PlatformIO project) |
 | `~/Desktop/KART_SW` | Old copy of kart_sw (can be deleted) |
 
 ## ZED Camera
@@ -93,7 +93,7 @@ export LD_LIBRARY_PATH=/usr/local/cuda-12.6/targets/aarch64-linux/lib:$(find ~/.
 ## Live Perception Pipeline
 ```bash
 # All-in-one script
-~/kart_brain/run_live.sh
+~/kart-brain/run_live.sh
 
 # Or manually:
 ros2 run kart_perception image_source --ros-args \
@@ -104,11 +104,11 @@ DISPLAY=:1 XAUTHORITY=/run/user/1000/gdm/Xauthority \
   ros2 run rqt_image_view rqt_image_view /perception/yolo/annotated &
 ```
 
-## ESP32 Firmware (kart_medulla)
+## ESP32 Firmware (kart-medulla)
 
 ```bash
 # Build and flash (from Orin)
-cd ~/Desktop/kart_medulla
+cd ~/Desktop/kart-medulla
 ~/.local/bin/pio run --target upload --environment esp32dev --upload-port /dev/ttyUSB0
 
 # Test firmware variants (see flash_test.sh):
@@ -134,7 +134,7 @@ cd ~/Desktop/kart_medulla
 
 **Export procedure** (on Orin):
 ```bash
-cd ~/kart_brain
+cd ~/kart-brain
 # 1. Export .pt → ONNX (CPU-safe, no CUBLAS needed)
 python3 -c "from ultralytics import YOLO; YOLO('models/perception/yolo/<model>.pt').export(format='onnx', imgsz=640, device='cpu')"
 # 2. Convert ONNX → TensorRT engine (uses trtexec, avoids PyTorch fuse)
@@ -166,12 +166,12 @@ sudo systemctl restart kart-brain      # Restart
 journalctl -u kart-brain -f            # View logs
 
 # Service file lives at: tools/kart-brain.service (repo) → /etc/systemd/system/ (Orin)
-# To update after editing: sudo cp ~/kart_brain/tools/kart-brain.service /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl restart kart-brain
+# To update after editing: sudo cp ~/kart-brain/tools/kart-brain.service /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl restart kart-brain
 ```
 
 **Manual launch** (if service is stopped):
 ```bash
-cd ~/kart_brain && source install/setup.bash
+cd ~/kart-brain && source install/setup.bash
 ros2 launch kart_bringup launch.py
 
 # This starts: ZED camera → YOLO perception → cone_follower → cmd_vel_bridge → KB_Coms_micro → dashboard

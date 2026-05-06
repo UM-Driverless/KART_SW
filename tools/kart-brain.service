@@ -12,7 +12,7 @@ ExecStartPre=/bin/sleep 10
 ExecStartPre=/bin/bash -c 'python3 -c "import serial; s=serial.Serial(\"/dev/ttyUSB0\", 115200); s.setDTR(False); import time; time.sleep(0.1); s.setDTR(True); time.sleep(0.5); s.close()" 2>/dev/null || true'
 ExecStart=/bin/bash -c '\
   source /opt/ros/humble/setup.bash && \
-  source ~/kart_brain/install/setup.bash && \
+  source ~/kart-brain/install/setup.bash && \
   ros2 launch kart_bringup launch.py'
 TimeoutStopSec=10
 Restart=on-failure

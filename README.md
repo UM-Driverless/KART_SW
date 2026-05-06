@@ -1,4 +1,4 @@
-# kart_brain
+# kart-brain
 
 ROS workspace for the UM-Driverless kart software stack.
 
@@ -113,7 +113,7 @@ The Jetson Orin runs Ubuntu 22.04 (JetPack 6), and Humble is the LTS release tha
 We use Python. The perception and control nodes are written in Python for faster prototyping and because PyTorch (used by YOLO) is a Python library. C++ nodes may be introduced later for performance-critical paths, but Python is the default.
 
 **Why is the microcontroller code in a separate repo?**
-The ESP32 firmware (`kart_medulla`) runs on bare metal with FreeRTOS — it has its own toolchain (PlatformIO/Arduino), its own flashing process, and no ROS dependency. Keeping it separate avoids coupling the embedded build with the ROS workspace.
+The ESP32 firmware (`kart-medulla`) runs on bare metal with FreeRTOS — it has its own toolchain (PlatformIO/Arduino), its own flashing process, and no ROS dependency. Keeping it separate avoids coupling the embedded build with the ROS workspace.
 
 **Why YOLOv5 and not a newer version?**
 The trained weights (`best_adri.pt`) were produced with YOLOv5 on our custom cone dataset. YOLOv5's PyTorch Hub integration makes it simple to load custom weights, and the model runs well on Jetson via TensorRT export. Migrating to a newer YOLO version is tracked as a future task but not a priority — the current model detects cones reliably.

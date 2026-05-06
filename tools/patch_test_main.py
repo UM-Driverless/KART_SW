@@ -5,7 +5,7 @@ Run on Orin: python3 patch_test_main.py
 """
 import sys
 
-TEST_FILE = "/home/orin/Desktop/kart_medulla/main/test_main.c"
+TEST_FILE = "/home/orin/Desktop/kart-medulla/main/test_main.c"
 
 NEW_TESTS = r'''/* ============================================================
  * 16. ACTUATOR OUTPUT LIMIT BUG

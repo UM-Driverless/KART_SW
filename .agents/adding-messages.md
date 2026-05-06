@@ -1,11 +1,11 @@
 <!-- reference — read when relevant -->
 # How to Add New Message Types (Orin ↔ ESP32)
 
-This guide describes how to add a new message type to the serial communication between the Orin (ROS2) and the ESP32 (kart_medulla firmware). Both sides must be updated to keep message tags in sync.
+This guide describes how to add a new message type to the serial communication between the Orin (ROS2) and the ESP32 (kart-medulla firmware). Both sides must be updated to keep message tags in sync.
 
 ---
 
-## Part 1: Orin Side (kart_brain)
+## Part 1: Orin Side (kart-brain)
 
 ### Step 1 — Add the tag to the ROS custom message
 
@@ -100,7 +100,7 @@ case kb_interfaces::msg::Frame::ESP_ACT_SPEED: {
 
 ---
 
-## Part 2: ESP32 Side (kart_medulla)
+## Part 2: ESP32 Side (kart-medulla)
 
 ### Step 1 — Update `km_coms.h`
 
@@ -158,12 +158,12 @@ Both sides provide functions to send data. Create an `int32_t` array and pass it
 
 ## Checklist for adding a new message
 
-1. [ ] Add tag to `Frame.msg` (kart_brain)
-2. [ ] Add tag to `message_type_t` enum in `kb_coms_micro.hpp` (kart_brain)
-3. [ ] Declare publisher/subscriber in `kb_coms_micro.hpp` (kart_brain)
-4. [ ] Initialize publisher/subscriber in `kb_coms_micro.cpp` (kart_brain)
-5. [ ] Add RX switch case or use TX callback in `kb_coms_micro.cpp` (kart_brain)
-6. [ ] Add tag to `message_type_t` enum in `km_coms.h` (kart_medulla)
-7. [ ] Add case to `KM_COMS_ProccessPayload` in `km_coms.c` (kart_medulla)
+1. [ ] Add tag to `Frame.msg` (kart-brain)
+2. [ ] Add tag to `message_type_t` enum in `kb_coms_micro.hpp` (kart-brain)
+3. [ ] Declare publisher/subscriber in `kb_coms_micro.hpp` (kart-brain)
+4. [ ] Initialize publisher/subscriber in `kb_coms_micro.cpp` (kart-brain)
+5. [ ] Add RX switch case or use TX callback in `kb_coms_micro.cpp` (kart-brain)
+6. [ ] Add tag to `message_type_t` enum in `km_coms.h` (kart-medulla)
+7. [ ] Add case to `KM_COMS_ProccessPayload` in `km_coms.c` (kart-medulla)
 8. [ ] `colcon build` on Orin + flash ESP32
 9. [ ] Test round-trip

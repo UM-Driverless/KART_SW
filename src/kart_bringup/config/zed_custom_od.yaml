@@ -11,5 +11,5 @@
             confidence_threshold: 25.0
             prediction_timeout: 0.2
             filtering_mode: 'NMS3D_PER_CLASS'
-            custom_onnx_file: '/home/orin/kart_brain/models/perception/yolo/ruben_yolov11n_2026_03.onnx'
+            custom_onnx_file: '/home/orin/kart-brain/models/perception/yolo/ruben_yolov11n_2026_03.onnx'
             custom_onnx_input_size: 640

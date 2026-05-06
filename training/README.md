@@ -1,6 +1,6 @@
 # Training
 
-Training pipelines for kart_brain models.
+Training pipelines for kart-brain models.
 
 ## Perception — YOLOv11 Cone Detection
 

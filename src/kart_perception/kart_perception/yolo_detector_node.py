@@ -26,7 +26,7 @@ _REPO_ROOT = pathlib.Path(__file__).resolve().parents[4]  # .../src/kart_percept
 
 
 def _repo_relative(path_str: str) -> pathlib.Path:
-    """@brief Resolve a path relative to the kart_brain repo root if not absolute.
+    """@brief Resolve a path relative to the kart-brain repo root if not absolute.
 
     @param path_str Path string, either absolute or relative to repo root.
     @return Resolved absolute path.
@@ -37,8 +37,8 @@ def _repo_relative(path_str: str) -> pathlib.Path:
     candidate = _REPO_ROOT / p
     if candidate.exists():
         return candidate
-    # Fallback: ~/kart_brain (works on all our machines)
-    return pathlib.Path.home() / "kart_brain" / p
+    # Fallback: ~/kart-brain (works on all our machines)
+    return pathlib.Path.home() / "kart-brain" / p
 
 
 class YoloDetectorNode(Node):

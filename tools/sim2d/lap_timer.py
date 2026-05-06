@@ -12,7 +12,7 @@ CROSSING_RADIUS = 3.0  # how close to start line to count
 
 def main():
     proc = subprocess.Popen(
-        ["ssh", "utm", "bash -ic 'source ~/kart_brain/install/setup.bash && ros2 topic echo /model/kart/odom_gt'"],
+        ["ssh", "utm", "bash -ic 'source ~/kart-brain/install/setup.bash && ros2 topic echo /model/kart/odom_gt'"],
         stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True
     )
 

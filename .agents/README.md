@@ -1,7 +1,7 @@
 <!-- read in full — kept under 150 lines -->
 # Kart Brain Agent Documentation
 
-This directory contains persistent AI-focused documentation for the kart_brain workspace. It follows a two-layer system: **memory** (what agents read) and **enforcement** (what prevents bad work).
+This directory contains persistent AI-focused documentation for the kart-brain workspace. It follows a two-layer system: **memory** (what agents read) and **enforcement** (what prevents bad work).
 
 ## Why This Exists
 

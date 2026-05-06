@@ -4,7 +4,7 @@
 
 set -e
 
-MEDULLA=~/Desktop/kart_medulla
+MEDULLA=~/Desktop/kart-medulla
 
 echo "=== Fixing outputLimit bug ==="
 

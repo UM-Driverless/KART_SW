@@ -4,7 +4,7 @@
 The Orin sends actuator targets to the ESP32 over USB serial (UART). This document
 defines the current wire format and a planned, more robust version with checksum.
 
-Reference firmware repo: https://github.com/UM-Driverless/kart_medulla
+Reference firmware repo: https://github.com/UM-Driverless/kart-medulla
 
 ## Version 1 (current)
 Fixed 4-byte frame, no checksum. Steering uses signed 8-bit (s8): negative = right,
@@ -40,4 +40,4 @@ signed 8-bit (s8): negative = right, positive = left, 0 = straight.
 
 Notes:
 - Use CRC-8 (poly 0x07) or XOR if simplicity is required.
-- Requires firmware update in `kart_medulla` to parse V2 frames.
+- Requires firmware update in `kart-medulla` to parse V2 frames.
