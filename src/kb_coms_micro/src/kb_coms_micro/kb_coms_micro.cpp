@@ -35,6 +35,8 @@ KB_coms_micro::KB_coms_micro() : Node("kb_coms_micro_node") {
 
     esp_diag_steering_pub_ = create_publisher<kb_interfaces::msg::Frame>("/esp32/diag_steering", 10);
 
+    esp_fps_pub_ = create_publisher<std_msgs::msg::Float32>("/esp32/fps", 10);
+
     // Create Subscriptors
     orin_throttle_sub_ = create_subscription<kb_interfaces::msg::Frame>(
         "/orin/throttle", 10, std::bind(&KB_coms_micro::kb_coms_TXcallback, this, std::placeholders::_1));
@@ -68,7 +70,26 @@ KB_coms_micro::KB_coms_micro() : Node("kb_coms_micro_node") {
         std::chrono::seconds(1),
         std::bind(&KB_coms_micro::kb_coms_OrinHeartbeat, this));
 
+    fps_last_sample_ = std::chrono::steady_clock::now();
+    fps_timer_ = this->create_wall_timer(
+        std::chrono::seconds(1),
+        std::bind(&KB_coms_micro::kb_coms_PublishFps, this));
+
     serial_->start();
+}
+
+void KB_coms_micro::kb_coms_PublishFps(void) {
+    // Sample-and-clear the steering frame counter; divide by elapsed wall time
+    // (steady_clock) so the rate is correct even if the timer fires late.
+    auto now = std::chrono::steady_clock::now();
+    double dt = std::chrono::duration<double>(now - fps_last_sample_).count();
+    fps_last_sample_ = now;
+
+    uint32_t count = steering_frame_count_.exchange(0);
+
+    std_msgs::msg::Float32 msg;
+    msg.data = (dt > 0.0) ? static_cast<float>(count / dt) : 0.0f;
+    esp_fps_pub_->publish(msg);
 }
 
 KB_coms_micro::~KB_coms_micro() { serial_->stop(); }
@@ -126,6 +147,9 @@ void KB_coms_micro::kb_coms_RXcallback(const SerialDriver::Frame &frame_esp) {
         msg_orin4.payload = frame_esp.payload;
 
         esp_steering_pub_->publish(msg_orin4);
+
+        // Count for /esp32/fps — steering is the high-rate critical-path frame.
+        steering_frame_count_.fetch_add(1, std::memory_order_relaxed);
 
         break;
     }

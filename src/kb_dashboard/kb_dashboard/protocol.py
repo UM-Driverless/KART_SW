@@ -295,6 +295,7 @@ class DashboardState:
             "health_heap_kb": 0,
             "health_i2c_errors": 0,
             "yolo_fps": 0.0,
+            "esp_fps": 0.0,
             "cones_3d_ground": [],  # [{"x": float, "z": float, "c": str}, ...] from /perception/cones_3d_ground
             "mission": "manual",
             "state": "idle",  # idle | running | ebs
