@@ -295,6 +295,7 @@ class DashboardState:
             "health_heap_kb": 0,
             "health_i2c_errors": 0,
             "yolo_fps": 0.0,
+            "esp_fps": 0.0,
             "mission": "manual",
             "state": "idle",  # idle | running | ebs
             "steer_mode": "pid",  # "pid" or "pwm"

@@ -113,6 +113,11 @@ class DashboardNode(Node):
             Float32, "/perception/yolo/fps", self._on_yolo_fps, qos_reliable
         )
 
+        # ESP32 steering-frame rate (Orin↔ESP USB-serial link health)
+        self.create_subscription(
+            Float32, "/esp32/fps", self._on_esp_fps, qos_reliable
+        )
+
         # HUD image stream (JPEG bytes stored for WebSocket binary broadcast)
         self._bridge = CvBridge()
         self._hud_jpeg: bytes | None = None
@@ -255,6 +260,10 @@ class DashboardNode(Node):
     def _on_yolo_fps(self, msg: Float32):
         """@brief Callback for YOLO inference FPS updates."""
         self.state.update("yolo_fps", round(msg.data, 1))
+
+    def _on_esp_fps(self, msg: Float32):
+        """@brief Callback for ESP32 steering-frame rate updates."""
+        self.state.update("esp_fps", round(msg.data, 1))
 
     def _on_hud_image(self, msg: Image):
         """@brief Callback for HUD image. Converts to JPEG for WebSocket binary broadcast."""

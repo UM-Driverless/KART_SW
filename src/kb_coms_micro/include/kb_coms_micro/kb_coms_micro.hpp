@@ -4,6 +4,9 @@
 #include "kb_coms_serial_driver.hpp"
 #include "kb_interfaces/msg/frame.hpp"
 #include <rclcpp/rclcpp.hpp>
+#include <std_msgs/msg/float32.hpp>
+#include <atomic>
+#include <chrono>
 
 class KB_coms_micro : public rclcpp::Node {
 
@@ -13,6 +16,8 @@ class KB_coms_micro : public rclcpp::Node {
     ~KB_coms_micro();
 
     void kb_coms_OrinHeartbeat();
+
+    void kb_coms_PublishFps();
 
     enum  class message_type_t : uint8_t{
       // ==========================
@@ -57,6 +62,13 @@ class KB_coms_micro : public rclcpp::Node {
     std::unique_ptr<SerialDriver> serial_;
 
     rclcpp::TimerBase::SharedPtr timer_;
+    rclcpp::TimerBase::SharedPtr fps_timer_;
+
+    // ESP→Orin steering frame counter, sampled by fps_timer_ once per second.
+    std::atomic<uint32_t> steering_frame_count_{0};
+    std::chrono::steady_clock::time_point fps_last_sample_;
+
+    rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr esp_fps_pub_;
 
     // Declaration of all publishers
     rclcpp::Publisher<kb_interfaces::msg::Frame>::SharedPtr esp_heart_pub_;
