@@ -37,4 +37,4 @@ acceleration, and send actuator targets over USB to an ESP32.
 - YOLO model and weights versioned outside this repo or via artifacts.
 
 ## References
-- Kart Docs: https://um-driverless.github.io/kart_docs/
+- Kart Docs: https://um-driverless.github.io/kart-docs/

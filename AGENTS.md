@@ -48,7 +48,7 @@
 
 ## Branch Workflow (READ THIS)
 
-**All day-to-day work happens on `dev`.** `main` is a protected release branch — it only receives merges from `dev` (or feature branches) *after* the change has been physically validated on the kart. This applies to every UM-Driverless repo (`kart-brain`, `kart-medulla`, `kart_docs`, etc.).
+**All day-to-day work happens on `dev`.** `main` is a protected release branch — it only receives merges from `dev` (or feature branches) *after* the change has been physically validated on the kart. This applies to every UM-Driverless repo (`kart-brain`, `kart-medulla`, `kart-docs`, etc.).
 
 - **Default working branch on the Mac, the Orin, and the VM is `dev`.** Every `git checkout` / `git pull` you do should be on `dev` unless you have a specific reason (e.g. inspecting `main`).
 - **Commit and push to `dev` first**, every time. Never push directly to `main`, even for "trivial" changes — `main`'s protection will reject you anyway, and a rejected push after a merge/cherry-pick creates annoying recovery work.
@@ -113,7 +113,7 @@ Used everywhere — YOLO class names, Detection messages, visualization:
 - **Document every decision.** When a version is chosen, a workaround is found, or an approach is selected over alternatives, write it down in the relevant `.agents/` file with the date and reasoning.
 - **Document every error.** When something breaks or doesn't work as expected, add it to `.agents/error-log.md` with what happened and the prevention rule.
 - **Document every version.** Software versions, SDK versions, wheel sources, compatibility notes — all go in `.agents/orin-environment.md` or the relevant environment file.
-- **Official docs live in kart_docs.** The `.agents/` directory is for AI agent workflow. Official project documentation goes to https://github.com/UM-Driverless/kart_docs.
+- **Official docs live in kart-docs.** The `.agents/` directory is for AI agent workflow. Official project documentation goes to https://github.com/UM-Driverless/kart-docs.
 
 ## Task Management
 - **`TODO.md`** — Human-curated roadmap. High-level goals and priorities. Agents read this for context but do **NOT edit it** unless explicitly asked.
@@ -146,7 +146,7 @@ When the user says "work on tasks" (or similar), launch subagents to execute tas
 
 ## Documentation
 The official documentation for the kart project lives in a separate repo:
-- **Repo:** https://github.com/UM-Driverless/kart_docs
-- **Site:** https://um-driverless.github.io/kart_docs/
+- **Repo:** https://github.com/UM-Driverless/kart-docs
+- **Site:** https://um-driverless.github.io/kart-docs/
 
 The `.agents/` directory in this repo is for AI agent workflow only — not official project docs.

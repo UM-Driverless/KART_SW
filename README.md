@@ -44,7 +44,7 @@ To make the LAN path reliable, give the Orin a **static DHCP reservation** on yo
 | **Gamepad** | USB/Bluetooth (deadman switch on R1) |
 | **Actuators** | Steering motor (H-bridge) + throttle (DAC) via ESP32 |
 
-See [kart_docs](https://um-driverless.github.io/kart_docs/assembly/) for full hardware documentation, wiring diagrams, and setup guides.
+See [kart-docs](https://um-driverless.github.io/kart-docs/assembly/) for full hardware documentation, wiring diagrams, and setup guides.
 
 ## Install (ROS 2 Humble)
 Assumes Ubuntu 22.04 with ROS 2 Humble already installed and sourced.
@@ -173,8 +173,8 @@ ros2 launch kart_sim simulation.launch.py controller:=geometric track:=autocross
 Current best: **Geometric controller** — 28 laps in 60s, loss 8.95 (`tools/sim2d/best_geometric.json`).
 
 ## References
-- Kart Docs: https://github.com/UM-Driverless/kart_docs
-- Kart Docs site: https://um-driverless.github.io/kart_docs/
+- Kart Docs: https://github.com/UM-Driverless/kart-docs
+- Kart Docs site: https://um-driverless.github.io/kart-docs/
 - ROS 2 installation: https://docs.ros.org/en/rolling/Installation.html
 - ROS 2 Humble docs: https://docs.ros.org/en/humble/
 

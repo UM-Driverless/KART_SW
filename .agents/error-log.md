@@ -133,10 +133,10 @@ Tracks mistakes made during development and the prevention mechanisms added. Eve
 - Rule: **All environment setup (ROS, workspace, Gazebo resource path) is in `.bashrc` on every machine.** Just run commands directly — never prepend source/export boilerplate.
 
 ## 2026-02-28 - Wrote to wrong file instead of asking where it goes
-**What happened:** User asked to add a FAQ entry to "kart_docs". Instead of recognizing this as the separate `~/repos/kart_docs/` repository (which has a `docs/faq.md`), I assumed the file didn't exist and wrote the content to `.agents/README.md` in `kart-brain` — the wrong repo entirely. I should have asked the user for the path or searched for the `kart_docs` repo.
+**What happened:** User asked to add a FAQ entry to "kart-docs". Instead of recognizing this as the separate `~/repos/kart-docs/` repository (which has a `docs/faq.md`), I assumed the file didn't exist and wrote the content to `.agents/README.md` in `kart-brain` — the wrong repo entirely. I should have asked the user for the path or searched for the `kart-docs` repo.
 **Prevention added:**
 - Rule: **If the user references a file or location you don't recognize, ASK — don't assume and write to a different location.** Writing to the wrong file is worse than asking a clarifying question.
-- Rule: **The `kart_docs` repo lives at `~/repos/kart_docs/`** and has its own `docs/faq.md`. It is a separate repo from `kart-brain`.
+- Rule: **The `kart-docs` repo lives at `~/repos/kart-docs/`** and has its own `docs/faq.md`. It is a separate repo from `kart-brain`.
 
 ## 2026-02-28 - Created files but didn't rebuild workspace before telling user to launch
 **What happened:** Created `hairpin_track.sdf` and updated `simulation.launch.py` on the Mac, then told the user the launch commands without rebuilding the workspace. The `install(DIRECTORY worlds/ ...)` in CMakeLists only copies files at build time, so the installed share directory still had the old files. User launched and got the old oval track.
@@ -219,7 +219,7 @@ echo "0" | sudo -S bash -c "echo 0 > /sys/bus/usb/devices/2-3.2/authorized && sl
 **Prevention added:**
 - Created `/etc/X11/xorg.conf.d/10-virtual-display.conf` with `Option "ConnectedMonitor" "DFP-0"` to force the driver to create a framebuffer on DisplayPort regardless of EDID detection
 - Also set `Option "AllowEmptyInitialConfiguration" "true"` and `Virtual 1920 1080`
-- Documented in kart_docs orin-setup.md
+- Documented in kart-docs orin-setup.md
 
 ## 2026-03-21 - Stale ROS processes halved YOLO FPS (18 Hz → 32+ Hz)
 **What happened:** After multiple restarts of the autonomous launch, `killall` didn't kill all child processes. Six stale instances of yolo_detector, steering_hud, cone_marker_viz_3d etc. accumulated, consuming GPU and CPU. YOLO ran at ~18 Hz instead of 32+ Hz. The issue was that `killall python3` sometimes fails to catch ROS launch children because `nohup` detaches them.
@@ -234,7 +234,7 @@ echo "0" | sudo -S bash -c "echo 0 > /sys/bus/usb/devices/2-3.2/authorized && sl
 **What happened:** YOLO engine was exported without `half=True`, producing an FP32 engine. Inference ran at ~34 Hz instead of ~75 Hz. The Orin's Ampere GPU has dedicated FP16 tensor cores that double throughput.
 **Prevention added:**
 - Rule: **Always export TensorRT engines with `half=True`** for FP16. Command: `m.export(format='engine', imgsz=320, half=True)`. Never omit `half=True`.
-- Updated kart_docs orin-setup.md with warning.
+- Updated kart-docs orin-setup.md with warning.
 
 ## 2026-03-21 - symlink-install doesn't reload running Python nodes
 **What happened:** Changed `state_machine_node.py` on disk (via scp), assumed the running node would pick it up because of `--symlink-install`. The node kept running the old code. Throttle stayed at 10% instead of 50%. Spent time debugging hardware when the issue was that the code change wasn't live.

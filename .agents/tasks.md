@@ -6,9 +6,9 @@ See `AGENTS.md` → Task Management for conventions.
 
 ## Ready
 
-- [ ] **Rename deployment folders to match new repo names** — On 2026-05-06 the GitHub repos `kart_brain` and `kart_medulla` were renamed to `kart-brain` and `kart-medulla`, and all in-repo path references on the Mac were updated to match. The deployment folders still use the old names and need to be renamed so scripts/configs work:
-    - **Orin:** `mv ~/kart_brain ~/kart-brain` and `mv ~/Desktop/kart_medulla ~/Desktop/kart-medulla`. Then update the systemd unit (`/etc/systemd/system/kart-brain.service` was edited in-repo to point at `~/kart-brain/install/setup.bash`; copy the new version with `sudo cp ~/kart-brain/tools/kart-brain.service /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl restart kart-brain`).
-    - **VM (`utm`):** `mv ~/kart_brain ~/kart-brain`.
+- [ ] **Rename deployment folders to match new repo names** — On 2026-05-06 the GitHub repos `kart-brain` and `kart-medulla` were renamed to `kart-brain` and `kart-medulla`, and all in-repo path references on the Mac were updated to match. The deployment folders still use the old names and need to be renamed so scripts/configs work:
+    - **Orin:** `mv ~/kart-brain ~/kart-brain` and `mv ~/Desktop/kart-medulla ~/Desktop/kart-medulla`. Then update the systemd unit (`/etc/systemd/system/kart-brain.service` was edited in-repo to point at `~/kart-brain/install/setup.bash`; copy the new version with `sudo cp ~/kart-brain/tools/kart-brain.service /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl restart kart-brain`).
+    - **VM (`utm`):** `mv ~/kart-brain ~/kart-brain`.
     - After renaming, `cd ~/kart-brain && git remote -v` should still show the new GitHub URL via redirect; optionally `git remote set-url origin <new-url>` for cleanliness.
     - Verify: `~/kart-brain/run_live.sh` works on Orin; `colcon build` works on VM; `pio run --target upload` works in `~/Desktop/kart-medulla`.
 

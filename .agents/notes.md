@@ -95,7 +95,7 @@ Exact part number for the next-revision Kart Medulla PCB: **ESP32-S3-WROOM-1-N8R
 
 **Valid upgrade path if flash fills up: ESP32-S3-WROOM-1-N16R2** (16 MB flash, 2 MB quad PSRAM — zero GPIO cost, zero pinout change). **Never N16R8.**
 
-Decision recorded in `kart_docs/history.md` (2026-04-23), `kart_docs/docs/assembly/electronics/bom.yaml`, and `kart_docs/docs/assembly/electronics/kart-medulla/index.md`.
+Decision recorded in `kart-docs/history.md` (2026-04-23), `kart-docs/docs/assembly/electronics/bom.yaml`, and `kart-docs/docs/assembly/electronics/kart-medulla/index.md`.
 
 ## ESP32 ↔ Orin Serial Protocol
 
