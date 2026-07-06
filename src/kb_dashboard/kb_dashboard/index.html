@@ -2278,6 +2278,8 @@ body{
   display:flex; align-items:center; justify-content:center; color:var(--rc-label); cursor:pointer; flex:none;
   clip-path:polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px)); }
 .rc-fs:active{ background:var(--rc-red-dark); color:var(--rc-white); }
+.rc-fs.rc-fs-top{ width:38px; height:38px; margin-right:4px; }
+.rc-fs.rc-fs-top svg{ width:19px; height:19px; }
 `,
   render() { return `
 <div class="race-rotate">
@@ -2394,7 +2396,10 @@ body{
 
   init() {
     // brand block in the global topbar: logo + name + sub-line (from the mockup)
-    $('topbarTitle').innerHTML = `<img class="rc-blogo" src="${RC_LOGO}" alt="">` +
+    $('topbarTitle').innerHTML =
+      `<button class="rc-fs rc-fs-top" id="rcFsBtnTop" title="Fullscreen">` +
+      `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg></button>` +
+      `<img class="rc-blogo" src="${RC_LOGO}" alt="">` +
       `<span class="rc-bname">Ü MOTORSPORT<span class="rc-bsub">Formula Student · DV</span></span>`;
     // gauge ticks + redlines (geometry from the mockup)
     const cx = 100, cy = 108;
@@ -2444,7 +2449,7 @@ body{
     }, { passive: true });
     go(0);
     // fullscreen + landscape lock
-    $('rcFsBtn').addEventListener('click', () => {
+    const rcToggleFs = () => {
       const el = document.documentElement;
       if (!document.fullscreenElement) {
         (el.requestFullscreen && el.requestFullscreen()) || (el.webkitRequestFullscreen && el.webkitRequestFullscreen());
@@ -2452,7 +2457,9 @@ body{
       } else {
         document.exitFullscreen && document.exitFullscreen();
       }
-    });
+    };
+    $('rcFsBtn').addEventListener('click', rcToggleFs);
+    $('rcFsBtnTop').addEventListener('click', rcToggleFs);
     $('misGrid').addEventListener('click', missionClick);
     // relocate the global HUD stream + remote-control joystick into this skin's
     // pages (keeps their listeners/stream alive); restored on skin switch
