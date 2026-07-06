@@ -1,8 +1,9 @@
 <!-- read in full — kept under 150 lines -->
-# Agent Task Board
+# Task Board
 
-Actionable work items for AI agents. Derived from `TODO.md` (human roadmap).
-See `AGENTS.md` → Task Management for conventions.
+Actionable work items (agents and humans). Derived from `TODO.md` (human roadmap).
+See `AGENTS.md` → Task Management for conventions. This repo uses root `tasks.md`
+as the single task board — do NOT create `.agents/tasks.md`.
 
 ## Ready
 

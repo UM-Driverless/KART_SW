@@ -8,7 +8,7 @@
 
 **Read in full** before working (keep concise, < 150 lines):
 - **`README.md`** — System overview and file relationships.
-- **`tasks.md`** — Current work items and status.
+- **`tasks.md`** (repo ROOT, not .agents/) — Current work items and status.
 
 **Consult selectively** (search/grep — these grow over time):
 - **`error-log.md`** — Append-only log of past mistakes and preventions.
@@ -42,7 +42,7 @@
 - **Full details:** `.agents/vm-environment.md`
 
 ## Working Style
-- **Add discovered work to `.agents/tasks.md` immediately, without asking.** Any gap noticed mid-session — missing feature, pending validation, half-done rename, stale doc — becomes a task entry the same turn it's discovered. The board is the memory, not the conversation.
+- **Add discovered work to `tasks.md` (repo root) immediately, without asking.** Any gap noticed mid-session — missing feature, pending validation, half-done rename, stale doc — becomes a task entry the same turn it's discovered. The board is the memory, not the conversation.
 - **Use subagents for parallel work.** When tasks are independent (e.g., reading multiple files, searching codebase, running builds while editing), use the Agent tool to delegate to subagents. This keeps the main context clean and speeds up work.
 - **Use background tasks for long-running ops.** Builds (~30s–100s), flashing, serial reads, SSH commands — run these in the background and check results later.
 - **Don't block on things you can parallelize.** If you need to edit 3 files and deploy, edit them all, then deploy. If you need info from 2 different places, query both at once.
@@ -118,15 +118,15 @@ Used everywhere — YOLO class names, Detection messages, visualization:
 
 ## Task Management
 - **`TODO.md`** — Human-curated roadmap. High-level goals and priorities. Agents read this for context but do **NOT edit it** unless explicitly asked.
-- **`.agents/tasks.md`** — Agent task board. Concrete, actionable work items derived from TODO.md.
-- When starting work, check `.agents/tasks.md` first. If empty or stale, derive tasks from `TODO.md`.
+- **`tasks.md`** (repo root) — The task board. Concrete, actionable work items derived from TODO.md. There is intentionally NO `.agents/tasks.md` in this repo — never create one.
+- When starting work, check `tasks.md` first. If empty or stale, derive tasks from `TODO.md`.
 - Status markers: `- [ ]` ready, `- [→]` in progress, `- [⏸]` blocked (with reason), `- [x]` done (with date).
 
 ### Subagent Task Protocol
-When the user says "work on tasks" (or similar), launch subagents to execute tasks from `.agents/tasks.md`:
+When the user says "work on tasks" (or similar), launch subagents to execute tasks from `tasks.md`:
 
 1. **Pick** the first `- [ ]` (Ready) task. Each subagent picks a different task.
-2. **Claim** it: edit `.agents/tasks.md`, move it to In Progress (`- [→]`).
+2. **Claim** it: edit `tasks.md`, move it to In Progress (`- [→]`).
 3. **Do the work.** Read relevant `.agents/` docs first. Follow all project conventions.
 4. **If blocked** (needs user input, hardware access, unclear requirements): move to Blocked (`- [⏸] ... — reason: <specific question>`), then stop and return the question.
 5. **If done**: commit the changes, move to Done (`- [x] ... (YYYY-MM-DD)`), then return a summary.

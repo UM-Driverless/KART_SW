@@ -69,13 +69,13 @@ The most likely cause is this gotcha. Rebuild the affected package, then restart
 
 ## Autonomous Agent Orchestrator (idea — 2026-03-14)
 
-Run a headless Claude Code loop that picks tasks from `.agents/tasks.md` autonomously:
+Run a headless Claude Code loop that picks tasks from `tasks.md` (repo root) autonomously:
 
 ```bash
 # orchestrator.sh — run in tmux on Mac
 while true; do
   claude -p "
-    Read .agents/tasks.md. Pick the first Ready task.
+    Read tasks.md (repo root). Pick the first Ready task.
     Move it to In Progress. Do the work. Move to Done or Blocked.
     Commit if you made code changes.
   " --allowedTools Edit,Read,Write,Bash,Grep,Glob
