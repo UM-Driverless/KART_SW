@@ -2183,8 +2183,8 @@ function rcDrawClock(canvas) {
   ctx.fillStyle = '#141416'; ctx.fill();
   ctx.strokeStyle = '#e2001a'; ctx.lineWidth = 2; ctx.stroke();
 }
-const RC_DIAL_SPEED = { min: 0, max: 40, major: 10, minor: 5, numbers: true, label: 'km/h',
-  arcs: [{ from: 32, to: 40, color: '#5c0009' }] };
+const RC_DIAL_SPEED = { min: 0, max: 50, major: 10, minor: 5, numbers: true, label: 'km/h',
+  arcs: [{ from: 45, to: 50, color: '#5c0009' }] };
 const RC_DIAL_YOLO = { min: 0, max: 100, major: 20, minor: 10, label: 'YOLO', fmt: v => v.toFixed(0) + ' Hz',
   arcs: [{ from: 0, to: 15, color: '#5c0009' }, { from: 15, to: 30, color: '#7a5510' }, { from: 30, to: 100, color: '#1e5c37' }] };
 const RC_DIAL_ESP = { min: 0, max: 120, major: 30, minor: 15, label: 'ESP32', fmt: v => v.toFixed(0) + ' Hz',
