@@ -37,6 +37,22 @@ ssh orin-remote   # WAN — Cloudflare Tunnel (orin.rubenayla.xyz). Works from a
 | 50 | iPhone de JBA | iPhone de JBA | — | Jorge's phone hotspot. |
 | 10 | Robots_urjc | Robots_urjc | — | Lab WiFi. |
 
+## USB tethering (iPhone → Orin) — verified working 2026-07-05
+Plugging Ruben's iPhone into the Orin over USB (with Personal Hotspot on) creates an ethernet interface `enxfe9ca7a9ecdb` (name derives from the phone's MAC, so it can change if the phone presents a different MAC). NetworkManager auto-activates it as `Wired connection 2`, DHCP on the hotspot subnet 172.20.10.0/28: the iPhone is the router at 172.20.10.1, the Orin gets 172.20.10.2. Its default route has **metric 100, which beats Wi-Fi's 600** — so when tethered, all internet traffic (including the Cloudflare tunnel / `orin-remote` SSH) goes over USB automatically, no config needed. Verified by sudo-disconnecting Wi-Fi entirely: ping, DNS, and curl all worked over USB alone, and the remote SSH session survived.
+
+**The USB link is a two-way IP network, not just an internet pipe.** While the iPhone provides internet, it can simultaneously reach the Orin directly at its link IP — dashboard from Safari on the tethering phone: `http://172.20.10.2:9090`. Routing verified from the Orin side (Orin ↔ 172.20.10.1 pings over the USB interface); the Safari-on-phone check itself is still pending.
+
+Gotcha: `nmcli device disconnect/connect` over SSH fails with "not authorized" (polkit) — needs sudo.
+
+### Planned network architecture (decided 2026-07-05, not yet implemented)
+Goal: dashboard must work even when the phone has no internet. Design:
+- **Orin Wi-Fi (`wlP1p1s0`) becomes its own access point** (`nmcli device wifi hotspot ifname wlP1p1s0 ssid kart password <pwd>`, set autoconnect). Dashboard for everyone who joins: `http://10.42.0.1:9090` (NM hotspot default IP). Zero internet needed.
+- **Ruben's iPhone: USB cable only, no Wi-Fi role.** Provides cellular internet to the Orin and browses the dashboard at `172.20.10.2:9090` over the same cable. (iPhones can't be Wi-Fi client + Wi-Fi hotspot at once — single radio — but that's irrelevant here since the phone doesn't need Wi-Fi.)
+- Other phones join the kart AP; NM `shared` mode NATs the Orin's USB internet to them by default, so they even get internet when the tether is plugged in.
+- Consequence: Orin no longer joins lab/phone Wi-Fi → `orin-local` means "join the kart AP, ssh 10.42.0.1". `orin-remote` works whenever the USB tether is up.
+
+To verify before calling it done: (1) `iw list` shows AP mode support on the Wi-Fi card; (2) dashboard binds `0.0.0.0:9090`, not localhost (Cloudflare tunnel only needs localhost, so this could be hiding); (3) Safari on the tethering iPhone reaches `172.20.10.2:9090`.
+
 For non-interactive sudo:
 ```bash
 ssh orin-local 'echo "0" | sudo -S <command>'
