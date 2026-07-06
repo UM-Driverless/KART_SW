@@ -2187,8 +2187,6 @@ const RC_DIAL_SPEED = { min: 0, max: 50, major: 10, minor: 5, numbers: true, lab
   arcs: [{ from: 45, to: 50, color: '#5c0009' }] };
 const RC_DIAL_YOLO = { min: 0, max: 100, major: 20, minor: 10, label: 'YOLO', fmt: v => v.toFixed(0) + ' Hz',
   arcs: [{ from: 0, to: 15, color: '#5c0009' }, { from: 15, to: 30, color: '#7a5510' }, { from: 30, to: 100, color: '#1e5c37' }] };
-const RC_DIAL_ESP = { min: 0, max: 120, major: 30, minor: 15, label: 'ESP32', fmt: v => v.toFixed(0) + ' Hz',
-  arcs: [{ from: 0, to: 30, color: '#5c0009' }, { from: 30, to: 80, color: '#7a5510' }, { from: 80, to: 120, color: '#1e5c37' }] };
 const RC_DIAL_HEAP = { min: 0, max: 300, major: 100, minor: 25, label: 'HEAP', fmt: v => v.toFixed(0) + ' kB',
   arcs: [{ from: 0, to: 50, color: '#5c0009' }, { from: 50, to: 100, color: '#7a5510' }, { from: 100, to: 300, color: '#1e5c37' }] };
 
@@ -2306,25 +2304,13 @@ body{
 .rc-mini{ display:flex; align-items:center; justify-content:center; padding:5px; min-height:0; }
 .rc-mini canvas{ max-height:94%; max-width:94%; width:auto; height:auto; }
 
-/* ---- page 2: CONTROL ---- */
-.rc-control{ display:grid; grid-template-columns:1fr 1.5fr; gap:8px; height:100%; }
-.rc-cpanel{ padding:10px 12px; display:flex; flex-direction:column; gap:6px; min-height:0; }
-.rc-cpanel .body{ flex:1; min-height:0; display:flex; align-items:center; justify-content:center; gap:22px; }
 #ggCanvas{ background:#0a0a0c; border:1px solid var(--rc-line); border-radius:50%; }
-#ctrlPad{ background:#0a0a0c; border:1px solid var(--rc-line); max-height:100%; }
-.rc-gvals{ display:flex; flex-direction:column; gap:10px; }
-.rc-gvals .lbl{ font-size:9px; color:var(--rc-label-dim); letter-spacing:.16em; text-transform:uppercase; font-weight:700; }
-.rc-gvals .v{ font-size:17px; }
-.ctrl-nums{ display:flex; flex-direction:column; gap:7px; font-variant-numeric:tabular-nums; }
-.ctrl-nr{ display:grid; grid-template-columns:1fr 1fr 0.9fr 1.15fr; gap:10px; align-items:baseline; }
-.ctrl-nr > span{ text-align:left; font-family:'Rajdhani',sans-serif; font-weight:700; }
-.ctrl-nr > span:nth-child(1){ color:#f39c12; font-size:15px; }
-.ctrl-nr > span:nth-child(2){ color:#4a9eff; font-size:15px; }
-.ctrl-nr > span:nth-child(3){ color:var(--rc-label); font-size:12px; }
-.ctrl-nr > span:nth-child(4){ color:var(--rc-label-dim); font-size:9px; text-transform:uppercase; letter-spacing:.12em; }
-.ctrl-nr-hdr > span{ color:var(--rc-label-dim) !important; font-size:8px !important; text-transform:uppercase; letter-spacing:.16em; }
+.rc-mini{ position:relative; }
+.rc-mini-lbl{ position:absolute; top:6px; left:10px; font-size:9px; letter-spacing:.18em;
+  color:var(--rc-label-dim); text-transform:uppercase; font-weight:700; }
+.rc-pwm{ font-size:9px; color:var(--rc-label-dim); letter-spacing:.14em; margin-top:5px; font-weight:700; text-transform:uppercase; }
 
-/* ---- page 3: MISSION ---- */
+/* ---- page 2: MISSION ---- */
 .rc-mission{ display:grid; grid-template-columns:1.15fr 1fr 1fr; gap:8px; height:100%; }
 .rc-mpanel{ padding:10px 12px; display:flex; flex-direction:column; gap:8px; min-height:0; overflow-y:auto; }
 .mis-grid{ display:grid; grid-template-columns:1fr 1fr; gap:5px; flex:1; }
@@ -2385,7 +2371,8 @@ body{
   border-top:1px solid var(--rc-line); background:var(--rc-panel); }
 .rc-pedal{ display:flex; align-items:center; gap:7px; flex:1; max-width:185px; }
 .rc-pedal .lbl{ font-size:9px; color:var(--rc-label); letter-spacing:.14em; text-transform:uppercase; font-weight:700; }
-.rc-pedal .track{ flex:1; height:7px; background:var(--rc-raised); overflow:hidden; border:1px solid var(--rc-line); }
+.rc-pedal .track{ flex:1; height:7px; background:var(--rc-raised); overflow:hidden; border:1px solid var(--rc-line); position:relative; }
+.rc-pedal .track .tgt{ position:absolute; top:0; bottom:0; width:2px; left:0; background:var(--rc-amber); box-shadow:0 0 4px var(--rc-amber); }
 .rc-pedal .track .fill{ height:100%; width:0%; transition:width .12s linear; }
 .rc-pedal .fill.thr{ background:var(--rc-green); }
 .rc-pedal .fill.brk{ background:var(--rc-red); }
@@ -2445,6 +2432,7 @@ body{
           <div class="rc-angle"><span class="num" id="rcAngleVal">0</span><span class="unit">° <span id="rcAngleDir">CENTER</span></span></div>
           <div class="rc-dirbar"><div class="mid"></div><div class="fill" id="rcDirFill"></div></div>
           <div class="rc-lr"><span>L 90°</span><span>R 90°</span></div>
+          <div class="rc-pwm">PWM <span id="rcPwmVal">0</span>%</div>
         </div>
         <div class="rc-panel rc-speeddial">
           <div class="rc-corner"></div><div class="rc-rivet tl"></div><div class="rc-rivet bl"></div>
@@ -2456,38 +2444,9 @@ body{
         </div>
         <div class="rc-minis">
           <div class="rc-panel rc-mini"><canvas id="rcDialYolo" width="150" height="150"></canvas></div>
-          <div class="rc-panel rc-mini"><canvas id="rcDialEsp" width="150" height="150"></canvas></div>
+          <div class="rc-panel rc-mini"><span class="rc-mini-lbl">G</span><canvas id="ggCanvas" width="140" height="140"></canvas></div>
           <div class="rc-panel rc-mini"><canvas id="rcDialHeap" width="150" height="150"></canvas></div>
           <div class="rc-panel rc-mini"><canvas id="rcClock" width="150" height="150"></canvas></div>
-        </div>
-      </div>
-
-      <div class="race-page rc-control">
-        <div class="rc-panel rc-cpanel">
-          <div class="rc-corner"></div><div class="rc-rivet tl"></div><div class="rc-rivet bl"></div>
-          <span class="rc-label">G-Force</span>
-          <div class="body">
-            <canvas id="ggCanvas" width="140" height="140"></canvas>
-            <div class="rc-gvals">
-              <div><div class="lbl">Lateral</div><div class="v num" id="rcGLat">0.00 g</div></div>
-              <div><div class="lbl">Longitudinal</div><div class="v num" id="rcGLon">0.00 g</div></div>
-              <div><div class="lbl">Total</div><div class="v num" id="rcGTot">0.00 g</div></div>
-            </div>
-          </div>
-        </div>
-        <div class="rc-panel rc-cpanel">
-          <div class="rc-corner"></div><div class="rc-rivet tl"></div><div class="rc-rivet bl"></div>
-          <span class="rc-label">Target vs Actual</span>
-          <div class="body">
-            <canvas id="ctrlPad" width="220" height="220"></canvas>
-            <div class="ctrl-nums">
-              <div class="ctrl-nr ctrl-nr-hdr"><span>TGT</span><span>ACT</span><span>Δ</span><span></span></div>
-              <div class="ctrl-nr"><span id="cnTgtSt">0°</span><span id="cnActSt">0°</span><span id="cnDSt">0°</span><span>Steer</span></div>
-              <div class="ctrl-nr"><span id="cnTgtTh">0%</span><span id="cnActTh">0%</span><span id="cnDTh">0%</span><span>Throttle</span></div>
-              <div class="ctrl-nr"><span id="cnTgtBr">0%</span><span id="cnActBr">0%</span><span id="cnDBr">0%</span><span>Brake</span></div>
-              <div class="ctrl-nr"><span>&mdash;</span><span id="cnPwm">0%</span><span>&mdash;</span><span>Str PWM</span></div>
-            </div>
-          </div>
         </div>
       </div>
 
@@ -2540,10 +2499,10 @@ body{
     </div>
   </div>
   <div class="race-bottombar">
-    <div class="rc-pedal"><span class="lbl">Accel</span><div class="track"><div class="fill thr" id="thrFill"></div></div><span class="pv" id="vThr">0%</span></div>
-    <div class="rc-pedal"><span class="lbl">Brake</span><div class="track"><div class="fill brk" id="brkFill"></div></div><span class="pv" id="vBrk">0%</span></div>
+    <div class="rc-pedal"><span class="lbl">Accel</span><div class="track"><div class="fill thr" id="thrFill"></div><div class="tgt" id="thrTgt"></div></div><span class="pv" id="vThr">0%</span></div>
+    <div class="rc-pedal"><span class="lbl">Brake</span><div class="track"><div class="fill brk" id="brkFill"></div><div class="tgt" id="brkTgt"></div></div><span class="pv" id="vBrk">0%</span></div>
     <div class="race-tabs">
-      <button class="race-tab on">Telemetry</button><button class="race-tab">Control</button><button class="race-tab">Mission</button><button class="race-tab">Vision</button><button class="race-tab">System</button>
+      <button class="race-tab on">Telemetry</button><button class="race-tab">Mission</button><button class="race-tab">Vision</button><button class="race-tab">System</button>
     </div>
   </div>
 </div>`; },
@@ -2589,7 +2548,7 @@ body{
     let page = 0;
     const track = $('rcTrack');
     const go = i => {
-      page = Math.max(0, Math.min(4, i));
+      page = Math.max(0, Math.min(3, i));
       track.style.transform = `translateX(${-page * 100}%)`;
       document.querySelectorAll('.race-tab').forEach((t, j) => t.classList.toggle('on', j === page));
     };
@@ -2627,10 +2586,8 @@ body{
     $('rcJoySlot').appendChild(joy);
     drawCenital($('rcCenital'), []);
     drawGG(0, 0, '#2c2c2f', '#84848a40', '#e2001a', 8);
-    drawControlPad(0, 0, 0, 0, 0.5);
     rcDrawDial($('rcSpeedDial'), RC_DIAL_SPEED, 0);
     rcDrawDial($('rcDialYolo'), RC_DIAL_YOLO, 0);
-    rcDrawDial($('rcDialEsp'), RC_DIAL_ESP, 0);
     rcDrawDial($('rcDialHeap'), RC_DIAL_HEAP, 0);
     rcDrawClock($('rcClock'));
     const rcClockId = setInterval(() => rcDrawClock($('rcClock')), 1000);
@@ -2664,16 +2621,16 @@ body{
     if (aPct >= 0) { af.style.left = '50%'; af.style.width = aPct + '%'; af.style.background = 'var(--rc-green)'; }
     else { af.style.left = (50 + aPct) + '%'; af.style.width = (-aPct) + '%'; af.style.background = 'var(--rc-red)'; }
     $('rcAccelCaption').textContent = `LON ${lonG.toFixed(2)} g · LAT ${latG.toFixed(2)} g`;
-    // CONTROL page — shared legacy helpers, race colors for the G-G dot
+    // targets ride the same instruments: amber needle on the steering gauge
+    // (above), amber ticks on the pedal bars, PWM readout under the gauge
+    $('rcPwmVal').textContent = Math.round(Math.abs(d.esp32_steering_pwm || 0) * 100);
+    $('thrTgt').style.left = Math.round((d.orin_cmd_throttle || 0) * 100) + '%';
+    $('brkTgt').style.left = Math.round((d.orin_cmd_brake || 0) * 100) + '%';
+    // G-G mini dial in the telemetry cluster
     drawGG(latG, lonG, '#2c2c2f', '#84848a40', '#e2001a', 8);
-    $('rcGLat').textContent = latG.toFixed(2) + ' g';
-    $('rcGLon').textContent = lonG.toFixed(2) + ' g';
-    $('rcGTot').textContent = Math.sqrt(latG*latG + lonG*lonG).toFixed(2) + ' g';
-    updateControlPanel(d);
     // mini instrument dials
     const yolo = d.yolo_fps || 0, esp = d.esp_fps || 0, heap = d.health_heap_kb || 0;
     rcDrawDial($('rcDialYolo'), RC_DIAL_YOLO, yolo);
-    rcDrawDial($('rcDialEsp'), RC_DIAL_ESP, esp);
     rcDrawDial($('rcDialHeap'), RC_DIAL_HEAP, heap);
     // SYSTEM page
     const sys = (id, txt, cls) => { const el = $(id); el.textContent = txt; el.className = 'val num rc-sysval ' + cls; };
@@ -2695,7 +2652,7 @@ body{
     // any unhealthy item → the System tab pulses red
     const sysBad = !d.health_magnet_ok || !d.health_i2c_ok || !d.health_heap_ok || !agcOk ||
       !d.esp32_heartbeat || yolo < 15 || esp < 30 || (stkMin !== null && stkMin < 200);
-    const sysTab = document.querySelectorAll('.race-tab')[4];
+    const sysTab = document.querySelectorAll('.race-tab')[3];
     if (sysTab) sysTab.classList.toggle('bad', sysBad);
     const st = $('rcSysState');
     st.textContent = (d.as_state || d.state || '--').toUpperCase();

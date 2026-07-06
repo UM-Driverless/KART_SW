@@ -174,3 +174,15 @@ The Orin's Wi-Fi (`wlP1p1s0`, RTL8822CE) now runs as its own access point instea
 - Expect double NAT and cellular speeds for AP clients' internet — fine for the dashboard and browsing.
 
 Rollback if ever needed: `sudo nmcli connection down kart-ap` and `sudo nmcli connection up "<old wifi>"`. Full details in `.agents/orin-environment.md`.
+
+---
+
+## 2026-07-06 — Race skin: cockpit dials, targets on the instruments, Control page removed
+
+Series of UI decisions from today's experimentation session (all local, `?demo=1` simulated telemetry; Orin off — deploy pending):
+
+- **Telemetry page became an aircraft-style instrument cluster**: speed is a round 270° dial (0–50 km/h after the user corrected the kart's ~45 top speed; redline from 45) with a small digital readout kept below it; the old YOLO/ESP/heap bar-cards became mini round gauges with green/amber/red range arcs; an analog clock fills the fourth cell (experimental — swap for a lap timer if it earns nothing). New reusable canvas painter `rcDrawDial`. **Dials must never get a percentage `height`** — only max-width/max-height, or they squash into ellipses on odd-shaped screens (bug found on a 704×562 window).
+- **Targets ride the same instruments instead of a separate panel**: the steering gauge already had the amber command needle; the pedal bars got amber target ticks (`orin_cmd_throttle/brake`); steering PID PWM is a small readout under the gauge. With that, the "Target vs Actual" XY pad + TGT/ACT/Δ table was redundant and was deleted.
+- **Control page removed entirely** (back to 4 pages): its G-G diagram moved into the telemetry mini-cluster, replacing the ESP32-link dial — rationale (user): ESP32 link rate should be high and boring, it's health data, not telemetry; it stays on the System page only.
+- **Health consolidated into a self-alarming System tab**: every legacy health-bar field is a System-page card with its explanation printed on it (AGC folded into the magnet card; new Stack card — shows `--` until the firmware sends per-task stack minima, task filed in `tasks.md`). The System tab pulses red when anything is unhealthy; the four MAG/I2C/HEAP/HB bottom-bar dots were removed.
+- **`?demo=1` mode added**: simulated random-walk telemetry (speed, steering, pedals, drifting cones) so UI work needs no kart. This is the standing way to iterate on the dashboard from home.
