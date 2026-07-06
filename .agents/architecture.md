@@ -4,7 +4,7 @@
 ## Workspace Structure
 
 ```
-~/kart_brain/                          (colcon ROS 2 workspace)
+~/kart-brain/                          (colcon ROS 2 workspace)
 ├── AGENTS.md                       ← Agent entry point
 ├── .agents/                        ← This directory
 ├── src/
@@ -145,7 +145,7 @@ cmd_vel_bridge_node.py (100 Hz)
 KB_Coms_micro (C++ serial bridge)
   → UART0 (USB /dev/ttyUSB0) → ESP32
 
-ESP32 (kart_medulla firmware)
+ESP32 (kart-medulla firmware)
   → steering motor (H-bridge), throttle DAC, brake DAC
   → AS5600 angle sensor (I2C) → steering feedback
   → publishes: /esp32/heartbeat, /esp32/steering, etc.

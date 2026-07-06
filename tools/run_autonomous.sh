@@ -6,7 +6,7 @@ export LD_LIBRARY_PATH="/usr/local/cuda-12.6/targets/aarch64-linux/lib:${NVIDIA_
 export DISPLAY=:1
 export XAUTHORITY=/run/user/1000/gdm/Xauthority
 export PATH=/usr/local/cuda-12.6/bin:$PATH
-cd ~/kart_brain
+cd ~/kart-brain
 source /opt/ros/humble/setup.bash
 source install/setup.bash
 

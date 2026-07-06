@@ -150,7 +150,7 @@ def _launch_setup(context):
 
     # --- 3b. YOLO perception pipeline (when use_yolo=true) ---
     weights_path = os.path.join(
-        os.path.expanduser("~"), "kart_brain", "models", "perception", "yolo",
+        os.path.expanduser("~"), "kart-brain", "models", "perception", "yolo",
         "ruben_yolov11n_2026_03.pt",
     )
     try:

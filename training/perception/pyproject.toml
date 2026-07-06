@@ -1,7 +1,7 @@
 [project]
 name = "kart-brain-training"
 version = "0.1.0"
-description = "YOLOv11 cone detection training for kart_brain"
+description = "YOLOv11 cone detection training for kart-brain"
 requires-python = ">=3.10"
 dependencies = [
   "ultralytics>=8.4",

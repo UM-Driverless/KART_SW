@@ -350,7 +350,7 @@ async def run_websocket_server(
                 node.publish_steer_mode(1 if mode == "pwm" else 0)
         elif action == "list_svo":
             import glob as _glob
-            svo_dir = Path.home() / "kart_brain" / "data" / "svo"
+            svo_dir = Path.home() / "kart-brain" / "data" / "svo"
             files = sorted(p.name for p in svo_dir.glob("*.svo")) if svo_dir.is_dir() else []
             resp = json.dumps({"svo_files": files}).encode()
             ws_send(writer, resp)
@@ -363,7 +363,7 @@ async def run_websocket_server(
                 except FileNotFoundError:
                     pass
             else:
-                svo_full = str(Path.home() / "kart_brain" / "data" / "svo" / svo_name)
+                svo_full = str(Path.home() / "kart-brain" / "data" / "svo" / svo_name)
                 svo_path_file.write_text(svo_full)
             state.update("svo_file", svo_name)
             node.get_logger().info(f"SVO set to: {svo_name} (restart to apply)")

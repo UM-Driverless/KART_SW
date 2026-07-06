@@ -1,4 +1,4 @@
-# ZED camera parameter overrides for kart_brain (YOLO perception path)
+# ZED camera parameter overrides for kart-brain (YOLO perception path)
 # Minimal config: RGB + depth only, everything else disabled to free GPU for YOLO
 # ZED 2 at VGA@100Hz for low-latency perception
 /**:

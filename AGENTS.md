@@ -29,14 +29,14 @@
 ### Jetson Orin (Real Hardware)
 - **Connection:** `ssh orin-local` (WiFi 10.7.20.142) or `ssh orin-remote` (Cloudflare Tunnel) or AnyDesk
 - **Dashboard:** `kart.rubenayla.xyz` (password: `0`, configurable via ROS param `password`)
-- **Workspace:** `~/kart_brain`
+- **Workspace:** `~/kart-brain` (renamed from `~/kart_brain` on 2026-07-06; `.bashrc` + systemd unit updated, workspace clean-rebuilt)
 - **Camera:** ZED 2 stereo (USB)
 - **sudo password:** `0`
 - **Full details:** `.agents/orin-environment.md`
 
 ### UTM VM (Simulation)
 - **Connection:** `ssh utm` (192.168.64.3, static IP)
-- **Workspace:** `~/kart_brain/`
+- **Workspace:** `~/kart-brain/`
 - **Simulator:** Gazebo Fortress (headless, CPU rendering)
 - **sudo password:** `0`
 - **Full details:** `.agents/vm-environment.md`
@@ -48,7 +48,7 @@
 
 ## Branch Workflow (READ THIS)
 
-**All day-to-day work happens on `dev`.** `main` is a protected release branch — it only receives merges from `dev` (or feature branches) *after* the change has been physically validated on the kart. This applies to every UM-Driverless repo (`kart_brain`, `kart_medulla`, `kart_docs`, etc.).
+**All day-to-day work happens on `dev`.** `main` is a protected release branch — it only receives merges from `dev` (or feature branches) *after* the change has been physically validated on the kart. This applies to every UM-Driverless repo (`kart-brain`, `kart-medulla`, `kart-docs`, etc.).
 
 - **Default working branch on the Mac, the Orin, and the VM is `dev`.** Every `git checkout` / `git pull` you do should be on `dev` unless you have a specific reason (e.g. inspecting `main`).
 - **Commit and push to `dev` first**, every time. Never push directly to `main`, even for "trivial" changes — `main`'s protection will reject you anyway, and a rejected push after a merge/cherry-pick creates annoying recovery work.
@@ -68,7 +68,7 @@ A change is NOT done until it's **validated on the target machine**:
 - **Don't trust auto-memory for technical state.** Auto-memory (`~/.claude/.../memory/`) goes stale fast — file paths, parameter values, launch files, firmware settings all change between conversations. **Always read the actual file or SSH to check** before quoting any value. Treat memory as "might have been true once" not "is true now". `.agents/` docs and the code itself are the source of truth.
 - **Environment is in `.bashrc`** — ROS, workspace, and `IGN_GAZEBO_RESOURCE_PATH` are all sourced in `.bashrc` on every machine. **Never tell the user to source or export these manually.**
 - **Always use `--symlink-install`** when building. This symlinks Python scripts and launch files so edits in `src/` take effect immediately without rebuilding. Only C++ changes need a rebuild.
-- **After creating/modifying files under `src/`, scp them to the VM and rebuild via SSH — don't just tell the user.** Use: `scp <files> utm:~/kart_brain/...` then `ssh utm "source /opt/ros/humble/setup.bash && cd ~/kart_brain && colcon build --symlink-install --packages-select <pkg>"`. Note: `.bashrc` is NOT sourced in non-interactive SSH — always source ROS explicitly.
+- **After creating/modifying files under `src/`, scp them to the VM and rebuild via SSH — don't just tell the user.** Use: `scp <files> utm:~/kart-brain/...` then `ssh utm "source /opt/ros/humble/setup.bash && cd ~/kart-brain && colcon build --symlink-install --packages-select <pkg>"`. Note: `.bashrc` is NOT sourced in non-interactive SSH — always source ROS explicitly.
 - **Gazebo Fortress uses `ign` CLI**, not `gz`. Message types are `ignition.msgs.*`, not `gz.msgs.*`.
 - **No `<cone>` geometry** in SDF — use `<cylinder>` instead (Fortress limitation).
 - **Odom is relative to spawn** — always account for the kart's initial world position.
@@ -80,13 +80,13 @@ A change is NOT done until it's **validated on the target machine**:
 ## Build & Run
 ```bash
 # Build everything (always use --symlink-install so Python/launch edits take effect without rebuilding)
-cd ~/kart_brain && colcon build --symlink-install
+cd ~/kart-brain && colcon build --symlink-install
 
 # Build single package
 colcon build --symlink-install --packages-select kart_perception
 
 # Live perception on Orin
-~/kart_brain/run_live.sh
+~/kart-brain/run_live.sh
 
 # Simulation in VM
 ros2 launch kart_sim simulation.launch.py
@@ -113,7 +113,7 @@ Used everywhere — YOLO class names, Detection messages, visualization:
 - **Document every decision.** When a version is chosen, a workaround is found, or an approach is selected over alternatives, write it down in the relevant `.agents/` file with the date and reasoning.
 - **Document every error.** When something breaks or doesn't work as expected, add it to `.agents/error-log.md` with what happened and the prevention rule.
 - **Document every version.** Software versions, SDK versions, wheel sources, compatibility notes — all go in `.agents/orin-environment.md` or the relevant environment file.
-- **Official docs live in kart_docs.** The `.agents/` directory is for AI agent workflow. Official project documentation goes to https://github.com/UM-Driverless/kart_docs.
+- **Official docs live in kart-docs.** The `.agents/` directory is for AI agent workflow. Official project documentation goes to https://github.com/UM-Driverless/kart-docs.
 
 ## Task Management
 - **`TODO.md`** — Human-curated roadmap. High-level goals and priorities. Agents read this for context but do **NOT edit it** unless explicitly asked.
@@ -135,7 +135,7 @@ When the user says "work on tasks" (or similar), launch subagents to execute tas
 ## Git Workflow
 - **`dev` is the working branch.** Push all changes to `dev` first, deploy and test on hardware.
 - **Merge to `main` only after confirming changes work.** Use `gh pr merge` to merge PRs when main is protected.
-- For repos with branch protection (like kart_medulla), create PRs with `gh pr create` and merge with `gh pr merge`.
+- For repos with branch protection (like kart-medulla), create PRs with `gh pr create` and merge with `gh pr merge`.
 
 ## Commit Protocol
 1. `git status` — check what will be committed
@@ -146,7 +146,7 @@ When the user says "work on tasks" (or similar), launch subagents to execute tas
 
 ## Documentation
 The official documentation for the kart project lives in a separate repo:
-- **Repo:** https://github.com/UM-Driverless/kart_docs
-- **Site:** https://um-driverless.github.io/kart_docs/
+- **Repo:** https://github.com/UM-Driverless/kart-docs
+- **Site:** https://um-driverless.github.io/kart-docs/
 
 The `.agents/` directory in this repo is for AI agent workflow only — not official project docs.

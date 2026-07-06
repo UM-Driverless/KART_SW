@@ -21,6 +21,7 @@ from rclpy.qos import QoSProfile, ReliabilityPolicy
 from kb_interfaces.msg import Frame
 from sensor_msgs.msg import Image, Imu
 from std_msgs.msg import Float32, String
+from vision_msgs.msg import Detection3DArray
 
 from geometry_msgs.msg import Twist
 
@@ -91,6 +92,26 @@ class DashboardNode(Node):
         self.create_subscription(
             Imu, "/zed/zed_node/imu/data", self._on_zed_imu, qos_best_effort
         )
+
+        # Pitch/roll-corrected cones from ground_plane_localizer_node — drives the
+        # top-down (cenital) view in the default skin.
+        self.create_subscription(
+            Detection3DArray,
+            "/perception/cones_3d_ground",
+            self._on_cones_3d_ground,
+            qos_reliable,
+        )
+        # Raw depth-localized cones from the YOLO pipeline. Fallback for the
+        # top-down view when ground_plane_localizer isn't running (it only
+        # exists in the ZED-OD validation launch) — same x=lateral, z=forward
+        # reading in the optical frame.
+        self.create_subscription(
+            Detection3DArray,
+            "/perception/cones_3d",
+            self._on_cones_3d_raw,
+            qos_reliable,
+        )
+        self._ground_seen_t = 0.0
 
         # Orin → ESP32 commands (to show what we're sending)
         self.create_subscription(
@@ -225,6 +246,37 @@ class DashboardNode(Node):
         self.state.update(
             "esp32_accel_lat", -msg.linear_acceleration.y
         )  # flip: y=left → positive=right
+
+    @staticmethod
+    def _det3d_to_cone_list(msg: Detection3DArray) -> list:
+        """@brief Flatten a Detection3DArray to [{"x": lateral_m, "z": forward_m,
+        "c": class_name}, ...] for the browser-side top-down renderer."""
+        cones = []
+        for det in msg.detections:
+            if not det.results:
+                continue
+            p = det.bbox.center.position
+            cones.append(
+                {
+                    "x": float(p.x),
+                    "z": float(p.z),
+                    "c": det.results[0].hypothesis.class_id,
+                }
+            )
+        return cones
+
+    def _on_cones_3d_ground(self, msg: Detection3DArray):
+        """@brief Callback for IMU-corrected cone detections. Feeds the cenital view."""
+        self._ground_seen_t = time.monotonic()
+        self.state.update("cones_3d_ground", self._det3d_to_cone_list(msg))
+
+    def _on_cones_3d_raw(self, msg: Detection3DArray):
+        """@brief Callback for raw depth-localized cones. Feeds the cenital view
+        only while the ground-corrected topic is silent (>1 s), so the corrected
+        data always wins when ground_plane_localizer is running."""
+        if time.monotonic() - self._ground_seen_t < 1.0:
+            return
+        self.state.update("cones_3d_ground", self._det3d_to_cone_list(msg))
 
     def _on_esp_health(self, msg: Frame):
         """@brief Callback for ESP32 health status frames. Updates magnet, I2C, heap fields."""

@@ -152,14 +152,14 @@ The script installs (in order):
 3. **ZED SDK 4.2** — for ZED 2 stereo camera (L4T 36.4 build, compatible with 36.5)
 4. **PyTorch 2.10** — from NVIDIA's Jetson AI Lab wheels (jp6/cu126)
 5. **Python deps** — numpy <2, ultralytics 8.4.14, etc.
-6. **kart_brain** — clone, build with colcon
+6. **kart-brain** — clone, build with colcon
 
 ### Verify
 ```bash
 nvcc --version                    # CUDA
 python3 -c "import torch; print(torch.cuda.is_available())"  # PyTorch GPU
 ros2 --help                       # ROS 2
-~/kart_brain/run_live.sh          # Live perception
+~/kart-brain/run_live.sh          # Live perception
 ```
 
 ## Post-Setup Checklist
@@ -169,10 +169,10 @@ ros2 --help                       # ROS 2
 - [ ] PyTorch sees GPU
 - [ ] ROS 2 Humble sourced in `.bashrc`
 - [ ] ZED camera detected (`ls /dev/video*`)
-- [ ] kart_brain built and perception pipeline runs
+- [ ] kart-brain built and perception pipeline runs
 - [ ] SSH key access from Mac (`ssh orin`)
 - [ ] AnyDesk working (needs DP dummy plug)
-- [ ] Deploy key for GitHub push (already added to kart_brain repo as "Jetson Orin")
+- [ ] Deploy key for GitHub push (already added to kart-brain repo as "Jetson Orin")
 
 ## Troubleshooting
 

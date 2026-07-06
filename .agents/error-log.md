@@ -133,16 +133,16 @@ Tracks mistakes made during development and the prevention mechanisms added. Eve
 - Rule: **All environment setup (ROS, workspace, Gazebo resource path) is in `.bashrc` on every machine.** Just run commands directly — never prepend source/export boilerplate.
 
 ## 2026-02-28 - Wrote to wrong file instead of asking where it goes
-**What happened:** User asked to add a FAQ entry to "kart_docs". Instead of recognizing this as the separate `~/repos/kart_docs/` repository (which has a `docs/faq.md`), I assumed the file didn't exist and wrote the content to `.agents/README.md` in `kart_brain` — the wrong repo entirely. I should have asked the user for the path or searched for the `kart_docs` repo.
+**What happened:** User asked to add a FAQ entry to "kart-docs". Instead of recognizing this as the separate `~/repos/kart-docs/` repository (which has a `docs/faq.md`), I assumed the file didn't exist and wrote the content to `.agents/README.md` in `kart-brain` — the wrong repo entirely. I should have asked the user for the path or searched for the `kart-docs` repo.
 **Prevention added:**
 - Rule: **If the user references a file or location you don't recognize, ASK — don't assume and write to a different location.** Writing to the wrong file is worse than asking a clarifying question.
-- Rule: **The `kart_docs` repo lives at `~/repos/kart_docs/`** and has its own `docs/faq.md`. It is a separate repo from `kart_brain`.
+- Rule: **The `kart-docs` repo lives at `~/repos/kart-docs/`** and has its own `docs/faq.md`. It is a separate repo from `kart-brain`.
 
 ## 2026-02-28 - Created files but didn't rebuild workspace before telling user to launch
 **What happened:** Created `hairpin_track.sdf` and updated `simulation.launch.py` on the Mac, then told the user the launch commands without rebuilding the workspace. The `install(DIRECTORY worlds/ ...)` in CMakeLists only copies files at build time, so the installed share directory still had the old files. User launched and got the old oval track.
 **Prevention added:**
 - Rule: **After creating or modifying any file under `src/`, scp the files to the VM and rebuild there.** Files in `src/` are not used directly — only the installed copies in `install/` are. Don't just tell the user — do it yourself via SSH.
-- Rule: **Development happens on Mac, but Gazebo runs on the VM.** Use `scp` to copy changed files, then `ssh utm "source /opt/ros/humble/setup.bash && cd ~/kart_brain && colcon build --packages-select <pkg>"` to rebuild. Note: `bash -lc` does NOT source `.bashrc` on the VM (non-interactive guard), so always source ROS explicitly in SSH commands.
+- Rule: **Development happens on Mac, but Gazebo runs on the VM.** Use `scp` to copy changed files, then `ssh utm "source /opt/ros/humble/setup.bash && cd ~/kart-brain && colcon build --packages-select <pkg>"` to rebuild. Note: `bash -lc` does NOT source `.bashrc` on the VM (non-interactive guard), so always source ROS explicitly in SSH commands.
 
 ## 2026-03-03 - Tried to flash ESP32 from Mac instead of Orin
 **What happened:** When asked to flash the ESP32 and update code on the Orin, checked for USB devices on the local Mac instead of SSHing to the Orin. The Mac has no kart hardware connected — the ESP32, cameras, and actuators are all physically on the Orin.
@@ -207,7 +207,7 @@ echo "0" | sudo -S bash -c "echo 0 > /sys/bus/usb/devices/2-3.2/authorized && sl
 - Rule: **A status check is: (1) is the process alive? (2) is the GPU active? (3) what does the log say?** — in that order. Never skip steps 1 and 2.
 
 ## 2026-03-11 - Claimed ESP32 uses custom binary protocol when it already uses nanopb/protobuf
-**What happened:** User asked about protobuf in the project. I found `proto/kart_msgs.proto` but relied on stale MEMORY.md info ("custom binary protocol over UART") instead of checking the actual codebase. Commit `3a9999e` ("Migrate kart_brain Python side to nanopb/protobuf protocol") had already migrated both sides. I also missed `proto/generated_c/` and `proto/nanopb/` directories that were right there.
+**What happened:** User asked about protobuf in the project. I found `proto/kart_msgs.proto` but relied on stale MEMORY.md info ("custom binary protocol over UART") instead of checking the actual codebase. Commit `3a9999e` ("Migrate kart-brain Python side to nanopb/protobuf protocol") had already migrated both sides. I also missed `proto/generated_c/` and `proto/nanopb/` directories that were right there.
 **Root cause:** Trusted outdated memory over codebase evidence. The `.proto` file was found but I didn't investigate further (e.g., checking for generated C files or recent commits mentioning protobuf).
 **Prevention added:**
 - Updated MEMORY.md ESP32 section to document nanopb/protobuf migration
@@ -219,7 +219,7 @@ echo "0" | sudo -S bash -c "echo 0 > /sys/bus/usb/devices/2-3.2/authorized && sl
 **Prevention added:**
 - Created `/etc/X11/xorg.conf.d/10-virtual-display.conf` with `Option "ConnectedMonitor" "DFP-0"` to force the driver to create a framebuffer on DisplayPort regardless of EDID detection
 - Also set `Option "AllowEmptyInitialConfiguration" "true"` and `Virtual 1920 1080`
-- Documented in kart_docs orin-setup.md
+- Documented in kart-docs orin-setup.md
 
 ## 2026-03-21 - Stale ROS processes halved YOLO FPS (18 Hz → 32+ Hz)
 **What happened:** After multiple restarts of the autonomous launch, `killall` didn't kill all child processes. Six stale instances of yolo_detector, steering_hud, cone_marker_viz_3d etc. accumulated, consuming GPU and CPU. YOLO ran at ~18 Hz instead of 32+ Hz. The issue was that `killall python3` sometimes fails to catch ROS launch children because `nohup` detaches them.
@@ -234,7 +234,7 @@ echo "0" | sudo -S bash -c "echo 0 > /sys/bus/usb/devices/2-3.2/authorized && sl
 **What happened:** YOLO engine was exported without `half=True`, producing an FP32 engine. Inference ran at ~34 Hz instead of ~75 Hz. The Orin's Ampere GPU has dedicated FP16 tensor cores that double throughput.
 **Prevention added:**
 - Rule: **Always export TensorRT engines with `half=True`** for FP16. Command: `m.export(format='engine', imgsz=320, half=True)`. Never omit `half=True`.
-- Updated kart_docs orin-setup.md with warning.
+- Updated kart-docs orin-setup.md with warning.
 
 ## 2026-03-21 - symlink-install doesn't reload running Python nodes
 **What happened:** Changed `state_machine_node.py` on disk (via scp), assumed the running node would pick it up because of `--symlink-install`. The node kept running the old code. Throttle stayed at 10% instead of 50%. Spent time debugging hardware when the issue was that the code change wasn't live.
@@ -279,10 +279,10 @@ echo "0" | sudo -S bash -c "echo 0 > /sys/bus/usb/devices/2-3.2/authorized && sl
 - Rule: **Before saving anything, check if it's already in `.agents/`.** Read AGENTS.md first. If it's already documented, say so — don't duplicate it.
 - Rule: **Project-specific workflows, processes, and conventions go in `.agents/` files, never in auto-memory.** Auto-memory is only for user preferences and cross-project info.
 
-## 2026-04-20 - Pushed to `main` in kart_medulla instead of `dev`
+## 2026-04-20 - Pushed to `main` in kart-medulla instead of `dev`
 **What happened:** After flashing the ESP32 with the steering PWM bump (0.35 → 0.65), I ran `git commit && git push` on the Orin while on `main`. Push rejected by branch protection. User had to correct me: "deberías usar dev. Está documentado claramente." I had to reset local main, merge origin/main into dev, cherry-pick the commit onto dev, push dev.
-**Root cause:** Didn't verify the current branch before committing on `~/kart_medulla` on the Orin — it happened to be on `main`. The convention (dev is working branch, main only receives validated merges) exists for `kart_brain` in `AGENTS.md` but `kart_medulla`'s AGENTS.md didn't have it prominently documented. Auto-memory mentions `dev` on both repos but I didn't consult it.
+**Root cause:** Didn't verify the current branch before committing on `~/kart-medulla` on the Orin — it happened to be on `main`. The convention (dev is working branch, main only receives validated merges) exists for `kart-brain` in `AGENTS.md` but `kart-medulla`'s AGENTS.md didn't have it prominently documented. Auto-memory mentions `dev` on both repos but I didn't consult it.
 **Prevention added:**
-- Added a "Branch Workflow (READ THIS)" section near the top of AGENTS.md in BOTH `kart_brain` and `kart_medulla` so it's impossible to miss on a read-in-full pass.
+- Added a "Branch Workflow (READ THIS)" section near the top of AGENTS.md in BOTH `kart-brain` and `kart-medulla` so it's impossible to miss on a read-in-full pass.
 - Rule: **Before any `git commit` on the Orin (or anywhere), run `git branch --show-current`.** If it's `main`, switch to `dev` first. Never commit directly on `main` unless doing an explicit revert/hotfix.
 - Rule: **Push to `dev` first. Merge `dev` → `main` only after the user confirms the change drove the kart correctly.** Admins can bypass approval but the validation step is non-negotiable. Ask the user if they forget to signal "it works, merge to main".

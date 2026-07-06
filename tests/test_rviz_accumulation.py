@@ -1,6 +1,6 @@
 """Diagnostic test: rviz / GUI process accumulation prevention.
 
-This script statically analyzes all launch files and shell scripts in kart_brain
+This script statically analyzes all launch files and shell scripts in kart-brain
 to ensure that any file spawning GUI processes (rviz2, rqt_image_view, hud_viewer)
 also includes cleanup logic to kill stale instances before spawning new ones.
 

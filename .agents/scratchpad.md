@@ -22,7 +22,7 @@ Claude Code runs on the Mac. The Gazebo simulator runs on the UTM VM (Ubuntu 22.
 - 8 GB RAM, 4 CPU cores
 - ~17 GB free disk
 - Node.js needed for Claude Code (install via `nvm` or `apt`)
-- The workspace `~/kart_brain` is already there and built
+- The workspace `~/kart-brain` is already there and built
 
 ### What to try
 1. Install Claude Code on the VM
