@@ -113,3 +113,40 @@ Why nylon + D-flat is a bad pairing, independent of PID tuning:
 **Gate on doing the CNC work**: electronic steering must demonstrate it actually works (reliable target tracking, no runaway, usable under mission modes) before investing the machining hours. Until then, software mitigations + careful operation buy test time on the current nylon parts.
 
 Re-open if: planet wear turns out to be surprisingly fast in practice (unlikely but measure it), or the CNC access falls through and we need a plan B.
+
+---
+
+## 2026-06-06 — ZED coordinate system + live orientation relative to gravity (verified on Orin)
+
+Cone 3D positions flow through `/perception/cones_3d` in the **optical frame** (`zed_left_camera_optical_frame`): **X = right, Y = down, Z = forward (depth)**, right-handed. This is fixed by `cone_depth_localizer_node.py:114-127` using `image_geometry.PinholeCameraModel.projectPixelTo3dRay` (always optical convention) — *not* a per-run/config setting. `frame_id` is inherited from the ZED `camera_info` header. So a cone dead ahead reads `(x≈0, y≈+, z=distance)`. The ROS *body* frame `zed_camera_link` uses the other REP-103 convention (X-fwd, Y-left, Z-up), but cone messages are NOT in that frame. Dashboard top-down view (`/perception/cones_3d_ground`) plots `{x, z}` (x lateral, z forward), dropping the down axis.
+
+Live verification (`ros2 topic echo /perception/cones_3d --once`): frame_id `zed_left_camera_optical_frame`; sample cones `(x=+0.59, y=+0.49, z=+1.55)` and `(x=-0.98, y=+0.34, z=+0.97)` — signs consistent with right/down/forward.
+
+**Orientation relative to gravity** (from `/zed/zed_node/imu/data`, kart stationary): accel `(−0.54, −0.20, 9.76) m/s²` (|a|≈9.78≈g), fused quaternion `(−0.011, 0.028, −0.001, 0.9996)` → total tilt `2·acos(w) ≈ 3.4°`. Gravity re-expressed in the optical frame ≈ `(−0.2, +9.76, +0.54)`, i.e. points almost exactly down the **+Y axis**. The camera is mounted essentially **level**: optical **+Y ≈ gravity (down)** within ~3.4°, with **~3° nose-down pitch** (small +Z/forward gravity component — sensible for looking at cones on the ground) and **~1.3° roll** (right side slightly up). Note: IMU publishing must be enabled to read this live — `zed_overrides.yaml` had `sensors_pub_rate: 0.0`; the `imu/data` topic was active during this check.
+
+Access gotcha hit during this session: the public Cloudflare hostnames (`kart.rubenayla.xyz` HTTP 530, `orin.rubenayla.xyz` SSH `websocket: bad handshake`) intermittently fail when the Orin's `cloudflared` daemon drops its connection — a restart of `cloudflared` on the Orin fixes it.
+
+---
+
+## 2026-07-06 — Landscape "Race" dashboard skin (phone holder in the kart is horizontal)
+
+Context: a phone holder was mounted in the kart that holds the phone **horizontally**. The dashboard was designed portrait-first (480px column, vertical scroll), which no longer matches how it's physically used on the kart. Decision: redesign for landscape, and replace vertical scrolling with **horizontal panel swiping** — while driving/testing you flick between full-screen pages instead of scrolling a column.
+
+**Style source**: an HTML mockup (`kart-dashboard.html`, made outside the repo with simulated data) with a Formula-Student racing look — carbon-fibre weave background, Ü MOTORSPORT red `#e2001a`, Orbitron/Rajdhani/Titillium Web fonts, clip-path chamfered panels with rivets and a red corner accent, hazard-stripe divider, steering needle gauge (±90° SVG), huge central speed readout, throttle/brake pedal bars, status-dot warn strip, portrait "rotate your device" guard. Copied verbatim into the repo as the design reference: `src/kb_dashboard/reference/horizontal-race-mockup.html`.
+
+**Implementation decision**: added as a new skin (`race`) in the existing skin system in `src/kb_dashboard/kb_dashboard/index.html`, not a rewrite — the portrait skins (Default/KITT/Tesla/HUD/Artemis) stay available from the same dropdown, and all the shared plumbing (WebSocket feed, mission/state helpers, `updatePedals`/`updatePills`/`drawCenital`, HUD JPEG stream) is reused.
+
+**Data mapping — mockup fakes vs what the kart actually publishes**:
+- Mockup's battery % / motor temp / motor RPM **don't exist on the kart** (no sensors). The right-hand telemetry stack shows real values instead: YOLO inference Hz, ESP32 link Hz, ESP32 free heap kB — same card style, same bars.
+- Speed hero ← `esp32_speed` (m/s → km/h). Steering gauge needle ← `esp32_steering_rad`; a second thin amber needle shows the commanded target (`orin_cmd_steering_rad`) so PID tracking error is visible at a glance.
+- Accel bar under the speed ← `esp32_accel_lon` (shown in g, green forward / red braking), caption also shows lateral g.
+- Pedal bars ← `esp32_throttle` / `esp32_braking`; warn strip dots ← MAG/I2C/HEAP health flags + ESP32 heartbeat (replacing the mockup's BMS/INVERSOR/TELEMETRÍA).
+- Steering sign follows the **existing dashboard visual convention** (positive rad renders to the right, same as every other skin's steer bar). If that is ever found to mismatch the physical left/right, fix it across all skins at once, not per-skin.
+
+**Panel layout (swipe left/right, or tap the tabs in the bottom bar)**:
+1. **TELE** — the mockup's main screen: steering gauge | speed hero | YOLO/ESP/heap stack.
+2. **MISSION** — mission grid, steering/speed algorithm dropdowns, Start/Stop/EBS/Restart (reuses `misGrid`/`.ctrl-btn` classes so `updateMissionUI` gating works unchanged), state/mission/HB pills. The remote-control joystick widget is *moved* into this page while the skin is active (DOM node relocation, restored on skin switch) so its nipplejs listeners survive.
+3. **VISION** — live HUD camera stream (the global `#hudStream` img node is likewise relocated into this page) + cenital top-down cone view.
+4. **SYSTEM** — full health readout: magnet, I2C errors, heap, AGC, YOLO Hz, ESP Hz, heartbeat age, AS state.
+
+Top bar is the global one restyled (brand red Orbitron title, live pulse dot, skin selector, ⓘ net info, power off) with the hazard stripe under it; bottom bar is persistent: pedals left, page tabs center, warn dots + fullscreen (with landscape orientation lock) right. Portrait shows a "rotate the phone" guard but keeps the top bar visible so you can still switch skins. All UI text is English (the mockup was Spanish; user asked for English — matches the rest of the dashboard).
