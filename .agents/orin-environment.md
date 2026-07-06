@@ -37,6 +37,19 @@ ssh orin-remote   # WAN — Cloudflare Tunnel (orin.rubenayla.xyz). Works from a
 | 50 | iPhone de JBA | iPhone de JBA | — | Jorge's phone hotspot. |
 | 10 | Robots_urjc | Robots_urjc | — | Lab WiFi. |
 
+## Addresses cheat-sheet (default operating mode)
+
+| Address | What | When it works |
+|---|---|---|
+| `http://kart/` | Dashboard, memorable name | On the `kart` Wi-Fi (pwd `umotorsport`). Needs the dnsmasq+port-80 setup below — NOT applied yet |
+| `http://10.42.0.1:9090` | Dashboard, bare IP | On the `kart` Wi-Fi. Always works, zero internet needed |
+| `ssh orin@10.42.0.1` (`orin-local`) | SSH | On the `kart` Wi-Fi |
+| `http://172.20.10.2:9090` | Dashboard from the USB-tethered iPhone itself | Phone plugged in via USB-C with Personal Hotspot on |
+| `https://kart.rubenayla.xyz` | Dashboard from anywhere | Only while the Orin has internet (USB tether plugged, or other) |
+| `ssh orin-remote` | SSH from anywhere (Cloudflare) | Only while the Orin has internet |
+
+Why these numbers: the Orin's hotspot uses NetworkManager's fixed shared-mode subnet (`10.42.0.x`, AP = `.1`); Apple hardcodes `172.20.10.1`/`.2` for every iPhone USB tether (phone = `.1`, first device = `.2`). The device that creates a network is always `.1`.
+
 ## USB tethering (iPhone → Orin) — verified working 2026-07-05
 Plugging Ruben's iPhone into the Orin over USB (with Personal Hotspot on) creates an ethernet interface `enxfe9ca7a9ecdb` (name derives from the phone's MAC, so it can change if the phone presents a different MAC). NetworkManager auto-activates it as `Wired connection 2`, DHCP on the hotspot subnet 172.20.10.0/28: the iPhone is the router at 172.20.10.1, the Orin gets 172.20.10.2. Its default route has **metric 100, which beats Wi-Fi's 600** — so when tethered, all internet traffic (including the Cloudflare tunnel / `orin-remote` SSH) goes over USB automatically, no config needed. Verified by sudo-disconnecting Wi-Fi entirely: ping, DNS, and curl all worked over USB alone, and the remote SSH session survived.
 

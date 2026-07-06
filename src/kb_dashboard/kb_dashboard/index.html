@@ -1844,27 +1844,28 @@ async function toggleNetInfo() {
   if (panel.style.display === 'block') { panel.style.display = 'none'; return; }
   panel.style.display = 'block';
   const content = $('netInfoContent');
-  content.innerHTML = '<i style="color:#6a6a7a">loading…</i>';
+  // Canonical access URLs — static so they show even with no backend reachable
+  const staticHtml = `
+    <div style="color:#6a6a7a;letter-spacing:1px">DASHBOARD ACCESS</div>
+    <div style="margin-top:4px"><a href="http://kart/" style="color:#2ecc71;text-decoration:none">http://kart/</a><br><span style="color:#6a6a7a">easiest — join WiFi "kart" (pwd umotorsport)</span></div>
+    <div style="margin-top:6px"><a href="http://10.42.0.1:9090" style="color:#2ecc71;text-decoration:none">http://10.42.0.1:9090</a><br><span style="color:#6a6a7a">same WiFi "kart", bare IP — always works</span></div>
+    <div style="margin-top:6px"><a href="http://172.20.10.2:9090" style="color:#4a9eff;text-decoration:none">http://172.20.10.2:9090</a><br><span style="color:#6a6a7a">only from the USB-tethered iPhone itself</span></div>
+    <div style="margin-top:6px"><a href="https://kart.rubenayla.xyz" target="_blank" style="color:#9b59b6;text-decoration:none">https://kart.rubenayla.xyz</a><br><span style="color:#6a6a7a">from anywhere — needs the USB tether plugged (Orin internet)</span></div>
+  `;
+  content.innerHTML = staticHtml + '<div style="margin-top:8px"><i style="color:#6a6a7a">loading live info…</i></div>';
   try {
     const res = await fetch('/network-info', { cache: 'no-store' });
     const d = await res.json();
     const ifaces = (d.interfaces || []).map(
       i => `<div>${i.iface}: <b style="color:#4a9eff">${i.ip}</b></div>`
     ).join('');
-    const urls = (d.interfaces || []).map(i =>
-      `<a href="http://${i.ip}:${d.port}" target="_blank" style="color:#2ecc71;text-decoration:none">http://${i.ip}:${d.port}</a>`
-    ).join('<br>');
-    content.innerHTML = `
-      <div><span style="color:#6a6a7a">hostname:</span> ${d.hostname || '?'}</div>
-      <div style="margin-top:8px;color:#6a6a7a">interfaces:</div>
+    content.innerHTML = staticHtml + `
+      <div style="margin-top:8px;border-top:1px solid #2a2a3a;padding-top:6px"><span style="color:#6a6a7a">hostname:</span> ${d.hostname || '?'}</div>
+      <div style="color:#6a6a7a">live interfaces:</div>
       ${ifaces || '<i style="color:#6a6a7a">none</i>'}
-      <div style="margin-top:8px;color:#6a6a7a">LAN URLs (same WiFi as Orin):</div>
-      <div>${urls || '<i style="color:#6a6a7a">none</i>'}</div>
-      <div style="margin-top:8px;color:#6a6a7a">Cloudflare (any internet):</div>
-      <div><a href="https://kart.rubenayla.xyz" target="_blank" style="color:#9b59b6;text-decoration:none">https://kart.rubenayla.xyz</a></div>
     `;
   } catch (e) {
-    content.innerHTML = '<span style="color:#e74c3c">failed to load: ' + e.message + '</span>';
+    content.innerHTML = staticHtml + '<div style="margin-top:8px;color:#e74c3c">live info failed: ' + e.message + '</div>';
   }
 }
 // Close the info panel when clicking outside it.
