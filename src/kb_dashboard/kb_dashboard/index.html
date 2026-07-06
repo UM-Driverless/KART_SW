@@ -2192,7 +2192,25 @@ body{
 .rc-card .bar{ width:100%; height:5px; background:var(--rc-raised); margin-top:8px; overflow:hidden; border:1px solid var(--rc-line); }
 .rc-card .bar .fill{ height:100%; width:0%; transition:width .3s ease; background:var(--rc-green); }
 
-/* ---- page 2: MISSION ---- */
+/* ---- page 2: CONTROL ---- */
+.rc-control{ display:grid; grid-template-columns:1fr 1.5fr; gap:8px; height:100%; }
+.rc-cpanel{ padding:10px 12px; display:flex; flex-direction:column; gap:6px; min-height:0; }
+.rc-cpanel .body{ flex:1; min-height:0; display:flex; align-items:center; justify-content:center; gap:22px; }
+#ggCanvas{ background:#0a0a0c; border:1px solid var(--rc-line); border-radius:50%; }
+#ctrlPad{ background:#0a0a0c; border:1px solid var(--rc-line); max-height:100%; }
+.rc-gvals{ display:flex; flex-direction:column; gap:10px; }
+.rc-gvals .lbl{ font-size:9px; color:var(--rc-label-dim); letter-spacing:.16em; text-transform:uppercase; font-weight:700; }
+.rc-gvals .v{ font-size:17px; }
+.ctrl-nums{ display:flex; flex-direction:column; gap:7px; font-variant-numeric:tabular-nums; }
+.ctrl-nr{ display:grid; grid-template-columns:1fr 1fr 0.9fr 1.15fr; gap:10px; align-items:baseline; }
+.ctrl-nr > span{ text-align:left; font-family:'Rajdhani',sans-serif; font-weight:700; }
+.ctrl-nr > span:nth-child(1){ color:#f39c12; font-size:15px; }
+.ctrl-nr > span:nth-child(2){ color:#4a9eff; font-size:15px; }
+.ctrl-nr > span:nth-child(3){ color:var(--rc-label); font-size:12px; }
+.ctrl-nr > span:nth-child(4){ color:var(--rc-label-dim); font-size:9px; text-transform:uppercase; letter-spacing:.12em; }
+.ctrl-nr-hdr > span{ color:var(--rc-label-dim) !important; font-size:8px !important; text-transform:uppercase; letter-spacing:.16em; }
+
+/* ---- page 3: MISSION ---- */
 .rc-mission{ display:grid; grid-template-columns:1.15fr 1fr 1fr; gap:8px; height:100%; }
 .rc-mpanel{ padding:10px 12px; display:flex; flex-direction:column; gap:8px; min-height:0; overflow-y:auto; }
 .mis-grid{ display:grid; grid-template-columns:1fr 1fr; gap:5px; flex:1; }
@@ -2321,6 +2339,35 @@ body{
         </div>
       </div>
 
+      <div class="race-page rc-control">
+        <div class="rc-panel rc-cpanel">
+          <div class="rc-corner"></div><div class="rc-rivet tl"></div><div class="rc-rivet bl"></div>
+          <span class="rc-label">G-Force</span>
+          <div class="body">
+            <canvas id="ggCanvas" width="140" height="140"></canvas>
+            <div class="rc-gvals">
+              <div><div class="lbl">Lateral</div><div class="v num" id="rcGLat">0.00 g</div></div>
+              <div><div class="lbl">Longitudinal</div><div class="v num" id="rcGLon">0.00 g</div></div>
+              <div><div class="lbl">Total</div><div class="v num" id="rcGTot">0.00 g</div></div>
+            </div>
+          </div>
+        </div>
+        <div class="rc-panel rc-cpanel">
+          <div class="rc-corner"></div><div class="rc-rivet tl"></div><div class="rc-rivet bl"></div>
+          <span class="rc-label">Target vs Actual</span>
+          <div class="body">
+            <canvas id="ctrlPad" width="220" height="220"></canvas>
+            <div class="ctrl-nums">
+              <div class="ctrl-nr ctrl-nr-hdr"><span>TGT</span><span>ACT</span><span>Δ</span><span></span></div>
+              <div class="ctrl-nr"><span id="cnTgtSt">0°</span><span id="cnActSt">0°</span><span id="cnDSt">0°</span><span>Steer</span></div>
+              <div class="ctrl-nr"><span id="cnTgtTh">0%</span><span id="cnActTh">0%</span><span id="cnDTh">0%</span><span>Throttle</span></div>
+              <div class="ctrl-nr"><span id="cnTgtBr">0%</span><span id="cnActBr">0%</span><span id="cnDBr">0%</span><span>Brake</span></div>
+              <div class="ctrl-nr"><span>&mdash;</span><span id="cnPwm">0%</span><span>&mdash;</span><span>Str PWM</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div class="race-page rc-mission">
         <div class="rc-panel rc-mpanel">
           <div class="rc-corner"></div><div class="rc-rivet tl"></div><div class="rc-rivet bl"></div>
@@ -2373,7 +2420,7 @@ body{
     <div class="rc-pedal"><span class="lbl">Accel</span><div class="track"><div class="fill thr" id="thrFill"></div></div><span class="pv" id="vThr">0%</span></div>
     <div class="rc-pedal"><span class="lbl">Brake</span><div class="track"><div class="fill brk" id="brkFill"></div></div><span class="pv" id="vBrk">0%</span></div>
     <div class="race-tabs">
-      <button class="race-tab on">Tele</button><button class="race-tab">Mission</button><button class="race-tab">Vision</button><button class="race-tab">System</button>
+      <button class="race-tab on">Tele</button><button class="race-tab">Control</button><button class="race-tab">Mission</button><button class="race-tab">Vision</button><button class="race-tab">System</button>
     </div>
     <div class="rc-warn">
       <div class="item"><div class="rc-dot" id="rcDotMag"></div>MAG</div>
@@ -2421,7 +2468,7 @@ body{
     let page = 0;
     const track = $('rcTrack');
     const go = i => {
-      page = Math.max(0, Math.min(3, i));
+      page = Math.max(0, Math.min(4, i));
       track.style.transform = `translateX(${-page * 100}%)`;
       document.querySelectorAll('.race-tab').forEach((t, j) => t.classList.toggle('on', j === page));
     };
@@ -2458,6 +2505,8 @@ body{
     $('rcHudSlot').appendChild(hud);
     $('rcJoySlot').appendChild(joy);
     drawCenital($('rcCenital'), []);
+    drawGG(0, 0, '#2c2c2f', '#84848a40', '#e2001a', 8);
+    drawControlPad(0, 0, 0, 0, 0.5);
     return () => {
       hudHome.parent.insertBefore(hud, hudHome.next);
       joyHome.parent.insertBefore(joy, joyHome.next);
@@ -2484,6 +2533,12 @@ body{
     if (aPct >= 0) { af.style.left = '50%'; af.style.width = aPct + '%'; af.style.background = 'var(--rc-green)'; }
     else { af.style.left = (50 + aPct) + '%'; af.style.width = (-aPct) + '%'; af.style.background = 'var(--rc-red)'; }
     $('rcAccelCaption').textContent = `LON ${lonG.toFixed(2)} g · LAT ${latG.toFixed(2)} g`;
+    // CONTROL page — shared legacy helpers, race colors for the G-G dot
+    drawGG(latG, lonG, '#2c2c2f', '#84848a40', '#e2001a', 8);
+    $('rcGLat').textContent = latG.toFixed(2) + ' g';
+    $('rcGLon').textContent = lonG.toFixed(2) + ' g';
+    $('rcGTot').textContent = Math.sqrt(latG*latG + lonG*lonG).toFixed(2) + ' g';
+    updateControlPanel(d);
     // telemetry stack — real signals in place of the mockup's battery/temp/rpm
     const yolo = d.yolo_fps || 0, esp = d.esp_fps || 0, heap = d.health_heap_kb || 0;
     $('rcYoloVal').innerHTML = yolo.toFixed(0) + '<span class="u">Hz</span>';
