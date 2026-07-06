@@ -286,3 +286,8 @@ echo "0" | sudo -S bash -c "echo 0 > /sys/bus/usb/devices/2-3.2/authorized && sl
 - Added a "Branch Workflow (READ THIS)" section near the top of AGENTS.md in BOTH `kart-brain` and `kart-medulla` so it's impossible to miss on a read-in-full pass.
 - Rule: **Before any `git commit` on the Orin (or anywhere), run `git branch --show-current`.** If it's `main`, switch to `dev` first. Never commit directly on `main` unless doing an explicit revert/hotfix.
 - Rule: **Push to `dev` first. Merge `dev` → `main` only after the user confirms the change drove the kart correctly.** Admins can bypass approval but the validation step is non-negotiable. Ask the user if they forget to signal "it works, merge to main".
+
+## 2026-07-06 — `git add -A src/` swept the user's untracked experiment repos into a commit
+**What happened:** committing the port-80 change with `git add -A src/ ...` staged the user's untracked `src/uros/*` and `src/ThirdParty/src/micro_ros_setup` (embedded git repos) into the commit, which got pushed to dev. Caught by the embedded-repo warnings; fixed within a minute via `git rm --cached` + amend + `push --force-with-lease`.
+**Root cause:** lazy pathspec. `-A src/` means "everything under src/", not "my changed files".
+**Prevention:** always stage by explicit file list (the files I actually edited). Never `git add -A`, `git add .`, or directory-wide adds in this repo — it has long-lived untracked experiment dirs by design.
