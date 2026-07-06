@@ -27,7 +27,7 @@
 ## Environments
 
 ### Jetson Orin (Real Hardware)
-- **Connection:** `ssh orin-local` (WiFi 10.7.20.142) or `ssh orin-remote` (Cloudflare Tunnel) or AnyDesk
+- **Connection:** `ssh orin-local` (join the "kart" Wi-Fi AP, pwd `umotorsport` → 10.42.0.1) or `ssh orin-remote` (Cloudflare Tunnel, needs the USB-tethered phone or other internet) or AnyDesk. Offline dashboard: `http://10.42.0.1:9090` on the kart AP.
 - **Dashboard:** `kart.rubenayla.xyz` (password: `0`, configurable via ROS param `password`)
 - **Workspace:** `~/kart-brain` (renamed from `~/kart_brain` on 2026-07-06; `.bashrc` + systemd unit updated, workspace clean-rebuilt)
 - **Camera:** ZED 2 stereo (USB)

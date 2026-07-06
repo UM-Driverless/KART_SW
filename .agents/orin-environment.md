@@ -44,14 +44,19 @@ Plugging Ruben's iPhone into the Orin over USB (with Personal Hotspot on) create
 
 Gotcha: `nmcli device disconnect/connect` over SSH fails with "not authorized" (polkit) — needs sudo.
 
-### Planned network architecture (decided 2026-07-05, not yet implemented)
+### Network architecture (decided 2026-07-05, IMPLEMENTED 2026-07-06)
 Goal: dashboard must work even when the phone has no internet. Design:
 - **Orin Wi-Fi (`wlP1p1s0`) becomes its own access point** (`nmcli device wifi hotspot ifname wlP1p1s0 ssid kart password <pwd>`, set autoconnect). Dashboard for everyone who joins: `http://10.42.0.1:9090` (NM hotspot default IP). Zero internet needed.
 - **Ruben's iPhone: USB cable only, no Wi-Fi role.** Provides cellular internet to the Orin and browses the dashboard at `172.20.10.2:9090` over the same cable. (iPhones can't be Wi-Fi client + Wi-Fi hotspot at once — single radio — but that's irrelevant here since the phone doesn't need Wi-Fi.)
 - Other phones join the kart AP; NM `shared` mode NATs the Orin's USB internet to them by default, so they even get internet when the tether is plugged in.
 - Consequence: Orin no longer joins lab/phone Wi-Fi → `orin-local` means "join the kart AP, ssh 10.42.0.1". `orin-remote` works whenever the USB tether is up.
 
-To verify before calling it done: (1) `iw list` shows AP mode support on the Wi-Fi card; (2) dashboard binds `0.0.0.0:9090`, not localhost (Cloudflare tunnel only needs localhost, so this could be hiding); (3) Safari on the tethering iPhone reaches `172.20.10.2:9090`.
+**Implemented 2026-07-06.** Verified: `iw list` shows AP mode ✓; dashboard binds `0.0.0.0:9090` ✓; hotspot up with dashboard answering on it ✓; internet + Cloudflare tunnel still flow over the USB tether ✓; `MASQUERADE 10.42.0.0/24` NAT rule active so AP clients get internet when the tether is plugged ✓. Still pending a human check: Safari on the tethering iPhone at `172.20.10.2:9090`, and a phone joining the AP.
+
+Config that was applied (all persistent, survives reboot):
+- NM connection **`kart-ap`**: SSID **`kart`**, WPA2 password **`umotorsport`**, `mode ap`, `ipv4.method shared` (NM runs dnsmasq + NAT automatically), `autoconnect yes`, `autoconnect-priority 200` (beats "Ruben's iPhone" at 100 and everything else — the Orin no longer joins lab/phone Wi-Fi on boot).
+- Dashboard for anyone on the kart AP: **`http://10.42.0.1:9090`**. SSH: `ssh orin@10.42.0.1` — the Mac's `orin-local` alias now points there.
+- Disable it if ever needed: `sudo nmcli connection down kart-ap` (or `... modify kart-ap connection.autoconnect no`); reconnect old Wi-Fi with `sudo nmcli connection up "Robots_urjc"` etc.
 
 For non-interactive sudo:
 ```bash
