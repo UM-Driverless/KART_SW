@@ -42,6 +42,7 @@
 - **Full details:** `.agents/vm-environment.md`
 
 ## Working Style
+- **Add discovered work to `.agents/tasks.md` immediately, without asking.** Any gap noticed mid-session — missing feature, pending validation, half-done rename, stale doc — becomes a task entry the same turn it's discovered. The board is the memory, not the conversation.
 - **Use subagents for parallel work.** When tasks are independent (e.g., reading multiple files, searching codebase, running builds while editing), use the Agent tool to delegate to subagents. This keeps the main context clean and speeds up work.
 - **Use background tasks for long-running ops.** Builds (~30s–100s), flashing, serial reads, SSH commands — run these in the background and check results later.
 - **Don't block on things you can parallelize.** If you need to edit 3 files and deploy, edit them all, then deploy. If you need info from 2 different places, query both at once.
