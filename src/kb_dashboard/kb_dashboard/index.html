@@ -176,7 +176,7 @@ const $ = id => document.getElementById(id);
 const deg = r => (r * 180 / Math.PI).toFixed(1);
 const WS_URL = `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/`;
 let ws = null, reconnectTimer = null, lastData = null, skinCleanup = null;
-let currentSkin = localStorage.getItem('skin') || 'default';
+let currentSkin = localStorage.getItem('skin') || 'race';
 let manualSteerType = 'angle'; // 'angle' or 'pwm'
 let currentMission = 'manual'; // Track mission state locally to show/hide widget
 let currentControllerType = 'geometric';
@@ -537,7 +537,7 @@ document.addEventListener('click', e => { if (!e.target.closest('.skin-select'))
 // SKIN: DEFAULT — Clean modern dark
 // ═══════════════════════════════════════════════════════
 const skinDefault = {
-  name: 'Default',
+  name: 'Legacy',
   css: `
 body { font-family:'Inter',-apple-system,BlinkMacSystemFont,'SF Pro',system-ui,sans-serif; background:#0a0a0f; color:#e0e0e8; }
 #topbarTitle { color:#888; font-weight:500; font-size:11px; letter-spacing:4px; text-transform:uppercase; }
@@ -2045,13 +2045,6 @@ function drawCenital(canvas, cones) {
     ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.arc(px, py, 4, 0, 2*Math.PI); ctx.stroke();
   }
-  // Kart marker (small upward triangle)
-  ctx.fillStyle = '#fff';
-  ctx.beginPath();
-  ctx.moveTo(KART_X, KART_Y - 8);
-  ctx.lineTo(KART_X - 5, KART_Y + 2);
-  ctx.lineTo(KART_X + 5, KART_Y + 2);
-  ctx.closePath(); ctx.fill();
 }
 
 // G-G diagram for Default skin
@@ -2531,7 +2524,7 @@ body{
   }
 };
 
-const SKINS = { default: skinDefault, kitt: skinKitt, tesla: skinTesla, hud: skinHud, artemis: skinArtemis, race: skinRace };
+const SKINS = { race: skinRace, default: skinDefault, kitt: skinKitt, tesla: skinTesla, hud: skinHud, artemis: skinArtemis };
 if (!SKINS[currentSkin]) currentSkin = 'default';
 
 function applySkin(id) {
