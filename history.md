@@ -150,3 +150,13 @@ Context: a phone holder was mounted in the kart that holds the phone **horizonta
 4. **SYSTEM** — full health readout: magnet, I2C errors, heap, AGC, YOLO Hz, ESP Hz, heartbeat age, AS state.
 
 Top bar is the global one restyled (brand red Orbitron title, live pulse dot, skin selector, ⓘ net info, power off) with the hazard stripe under it; bottom bar is persistent: pedals left, page tabs center, warn dots + fullscreen (with landscape orientation lock) right. Portrait shows a "rotate the phone" guard but keeps the top bar visible so you can still switch skins. All UI text is English (the mockup was Spanish; user asked for English — matches the rest of the dashboard).
+
+---
+
+## 2026-07-06 — Top-down cone view live on the kart: dashboard falls back to raw cones_3d
+
+Why the top-down (cenital) view was empty while the HUD showed detections: the dashboard only listened to `/perception/cones_3d_ground` from `ground_plane_localizer`, but that node (a) only runs in the separate `perception_zed_od_ground.launch.py`, not the systemd launch, and (b) consumes **ZED built-in OD** (`ObjectsStamped`) — it sits idle under the default YOLO pipeline even if launched. The 2D HUD path (`steering_hud` ← `/perception/cones_2d`) is independent and was always fine.
+
+Fix (commit `df3a5c9`): `dashboard_node` also subscribes to raw `/perception/cones_3d` and feeds the view from it whenever the ground-corrected topic has been silent >1 s. Corrected data automatically wins when the workshop validation launch is running. Verified live on the kart: workshop cone at (0.84 m left, 0.74 m fwd) renders in the Race skin's top-down panel.
+
+Also merged `feature/imu-corrected-ground-plane` into `dev` (merge `f604ff3`): ground-plane localizer + validation launch, Race skin, cenital view, kart_brain→kart-brain path renames. Deployed on the Orin (`dev`), all nodes up. **`main` untouched — waits for the kart physically driving with visual validation, per AGENTS.md.**
