@@ -51,6 +51,27 @@ Goal: dashboard must work even when the phone has no internet. Design:
 - Other phones join the kart AP; NM `shared` mode NATs the Orin's USB internet to them by default, so they even get internet when the tether is plugged in.
 - Consequence: Orin no longer joins lab/phone Wi-Fi → `orin-local` means "join the kart AP, ssh 10.42.0.1". `orin-remote` works whenever the USB tether is up.
 
+### Planned: dashboard at `http://kart/` (name instead of IP) — NOT YET APPLIED
+mDNS (`orin.local`) was rejected as unreliable on Android. The reliable way: on the kart AP the Orin is every client's DHCP **and DNS** server (NM shared mode runs dnsmasq), so a plain DNS entry works on all devices. Two steps, both on the Orin:
+
+1. **Name → IP.** NM's shared-mode dnsmasq reads `/etc/NetworkManager/dnsmasq-shared.d/`:
+   ```bash
+   echo 'address=/kart/10.42.0.1' | sudo tee /etc/NetworkManager/dnsmasq-shared.d/kart-name.conf
+   sudo nmcli connection down kart-ap && sudo nmcli connection up kart-ap   # reload dnsmasq (drops AP clients ~5 s)
+   ```
+   (Verify first that the running dnsmasq uses `--conf-dir=/etc/NetworkManager/dnsmasq-shared.d` — check `ps aux | grep dnsmasq`. If not, the line can go in the NM dnsmasq config it does read.)
+2. **Drop the :9090.** Redirect port 80 → 9090 for traffic arriving on the AP, persisted via a NetworkManager dispatcher script (same mechanism as the Wi-Fi powersave fix), `/etc/NetworkManager/dispatcher.d/90-kart-dash-redirect`, chmod +x:
+   ```sh
+   #!/bin/sh
+   if [ "$1" = "wlP1p1s0" ] && [ "$2" = "up" ]; then
+     iptables -t nat -C PREROUTING -i wlP1p1s0 -p tcp --dport 80 -j REDIRECT --to-ports 9090 2>/dev/null || \
+     iptables -t nat -A PREROUTING -i wlP1p1s0 -p tcp --dport 80 -j REDIRECT --to-ports 9090
+   fi
+   ```
+   Also run the iptables line once by hand to apply without reconnecting.
+
+Result: anyone on the kart Wi-Fi opens **`http://kart/`** (type it with the slash or `http://`, otherwise the browser searches the word). Caveats: only works for clients of the kart AP (not on the USB-tethered iPhone itself, whose DNS is cellular — it keeps using `172.20.10.2:9090`; not via Cloudflare). Test from a phone on the AP, not from the Orin itself (the PREROUTING rule doesn't apply to local traffic).
+
 **Implemented 2026-07-06.** Verified: `iw list` shows AP mode ✓; dashboard binds `0.0.0.0:9090` ✓; hotspot up with dashboard answering on it ✓; internet + Cloudflare tunnel still flow over the USB tether ✓; `MASQUERADE 10.42.0.0/24` NAT rule active so AP clients get internet when the tether is plugged ✓. Human-verified 2026-07-06: devices see and join the `kart` network and get internet through the USB tether. **This is the default operating mode** — the Orin always boots as the kart AP.
 
 Config that was applied (all persistent, survives reboot):
