@@ -51,7 +51,7 @@ Goal: dashboard must work even when the phone has no internet. Design:
 - Other phones join the kart AP; NM `shared` mode NATs the Orin's USB internet to them by default, so they even get internet when the tether is plugged in.
 - Consequence: Orin no longer joins lab/phone Wi-Fi → `orin-local` means "join the kart AP, ssh 10.42.0.1". `orin-remote` works whenever the USB tether is up.
 
-**Implemented 2026-07-06.** Verified: `iw list` shows AP mode ✓; dashboard binds `0.0.0.0:9090` ✓; hotspot up with dashboard answering on it ✓; internet + Cloudflare tunnel still flow over the USB tether ✓; `MASQUERADE 10.42.0.0/24` NAT rule active so AP clients get internet when the tether is plugged ✓. Still pending a human check: Safari on the tethering iPhone at `172.20.10.2:9090`, and a phone joining the AP.
+**Implemented 2026-07-06.** Verified: `iw list` shows AP mode ✓; dashboard binds `0.0.0.0:9090` ✓; hotspot up with dashboard answering on it ✓; internet + Cloudflare tunnel still flow over the USB tether ✓; `MASQUERADE 10.42.0.0/24` NAT rule active so AP clients get internet when the tether is plugged ✓. Human-verified 2026-07-06: devices see and join the `kart` network and get internet through the USB tether. **This is the default operating mode** — the Orin always boots as the kart AP.
 
 Config that was applied (all persistent, survives reboot):
 - NM connection **`kart-ap`**: SSID **`kart`**, WPA2 password **`umotorsport`**, `mode ap`, `ipv4.method shared` (NM runs dnsmasq + NAT automatically), `autoconnect yes`, `autoconnect-priority 200` (beats "Ruben's iPhone" at 100 and everything else — the Orin no longer joins lab/phone Wi-Fi on boot).

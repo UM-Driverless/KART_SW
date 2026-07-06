@@ -160,3 +160,17 @@ Why the top-down (cenital) view was empty while the HUD showed detections: the d
 Fix (commit `df3a5c9`): `dashboard_node` also subscribes to raw `/perception/cones_3d` and feeds the view from it whenever the ground-corrected topic has been silent >1 s. Corrected data automatically wins when the workshop validation launch is running. Verified live on the kart: workshop cone at (0.84 m left, 0.74 m fwd) renders in the Race skin's top-down panel.
 
 Also merged `feature/imu-corrected-ground-plane` into `dev` (merge `f604ff3`): ground-plane localizer + validation launch, Race skin, cenital view, kart_brain→kart-brain path renames. Deployed on the Orin (`dev`), all nodes up. **`main` untouched — waits for the kart physically driving with visual validation, per AGENTS.md.**
+
+---
+
+## 2026-07-06 — Kart Wi-Fi AP is live and is now the DEFAULT operating mode
+
+The Orin's Wi-Fi (`wlP1p1s0`, RTL8822CE) now runs as its own access point instead of joining lab/phone networks: NM connection `kart-ap`, SSID **`kart`**, WPA2 password **`umotorsport`**, `ipv4.method shared`, autoconnect priority 200 (wins over every client profile on boot). Verified working by the user in person: the network appears (the Mac's Wi-Fi list just took a while to refresh — the AP had been beaconing fine on channel 1/2.4 GHz all along), and **internet sharing to AP clients works** through the chain iPhone (USB-C tether, Personal Hotspot) → Orin → NAT (`MASQUERADE 10.42.0.0/24`) → Wi-Fi clients.
+
+**Default operating mode from now on:**
+- Dashboard for everyone at the kart: join Wi-Fi `kart` → `http://10.42.0.1:9090`. Zero internet required.
+- SSH at the kart: `ssh orin-local` (now pointing at `10.42.0.1` in the Mac's `~/.ssh/config`).
+- Internet for the Orin and remote access (`orin-remote` / Cloudflare tunnel / `kart.rubenayla.xyz`): plug Ruben's iPhone in via USB-C with Personal Hotspot on. Without it, everything local still works.
+- Expect double NAT and cellular speeds for AP clients' internet — fine for the dashboard and browsing.
+
+Rollback if ever needed: `sudo nmcli connection down kart-ap` and `sudo nmcli connection up "<old wifi>"`. Full details in `.agents/orin-environment.md`.
