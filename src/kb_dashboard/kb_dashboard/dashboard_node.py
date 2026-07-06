@@ -55,7 +55,10 @@ class DashboardNode(Node):
         """
         super().__init__("kb_dashboard")
         self.state = state
-        self.declare_parameter("port", 9090)
+        # Port 80 so URLs need no port suffix. Non-root binding of ports <1024
+        # requires: net.ipv4.ip_unprivileged_port_start=80 (sysctl, one line —
+        # see .agents/orin-environment.md). Override with the ROS "port" param.
+        self.declare_parameter("port", 80)
         self.declare_parameter("password", "0")
         self.port = self.get_parameter("port").value
         self.password = self.get_parameter("password").value

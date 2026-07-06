@@ -71,7 +71,7 @@ def generate_launch_description():
         "pkill -9 -f 'yolo_detector|cone_follower|steering_hud|state_machine|"
         "cmd_vel_bridge|KB_Coms_micro|dashboard_node|cone_depth' 2>/dev/null; "
         "killall -q rviz2 rqt_image_view 2>/dev/null; "
-        "fuser -k 9090/tcp 2>/dev/null; "
+        "fuser -k 80/tcp 9090/tcp 2>/dev/null; "
         "rm -rf /dev/shm/fastrtps_*; "
         "sleep 0.5",
         shell=True,
@@ -177,7 +177,7 @@ def generate_launch_description():
         package="kb_dashboard",
         executable="dashboard",
         name="kb_dashboard",
-        parameters=[{"port": 9090}],
+        parameters=[{"port": 80}],
         output="screen",
         sigterm_timeout="3",
         sigkill_timeout="2",

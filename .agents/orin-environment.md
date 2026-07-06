@@ -41,10 +41,10 @@ ssh orin-remote   # WAN — Cloudflare Tunnel (orin.rubenayla.xyz). Works from a
 
 | Address | What | When it works |
 |---|---|---|
-| `http://kart/` | Dashboard, memorable name | On the `kart` Wi-Fi (pwd `umotorsport`). Needs the dnsmasq+port-80 setup below — NOT applied yet |
-| `http://10.42.0.1:9090` | Dashboard, bare IP | On the `kart` Wi-Fi. Always works, zero internet needed |
+| `http://kart/` | Dashboard, memorable name | On the `kart` Wi-Fi (pwd `umotorsport`). Needs the dnsmasq+port-80 setup below — NOT applied yet (Orin was off) |
+| `http://10.42.0.1` | Dashboard, bare IP | On the `kart` Wi-Fi. Always works, zero internet needed. (`:9090` until the port-80 deploy lands) |
 | `ssh orin@10.42.0.1` (`orin-local`) | SSH | On the `kart` Wi-Fi |
-| `http://172.20.10.2:9090` | Dashboard from the USB-tethered iPhone itself | Phone plugged in via USB-C with Personal Hotspot on |
+| `http://172.20.10.2` | Dashboard from the USB-tethered iPhone itself | Phone plugged in via USB-C with Personal Hotspot on. (`:9090` until the port-80 deploy lands) |
 | `https://kart.rubenayla.xyz` | Dashboard from anywhere | Only while the Orin has internet (USB tether plugged, or other) |
 | `ssh orin-remote` | SSH from anywhere (Cloudflare) | Only while the Orin has internet |
 
@@ -73,17 +73,15 @@ mDNS (`orin.local`) was rejected as unreliable on Android. The reliable way: on 
    sudo nmcli connection down kart-ap && sudo nmcli connection up kart-ap   # reload dnsmasq (drops AP clients ~5 s)
    ```
    (Verify first that the running dnsmasq uses `--conf-dir=/etc/NetworkManager/dnsmasq-shared.d` — check `ps aux | grep dnsmasq`. If not, the line can go in the NM dnsmasq config it does read.)
-2. **Drop the :9090.** Redirect port 80 → 9090 for traffic arriving on the AP, persisted via a NetworkManager dispatcher script (same mechanism as the Wi-Fi powersave fix), `/etc/NetworkManager/dispatcher.d/90-kart-dash-redirect`, chmod +x:
-   ```sh
-   #!/bin/sh
-   if [ "$1" = "wlP1p1s0" ] && [ "$2" = "up" ]; then
-     iptables -t nat -C PREROUTING -i wlP1p1s0 -p tcp --dport 80 -j REDIRECT --to-ports 9090 2>/dev/null || \
-     iptables -t nat -A PREROUTING -i wlP1p1s0 -p tcp --dport 80 -j REDIRECT --to-ports 9090
-   fi
+2. **Drop the :9090 — the dashboard binds port 80 directly** (design decision 2026-07-06: no hidden iptables redirect; the server listens where browsers look). The code defaults to port 80 (`dashboard_node.py` + all launch files). Linux blocks ports <1024 for non-root, so on every machine that runs the dashboard, lower the floor once:
+   ```bash
+   echo 'net.ipv4.ip_unprivileged_port_start=80' | sudo tee /etc/sysctl.d/99-unprivileged-port-80.conf
+   sudo sysctl --system
    ```
-   Also run the iptables line once by hand to apply without reconnecting.
+   Also point the Cloudflare tunnel at the new port: in `/etc/cloudflared/config.yml` change `localhost:9090` → `localhost:80`, then `sudo systemctl restart cloudflared`.
+   Symptom of a missing sysctl: dashboard node dies with `PermissionError: [Errno 13]` binding port 80. Override port per-run with the ROS `port` param if ever needed.
 
-Result: anyone on the kart Wi-Fi opens **`http://kart/`** (type it with the slash or `http://`, otherwise the browser searches the word). Caveats: only works for clients of the kart AP (not on the USB-tethered iPhone itself, whose DNS is cellular — it keeps using `172.20.10.2:9090`; not via Cloudflare). Test from a phone on the AP, not from the Orin itself (the PREROUTING rule doesn't apply to local traffic).
+Result: anyone on the kart Wi-Fi opens **`http://kart/`** (type it with the slash or `http://`, otherwise the browser searches the word); bare-IP URLs need no port either. Caveats: the name only resolves for clients of the kart AP (not on the USB-tethered iPhone itself, whose DNS is cellular — it uses `http://172.20.10.2`; not via Cloudflare).
 
 **Implemented 2026-07-06.** Verified: `iw list` shows AP mode ✓; dashboard binds `0.0.0.0:9090` ✓; hotspot up with dashboard answering on it ✓; internet + Cloudflare tunnel still flow over the USB tether ✓; `MASQUERADE 10.42.0.0/24` NAT rule active so AP clients get internet when the tether is plugged ✓. Human-verified 2026-07-06: devices see and join the `kart` network and get internet through the USB tether. **This is the default operating mode** — the Orin always boots as the kart AP.
 
