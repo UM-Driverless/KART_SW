@@ -291,3 +291,10 @@ echo "0" | sudo -S bash -c "echo 0 > /sys/bus/usb/devices/2-3.2/authorized && sl
 **What happened:** committing the port-80 change with `git add -A src/ ...` staged the user's untracked `src/uros/*` and `src/ThirdParty/src/micro_ros_setup` (embedded git repos) into the commit, which got pushed to dev. Caught by the embedded-repo warnings; fixed within a minute via `git rm --cached` + amend + `push --force-with-lease`.
 **Root cause:** lazy pathspec. `-A src/` means "everything under src/", not "my changed files".
 **Prevention:** always stage by explicit file list (the files I actually edited). Never `git add -A`, `git add .`, or directory-wide adds in this repo — it has long-lived untracked experiment dirs by design.
+
+## 2026-07-07 — Invented a new `.agents/history.md` instead of using the existing root `history.md`
+**What happened:** User said "note this reasoning to history.md". I assumed `history.md` was a `.agents/` file (per the generic global convention), didn't check, created `.agents/history.md`, wrote the entry there, and edited the README index. The repo already has a `history.md` at its **root** (the actual "consult-selectively" chronological log). User corrected: "i didn't say .agents/history.md, i said history.md."
+**Root cause:** applied the generic global-CLAUDE convention (history.md lives in `.agents/`) without running a `find`/`ls` first. This repo keeps `history.md` at the repo root, not under `.agents/`.
+**Prevention:**
+- Rule: **When told to write to a named file, locate the existing one first (`find . -iname '<name>'`) before creating it.** Match the repo's actual layout, not the generic convention.
+- Fact: in **kart-brain**, `history.md` is at the **repo root** (not `.agents/`). `error-log.md` and the other logs are under `.agents/`.

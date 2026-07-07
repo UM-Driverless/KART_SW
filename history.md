@@ -186,3 +186,23 @@ Series of UI decisions from today's experimentation session (all local, `?demo=1
 - **Control page removed entirely** (back to 4 pages): its G-G diagram moved into the telemetry mini-cluster, replacing the ESP32-link dial — rationale (user): ESP32 link rate should be high and boring, it's health data, not telemetry; it stays on the System page only.
 - **Health consolidated into a self-alarming System tab**: every legacy health-bar field is a System-page card with its explanation printed on it (AGC folded into the magnet card; new Stack card — shows `--` until the firmware sends per-task stack minima, task filed in `tasks.md`). The System tab pulses red when anything is unhealthy; the four MAG/I2C/HEAP/HB bottom-bar dots were removed.
 - **`?demo=1` mode added**: simulated random-walk telemetry (speed, steering, pedals, drifting cones) so UI work needs no kart. This is the standing way to iterate on the dashboard from home.
+
+---
+
+## 2026-07-07 — Why the dashboard telemetry broadcast stays at 10 Hz (don't raise it)
+
+Question: is it worth updating the dashboard faster than 10 Hz?
+
+**Where the rates live:**
+- Telemetry broadcast to browsers: `broadcast_loop()` in `src/kb_dashboard/kb_dashboard/server.py:417`, set by `await asyncio.sleep(0.1)` → 10 Hz. This is an asyncio loop, **not** a ROS timer.
+- Command publish (joystick → kart): `create_timer(0.01, self._publish_pending)` in `dashboard_node.py:180` → 100 Hz, a real ROS timer on the spin thread (cross-thread-safe bridge from the asyncio WS handler).
+- HUD JPEG stream already throttled to 20 Hz to avoid stealing CPU from YOLO.
+
+**Decision: keep the broadcast at 10 Hz.** Reasoning:
+1. **Binding constraint is Orin CPU, not bandwidth.** YOLO runs at 70–84 Hz and is the critical job; each broadcast serializes state to JSON and sends to every connected client. Tripling the rate triples that cost for near-zero benefit. The JSON snapshot is small — bandwidth was never the limit; the JPEG HUD frames are.
+2. **Human perception saturates ~10–15 Hz** for reading numbers/gauges — the eye can't read digits faster.
+3. **Source-rate ceiling** — if the ESP/IMU data doesn't arrive faster than 10 Hz, a faster WebSocket just resends the same value.
+
+**Where faster *would* help, and the cheaper fix:**
+- Visual smoothness of moving elements (G-G dot, needles) looks "steppy" at 10 Hz. Fix in the **browser for free**: interpolate in JS between received values and paint at 60 Hz with `requestAnimationFrame`. Separate data rate (10 Hz, cheap) from render rate (60 Hz, smooth). Don't touch the network rate.
+- Fast transients (accel/G spikes on impact, vibration) alias at 10 Hz. Capture those in a **log on the Orin at the sensor's source rate**, not the live dashboard. Dashboard = human live monitoring; fine-grained analysis = separate recording.
