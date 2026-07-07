@@ -2528,7 +2528,7 @@ body{
 
 /* ---- page 4: SYSTEM ---- */
 .rc-system{ display:flex; flex-direction:column; gap:8px; height:100%; min-height:0; }
-.rc-sysgrid{ display:grid; grid-template-columns:repeat(4,1fr); grid-auto-rows:1fr; gap:8px; flex:1.6; min-height:0; }
+.rc-sysgrid{ display:grid; grid-template-columns:repeat(3,1fr); grid-auto-rows:1fr; gap:8px; flex:1.6; min-height:0; }
 .rc-sysgrid .rc-card{ flex:none; min-height:0; }
 .rc-sysbottom{ display:flex; gap:8px; flex:1.5; min-height:0; }
 .rc-pneu{ flex:1; min-width:0; display:flex; flex-direction:column; align-items:center; gap:6px; padding:8px 10px; }
@@ -2668,6 +2668,7 @@ body{
         <div class="rc-card"><div class="row1"><span class="rc-label">ESP32 link</span><span class="val num rc-sysval" id="rcSysEsp">--</span></div><div class="rc-sysdesc">steering frames over USB serial · firmware target 100 Hz</div></div>
         <div class="rc-card"><div class="row1"><span class="rc-label">Heartbeat</span><span class="val num rc-sysval" id="rcSysHb">--</span></div><div class="rc-sysdesc">time since last ESP32 heartbeat</div></div>
         <div class="rc-card"><div class="row1"><span class="rc-label">AS state</span><span class="val num rc-sysval" id="rcSysState" style="font-size:14px">--</span></div><div class="rc-sysdesc">autonomous system state machine</div></div>
+        <div class="rc-card"><div class="row1"><span class="rc-label">Battery</span><span class="val num rc-sysval" id="rcSysBat">--</span></div><div class="rc-sysdesc">pack voltage · SOC <span id="rcSysBatSoc">--</span> · via BMS over BLE</div></div>
         </div>
         <div class="rc-sysbottom">
           <div class="rc-panel rc-pneu">
@@ -2828,6 +2829,13 @@ body{
     sys('rcSysYolo', yolo.toFixed(1) + ' Hz', yolo >= 30 ? 'rc-ok' : yolo >= 15 ? 'rc-dim' : 'rc-bad');
     sys('rcSysEsp', esp.toFixed(1) + ' Hz', esp >= 80 ? 'rc-ok' : esp >= 30 ? 'rc-dim' : 'rc-bad');
     sys('rcSysHb', d.esp32_heartbeat_age < 0 ? '--' : d.esp32_heartbeat_age + ' s', d.esp32_heartbeat ? 'rc-ok' : 'rc-bad');
+    // battery pack voltage + state of charge (from the JBD BMS over BLE — null until wired)
+    const batV = d.battery_voltage, batSoc = d.battery_soc;
+    const haveBat = batV != null && !isNaN(batV);
+    const socLow = batSoc != null && batSoc < 15;
+    sys('rcSysBat', haveBat ? batV.toFixed(1) + ' V' : '--',
+      !haveBat ? 'rc-dim' : socLow ? 'rc-bad' : (batSoc != null && batSoc < 30) ? 'rc-dim' : 'rc-ok');
+    $('rcSysBatSoc').textContent = (batSoc != null) ? Math.round(batSoc) + '%' : '--';
     // pneumatics: tank dial (green safe band) + piston bar (rises when braking)
     const tank = d.pneu_tank_bar, pist = d.pneu_piston_bar;
     const haveTank = tank != null && !isNaN(tank);
@@ -2839,7 +2847,7 @@ body{
     // any unhealthy item → the System tab pulses red (tank out of its safe band counts)
     const sysBad = !d.health_magnet_ok || !d.health_i2c_ok || !d.health_heap_ok || !agcOk ||
       !d.esp32_heartbeat || yolo < 15 || esp < 30 || (stkMin !== null && stkMin < 200) ||
-      (haveTank && !tankOk);
+      (haveTank && !tankOk) || socLow;
     const sysTab = document.querySelectorAll('.race-tab')[3];
     if (sysTab) sysTab.classList.toggle('bad', sysBad);
     const st = $('rcSysState');
@@ -2894,7 +2902,7 @@ try { connect(); dbgLog('connect() called, WS_URL='+WS_URL); } catch(e) { dbgErr
 // ── Demo mode: open index.html?demo=1 to feed simulated telemetry.
 // For UI development with no kart — needles move, cones drift past.
 if (new URLSearchParams(location.search).has('demo')) {
-  let sp = 0, tsp = 25, st = 0, tst = 0, th = 0.2, br = 0, t = 0, pneuTank = 8, pneuPist = 0;
+  let sp = 0, tsp = 25, st = 0, tst = 0, th = 0.2, br = 0, t = 0, pneuTank = 8, pneuPist = 0, batSoc = 82;
   setInterval(() => {
     t += 0.1;
     if (Math.random() < 0.03) tsp = 3 + Math.random() * 35;
@@ -2906,6 +2914,8 @@ if (new URLSearchParams(location.search).has('demo')) {
     br = lon < -0.15 ? Math.min(1, br + 0.15) : br * 0.75;
     pneuTank = 8 + Math.sin(t * 0.15) * 0.7 + (Math.random() - 0.5) * 0.08;  // drifts inside the 6–10 safe band
     pneuPist = br * (pneuTank * 0.85);                                        // piston pressure tracks braking
+    batSoc = Math.max(0, batSoc - th * 0.004);                               // ~48 V pack, slowly draining under throttle
+    const batV = 42 + batSoc / 100 * 12;                                     // 42 V empty → 54 V full (illustrative)
     const cones = [];
     for (let row = 0; row < 4; row++) {
       const z = 2.5 + row * 3.5 - (t % 3.5);
@@ -2926,6 +2936,7 @@ if (new URLSearchParams(location.search).has('demo')) {
       stack_comms: 620, stack_control: 540, stack_heartbeat: 810, stack_health: 760,
       yolo_fps: 68 + Math.sin(t * 0.7) * 6, esp_fps: 95 + Math.sin(t * 1.3) * 8,
       pneu_tank_bar: pneuTank, pneu_piston_bar: pneuPist,
+      battery_voltage: batV, battery_soc: batSoc,
       cones_3d_ground: cones,
       mission: demoMission, state: demoState,
       as_state: demoState === 'running' ? 'AS_DRIVING' : (demoState === 'ebs' ? 'AS_EMERGENCY_BRAKE' : 'AS_READY'),
