@@ -2385,6 +2385,10 @@ body{
 .conn-dot{ background:var(--rc-label-dim); }
 .conn-dot.ok{ background:var(--rc-red); box-shadow:0 0 8px var(--rc-red-glow); animation:rcPulse 1.4s ease-in-out infinite; }
 @keyframes rcPulse{ 0%,100%{opacity:1;} 50%{opacity:.25;} }
+/* Danger glow — a panel whose gauge is in its RED (act-now) zone pulses red. Reserve for real
+   danger (battery <15%, tank out of range), never amber and never the pedals' brake-red. */
+.rc-panel.rc-danger{ border-color:var(--rc-red) !important; animation:rcDangerPulse 1s ease-in-out infinite; }
+@keyframes rcDangerPulse{ 0%,100%{ box-shadow:none; } 50%{ box-shadow:0 0 16px rgba(226,0,26,.75), inset 0 0 12px rgba(226,0,26,.22); } }
 .skin-btn{ background:var(--rc-raised); border:1px solid var(--rc-line-hard); color:var(--rc-white);
   font-family:'Rajdhani',sans-serif; font-weight:700; letter-spacing:1.5px; text-transform:uppercase;
   height:38px; padding:0 16px; font-size:12px;
@@ -2822,6 +2826,7 @@ body{
     const socLow = batSoc != null && batSoc < 15;
     rcDrawDial($('rcBatDial'), RC_DIAL_SOC, (batSoc != null && !isNaN(batSoc)) ? batSoc : NaN);
     $('rcBatCap').textContent = haveBat ? batV.toFixed(1) + ' V' : '-- V';
+    $('rcBatDial').closest('.rc-panel')?.classList.toggle('rc-danger', socLow);
     rcDrawPedals($('rcPedalsDial'), d.esp32_throttle || 0, d.esp32_braking || 0, d.orin_cmd_brake || 0);
     // SYSTEM page
     const sys = (id, txt, cls) => { const el = $(id); el.textContent = txt; el.className = 'val num rc-sysval ' + cls; };
@@ -2848,6 +2853,7 @@ body{
     const pf = $('rcPneuPistFill'), pv = $('rcPneuPistVal');
     if (pf) pf.style.width = (pist != null ? Math.max(0, Math.min(100, pist / PNEU_MAX_BAR * 100)) : 0) + '%';
     if (pv) pv.textContent = (pist != null ? pist.toFixed(1) + ' bar' : '-- bar');
+    document.querySelector('.rc-pneu')?.classList.toggle('rc-danger', haveTank && !tankOk);
     // any unhealthy item → the System tab pulses red (tank out of its safe band counts)
     const sysBad = !d.health_magnet_ok || !d.health_i2c_ok || !d.health_heap_ok || !agcOk ||
       !d.esp32_heartbeat || yolo < 15 || esp < 30 || (stkMin !== null && stkMin < 200) ||
