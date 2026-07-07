@@ -2325,11 +2325,14 @@ const RC_DIAL_YOLO = { min: 0, max: 100, major: 20, minor: 10, label: 'YOLO', fm
   arcs: [{ from: 0, to: 15, color: '#5c0009' }, { from: 15, to: 30, color: '#7a5510' }, { from: 30, to: 100, color: '#1e5c37' }] };
 const RC_DIAL_HEAP = { min: 0, max: 300, major: 100, minor: 25, label: 'HEAP', fmt: v => v.toFixed(0) + ' kB',
   arcs: [{ from: 0, to: 50, color: '#5c0009' }, { from: 50, to: 100, color: '#7a5510' }, { from: 100, to: 300, color: '#1e5c37' }] };
-// Pneumatic (EBS) reservoir limits — PLACEHOLDERS, confirm the real safe range with the team.
-const PNEU_MAX_BAR = 12, PNEU_TANK_MIN = 6, PNEU_TANK_MAX = 10;
-const RC_DIAL_TANK = { min: 0, max: PNEU_MAX_BAR, major: 3, minor: 1, numbers: true, label: 'TANK',
+// Pneumatic EBS reservoir: Festo CRVZS-0.75 (160235), 0.75 L, PS 16 bar. Operating
+// range 6-10 bar: 10 bar charged (FS T9.3.2 caps operating pressure at 10 bar), 6 bar
+// minimum to guarantee ~3 brake activations (10->6 bar). Tank sensor: Festo SDE5-D10
+// (567465), 0-10 bar. Source: ~/dv/kart/pneumatics/README.md + history.md.
+const PNEU_MAX_BAR = 10, PNEU_TANK_MIN = 6, PNEU_TANK_MAX = 10;
+const RC_DIAL_TANK = { min: 0, max: PNEU_MAX_BAR, major: 2, minor: 1, numbers: true, label: 'TANK',
   fmt: v => (v == null || isNaN(v)) ? '-- bar' : v.toFixed(1) + ' bar',
-  arcs: [{ from: 0, to: PNEU_TANK_MIN, color: '#5c0009' }, { from: PNEU_TANK_MIN, to: PNEU_TANK_MAX, color: '#1e5c37' }, { from: PNEU_TANK_MAX, to: PNEU_MAX_BAR, color: '#5c0009' }] };
+  arcs: [{ from: 0, to: PNEU_TANK_MIN, color: '#5c0009' }, { from: PNEU_TANK_MIN, to: PNEU_MAX_BAR, color: '#1e5c37' }] };
 
 const skinRace = {
   name: 'Race',
