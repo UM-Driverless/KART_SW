@@ -2048,31 +2048,87 @@ function drawCenital(canvas, cones) {
   }
 }
 
-// G-G diagram for Default skin
+// G-G (friction-circle) diagram — shared by the Legacy, Artemis and Race
+// skins (all draw into a 140x140 #ggCanvas). Rings are labelled in g,
+// axes carry half-g ticks and direction cues (ACC/BRK vertical = longitudinal,
+// L/R horizontal = lateral) so the live dot has a readable scale.
 function drawGG(latG, lonG, borderC, dimC, accentC, blur) {
   const canvas = $('ggCanvas'); if (!canvas) return;
   const ctx = canvas.getContext('2d');
-  const R=65, CX=70, CY=70, MAX=2;
+  const R=50, CX=70, CY=70, MAX=2;   // R leaves a margin for the edge labels
   ctx.clearRect(0,0,140,140);
-  ctx.strokeStyle=borderC; ctx.lineWidth=1;
-  for (let r=1;r<=2;r++) { ctx.beginPath(); ctx.arc(CX,CY,R*r/MAX,0,Math.PI*2); ctx.stroke(); }
-  ctx.strokeStyle=dimC; ctx.beginPath(); ctx.moveTo(CX-R,CY); ctx.lineTo(CX+R,CY); ctx.moveTo(CX,CY-R); ctx.lineTo(CX,CY+R); ctx.stroke();
-  const px=CX+(latG/MAX)*R, py=CY-(lonG/MAX)*R;
+  ctx.lineWidth=1;
+  // concentric g-rings, each labelled on the upper-right diagonal
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  for (let g=1; g<=MAX; g++) {
+    const rr=R*g/MAX;
+    ctx.strokeStyle=borderC; ctx.beginPath(); ctx.arc(CX,CY,rr,0,Math.PI*2); ctx.stroke();
+    ctx.font='700 14px Rajdhani, system-ui, sans-serif';
+    ctx.fillStyle='#b4b4be';
+    ctx.fillText(g+'g', CX+rr*0.707, CY-rr*0.707);
+  }
+  // axes
+  ctx.strokeStyle=dimC; ctx.beginPath();
+  ctx.moveTo(CX-R,CY); ctx.lineTo(CX+R,CY); ctx.moveTo(CX,CY-R); ctx.lineTo(CX,CY+R); ctx.stroke();
+  // half-g tick marks on both axes
+  ctx.strokeStyle=borderC;
+  for (let g=0.5; g<MAX; g+=0.5) {
+    const rr=R*g/MAX; ctx.beginPath();
+    ctx.moveTo(CX+rr,CY-3); ctx.lineTo(CX+rr,CY+3);
+    ctx.moveTo(CX-rr,CY-3); ctx.lineTo(CX-rr,CY+3);
+    ctx.moveTo(CX-3,CY-rr); ctx.lineTo(CX+3,CY-rr);
+    ctx.moveTo(CX-3,CY+rr); ctx.lineTo(CX+3,CY+rr);
+    ctx.stroke();
+  }
+  // direction cues at the axis ends
+  ctx.fillStyle='#9a9aa4'; ctx.font='700 11px Rajdhani, system-ui, sans-serif';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText('ACC', CX, CY-R-9);
+  ctx.fillText('BRK', CX, CY+R+9);
+  ctx.textAlign='right'; ctx.fillText('L', CX-R-6, CY);
+  ctx.textAlign='left';  ctx.fillText('R', CX+R+6, CY);
+  // live g dot (clamped to the plot), with a soft halo
+  const cl=Math.max(-MAX,Math.min(MAX,latG)), cn=Math.max(-MAX,Math.min(MAX,lonG));
+  const px=CX+(cl/MAX)*R, py=CY-(cn/MAX)*R;
   ctx.fillStyle=accentC; ctx.shadowColor=accentC; ctx.shadowBlur=blur;
   ctx.beginPath(); ctx.arc(px,py,5,0,Math.PI*2); ctx.fill(); ctx.shadowBlur=0;
   ctx.fillStyle=accentC+'4d'; ctx.beginPath(); ctx.arc(px,py,8,0,Math.PI*2); ctx.fill();
 }
 
-// G-G diagram for HUD skin (130x130 canvas, square shape)
+// G-G diagram for HUD skin (130x130 canvas, square shape). Same labelled
+// scale as drawGG: g-rings, half-g ticks, ACC/BRK (longitudinal) + L/R (lateral).
 function drawGGhud(latG, lonG) {
   const canvas = $('ggCanvas'); if (!canvas) return;
   const ctx = canvas.getContext('2d');
-  const R=55, CX=65, CY=65, MAX=2;
+  const R=46, CX=65, CY=65, MAX=2;
   ctx.clearRect(0,0,130,130);
-  ctx.strokeStyle='rgba(255,255,255,0.07)'; ctx.lineWidth=1;
-  for (let r=1;r<=2;r++) { ctx.beginPath(); ctx.arc(CX,CY,R*r/MAX,0,Math.PI*2); ctx.stroke(); }
-  ctx.strokeStyle='rgba(255,255,255,0.04)'; ctx.beginPath(); ctx.moveTo(CX-R,CY); ctx.lineTo(CX+R,CY); ctx.moveTo(CX,CY-R); ctx.lineTo(CX,CY+R); ctx.stroke();
-  const px=CX+(latG/MAX)*R, py=CY-(lonG/MAX)*R;
+  ctx.lineWidth=1;
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  for (let g=1; g<=MAX; g++) {
+    const rr=R*g/MAX;
+    ctx.strokeStyle='rgba(255,255,255,0.10)'; ctx.beginPath(); ctx.arc(CX,CY,rr,0,Math.PI*2); ctx.stroke();
+    ctx.font='700 13px Rajdhani, system-ui, sans-serif';
+    ctx.fillStyle='rgba(255,255,255,0.72)';
+    ctx.fillText(g+'g', CX+rr*0.707, CY-rr*0.707);
+  }
+  ctx.strokeStyle='rgba(255,255,255,0.06)'; ctx.beginPath();
+  ctx.moveTo(CX-R,CY); ctx.lineTo(CX+R,CY); ctx.moveTo(CX,CY-R); ctx.lineTo(CX,CY+R); ctx.stroke();
+  ctx.strokeStyle='rgba(255,255,255,0.12)';
+  for (let g=0.5; g<MAX; g+=0.5) {
+    const rr=R*g/MAX; ctx.beginPath();
+    ctx.moveTo(CX+rr,CY-3); ctx.lineTo(CX+rr,CY+3);
+    ctx.moveTo(CX-rr,CY-3); ctx.lineTo(CX-rr,CY+3);
+    ctx.moveTo(CX-3,CY-rr); ctx.lineTo(CX+3,CY-rr);
+    ctx.moveTo(CX-3,CY+rr); ctx.lineTo(CX+3,CY+rr);
+    ctx.stroke();
+  }
+  ctx.fillStyle='rgba(255,255,255,0.6)'; ctx.font='700 10px Rajdhani, system-ui, sans-serif';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText('ACC', CX, CY-R-9); ctx.fillText('BRK', CX, CY+R+9);
+  ctx.textAlign='right'; ctx.fillText('L', CX-R-6, CY);
+  ctx.textAlign='left';  ctx.fillText('R', CX+R+6, CY);
+  const cl=Math.max(-MAX,Math.min(MAX,latG)), cn=Math.max(-MAX,Math.min(MAX,lonG));
+  const px=CX+(cl/MAX)*R, py=CY-(cn/MAX)*R;
   ctx.fillStyle='#00b4ff'; ctx.shadowColor='#00b4ff'; ctx.shadowBlur=12;
   ctx.beginPath(); ctx.arc(px,py,5,0,Math.PI*2); ctx.fill(); ctx.shadowBlur=0;
   ctx.fillStyle='#00b4ff4d'; ctx.beginPath(); ctx.arc(px,py,8,0,Math.PI*2); ctx.fill();
@@ -2146,6 +2202,76 @@ function rcDrawDial(canvas, cfg, value) {
   ctx.beginPath(); ctx.arc(CX, CY, R * 0.09, 0, 6.2832);
   ctx.fillStyle = '#141416'; ctx.fill();
   ctx.strokeStyle = '#e2001a'; ctx.lineWidth = 2; ctx.stroke();
+}
+// Pedals dial — a centre-zero needle set on the top semicircle. Needles up =
+// idle. RIGHT/green = throttle, LEFT/red = brake.
+//   • Throttle: ONE needle. The kart has no independent throttle sensor — the
+//     value is the electronic effort we command — so there is no target-vs-real
+//     split to show.
+//   • Brake: TWO needles chasing each other — amber = commanded target,
+//     red = real (brake-pressure sensor channel, esp32_braking).
+// Same red = real / amber = target convention as the steering gauge.
+function rcDrawPedals(canvas, thr, brkReal, brkTgt) {
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, CX = W / 2, CY = W / 2, R = W / 2 - 4;
+  ctx.clearRect(0, 0, W, W);
+  ctx.beginPath(); ctx.arc(CX, CY, R, 0, 6.2832);
+  ctx.fillStyle = '#0a0a0c'; ctx.fill();
+  ctx.strokeStyle = '#2c2c2f'; ctx.lineWidth = 2; ctx.stroke();
+  // angle for a pedal reading: side +1 = throttle (up→right), -1 = brake (up→left); v in 0..1
+  const ang = (side, v) => -Math.PI / 2 + side * Math.max(0, Math.min(1, v)) * (Math.PI / 2);
+  // colored scale arcs on the top semicircle
+  ctx.lineWidth = R * 0.08; ctx.lineCap = 'butt';
+  ctx.beginPath(); ctx.arc(CX, CY, R - R * 0.10, ang(1, 0), ang(1, 1)); ctx.strokeStyle = '#1f7a34'; ctx.stroke();
+  ctx.beginPath(); ctx.arc(CX, CY, R - R * 0.10, ang(-1, 1), ang(-1, 0)); ctx.strokeStyle = '#7a1420'; ctx.stroke();
+  // ticks + 0/.5/1 scale labels on both sides (0 = idle at top, 1 = full at the ends)
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  for (const side of [1, -1]) {
+    for (let t = 0; t <= 1.0001; t += 0.25) {
+      const maj = Math.abs(t - 0) < 1e-6 || Math.abs(t - 0.5) < 1e-6 || Math.abs(t - 1) < 1e-6;
+      const a = ang(side, t), c = Math.cos(a), s = Math.sin(a);
+      const rout = R - 3, rin = R - (maj ? R * 0.17 : R * 0.10);
+      ctx.beginPath(); ctx.moveTo(CX + c * rout, CY + s * rout); ctx.lineTo(CX + c * rin, CY + s * rin);
+      ctx.strokeStyle = maj ? '#9a9a9f' : '#3f3f43'; ctx.lineWidth = maj ? 2 : 1; ctx.stroke();
+      if (maj && !(Math.abs(t - 0) < 1e-6 && side === -1)) {   // draw the shared top "0" once
+        ctx.fillStyle = '#6a6a72'; ctx.font = '700 ' + Math.round(R * 0.12) + 'px Rajdhani, system-ui, sans-serif';
+        const rl = R - R * 0.32;
+        ctx.fillText(t === 0 ? '0' : (t === 1 ? '1' : '.5'), CX + c * rl, CY + s * rl);
+      }
+    }
+  }
+  // side labels
+  ctx.fillStyle = '#b4b4be'; ctx.font = '700 ' + Math.round(R * 0.14) + 'px Rajdhani, system-ui, sans-serif';
+  ctx.fillText('THR', CX + R * 0.60, CY - R * 0.28);
+  ctx.fillText('BRK', CX - R * 0.60, CY - R * 0.28);
+  // needles
+  const needle = (side, v, color, len, w, glow) => {
+    const a = ang(side, v);
+    ctx.strokeStyle = color; ctx.lineWidth = w; ctx.lineCap = 'round';
+    if (glow) { ctx.shadowColor = color; ctx.shadowBlur = 6; }
+    ctx.beginPath(); ctx.moveTo(CX, CY); ctx.lineTo(CX + Math.cos(a) * R * len, CY + Math.sin(a) * R * len); ctx.stroke();
+    ctx.shadowBlur = 0;
+  };
+  needle(-1, brkTgt || 0, '#ffb020', 0.64, Math.max(2, R * 0.035), false);  // brake target (amber)
+  needle(-1, brkReal || 0, '#e2001a', 0.76, Math.max(2.5, R * 0.05), true); // brake real (red)
+  needle(1, thr || 0, '#e2001a', 0.76, Math.max(2.5, R * 0.05), true);      // throttle (red)
+  // hub
+  ctx.beginPath(); ctx.arc(CX, CY, R * 0.08, 0, 6.2832);
+  ctx.fillStyle = '#141416'; ctx.fill();
+  ctx.strokeStyle = '#e2001a'; ctx.lineWidth = 2; ctx.stroke();
+  // legend (red = real, amber = target) in the lower half
+  ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  ctx.font = '700 ' + Math.round(R * 0.115) + 'px Rajdhani, system-ui, sans-serif';
+  const ly = CY + R * 0.50;
+  ctx.fillStyle = '#e2001a'; ctx.beginPath(); ctx.arc(CX - R * 0.50, ly, R * 0.04, 0, 6.2832); ctx.fill();
+  ctx.fillStyle = '#8a8a92'; ctx.fillText('REAL', CX - R * 0.50 + R * 0.09, ly);
+  ctx.fillStyle = '#ffb020'; ctx.beginPath(); ctx.arc(CX + R * 0.12, ly, R * 0.04, 0, 6.2832); ctx.fill();
+  ctx.fillStyle = '#8a8a92'; ctx.fillText('TGT', CX + R * 0.12 + R * 0.09, ly);
+  // numeric readout
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#c8c8ce'; ctx.font = '700 ' + Math.round(R * 0.15) + 'px Orbitron, sans-serif';
+  ctx.fillText('T' + Math.round((thr || 0) * 100) + ' B' + Math.round((brkReal || 0) * 100), CX, CY + R * 0.72);
 }
 function rcDrawClock(canvas) {
   if (!canvas) return;
@@ -2263,7 +2389,7 @@ body{
 .rc-label{ font-size:10.5px; letter-spacing:.2em; color:var(--rc-label); text-transform:uppercase; font-weight:700; }
 
 /* ---- page 1: TELE ---- */
-.rc-drive{ display:grid; grid-template-columns:1fr 1.35fr 1fr; gap:8px; height:100%; min-height:0; }
+.rc-drive{ display:grid; grid-template-columns:1.2fr 1.25fr 1fr; gap:8px; height:100%; min-height:0; }
 .rc-drive > *{ min-height:0; min-width:0; }
 .rc-steer{ display:flex; flex-direction:column; align-items:center; justify-content:center; padding:10px 6px 6px; }
 .rc-steer svg{ width:96%; height:auto; max-height:60%; }
@@ -2309,6 +2435,12 @@ body{
 .rc-mini-lbl{ position:absolute; top:6px; left:10px; font-size:9px; letter-spacing:.18em;
   color:var(--rc-label-dim); text-transform:uppercase; font-weight:700; }
 .rc-pwm{ font-size:9px; color:var(--rc-label-dim); letter-spacing:.14em; margin-top:5px; font-weight:700; text-transform:uppercase; }
+.rc-legend{ display:flex; gap:12px; align-items:center; margin-top:5px; font-size:9px; font-weight:700;
+  letter-spacing:.12em; text-transform:uppercase; color:var(--rc-label-dim); }
+.rc-legend span{ display:flex; align-items:center; gap:4px; }
+.rc-legend .lg-dot{ width:8px; height:8px; border-radius:50%; display:inline-block; }
+.rc-legend .lg-a{ background:#e2001a; box-shadow:0 0 4px rgba(226,0,26,.7); }
+.rc-legend .lg-t{ background:#ffb020; }
 
 /* ---- page 2: MISSION ---- */
 .rc-mission{ display:grid; grid-template-columns:1.15fr 1fr 1fr; gap:8px; height:100%; }
@@ -2369,14 +2501,6 @@ body{
 /* ---- bottom bar (persistent) ---- */
 .race-bottombar{ display:flex; align-items:center; gap:12px; padding:0 12px;
   border-top:1px solid var(--rc-line); background:var(--rc-panel); }
-.rc-pedal{ display:flex; align-items:center; gap:7px; flex:1; max-width:185px; }
-.rc-pedal .lbl{ font-size:9px; color:var(--rc-label); letter-spacing:.14em; text-transform:uppercase; font-weight:700; }
-.rc-pedal .track{ flex:1; height:7px; background:var(--rc-raised); overflow:hidden; border:1px solid var(--rc-line); position:relative; }
-.rc-pedal .track .tgt{ position:absolute; top:0; bottom:0; width:2px; left:0; background:var(--rc-amber); box-shadow:0 0 4px var(--rc-amber); }
-.rc-pedal .track .fill{ height:100%; width:0%; transition:width .12s linear; }
-.rc-pedal .fill.thr{ background:var(--rc-green); }
-.rc-pedal .fill.brk{ background:var(--rc-red); }
-.rc-pedal .pv{ font-size:9px; color:var(--rc-label); min-width:28px; font-family:'Rajdhani',sans-serif; font-weight:700; }
 .race-tabs{ display:flex; gap:2px; margin:0 auto; height:100%; }
 .race-tab{ background:none; border:none; color:var(--rc-label-dim); font-family:'Rajdhani',sans-serif; font-weight:700;
   letter-spacing:.14em; font-size:10px; padding:0 10px; cursor:pointer; text-transform:uppercase; }
@@ -2412,6 +2536,14 @@ body{
     <div class="race-track" id="rcTrack">
 
       <div class="race-page rc-drive">
+        <div class="rc-panel rc-speeddial">
+          <div class="rc-corner"></div><div class="rc-rivet tl"></div><div class="rc-rivet bl"></div>
+          <span class="rc-label">Speed</span>
+          <canvas id="rcSpeedDial" width="300" height="300"></canvas>
+          <div class="rc-speed-digital"><span class="num" id="rcSpeedVal">0.0</span><span class="unit">km/h</span></div>
+          <div class="rc-acceltrack"><div class="mid"></div><div class="fill" id="rcAccelFill"></div></div>
+          <div class="rc-accelcap" id="rcAccelCaption">LON 0.00 g · LAT 0.00 g</div>
+        </div>
         <div class="rc-panel rc-steer">
           <div class="rc-corner"></div><div class="rc-rivet tl"></div><div class="rc-rivet bl"></div>
           <span class="rc-label">Steering angle</span>
@@ -2433,20 +2565,13 @@ body{
           <div class="rc-dirbar"><div class="mid"></div><div class="fill" id="rcDirFill"></div></div>
           <div class="rc-lr"><span>L 90°</span><span>R 90°</span></div>
           <div class="rc-pwm">PWM <span id="rcPwmVal">0</span>%</div>
-        </div>
-        <div class="rc-panel rc-speeddial">
-          <div class="rc-corner"></div><div class="rc-rivet tl"></div><div class="rc-rivet bl"></div>
-          <span class="rc-label">Speed</span>
-          <canvas id="rcSpeedDial" width="300" height="300"></canvas>
-          <div class="rc-speed-digital"><span class="num" id="rcSpeedVal">0.0</span><span class="unit">km/h</span></div>
-          <div class="rc-acceltrack"><div class="mid"></div><div class="fill" id="rcAccelFill"></div></div>
-          <div class="rc-accelcap" id="rcAccelCaption">LON 0.00 g · LAT 0.00 g</div>
+          <div class="rc-legend"><span><span class="lg-dot lg-a"></span>actual</span><span><span class="lg-dot lg-t"></span>target</span></div>
         </div>
         <div class="rc-minis">
           <div class="rc-panel rc-mini"><canvas id="rcDialYolo" width="150" height="150"></canvas></div>
           <div class="rc-panel rc-mini"><span class="rc-mini-lbl">G</span><canvas id="ggCanvas" width="140" height="140"></canvas></div>
           <div class="rc-panel rc-mini"><canvas id="rcDialHeap" width="150" height="150"></canvas></div>
-          <div class="rc-panel rc-mini"><canvas id="rcClock" width="150" height="150"></canvas></div>
+          <div class="rc-panel rc-mini"><span class="rc-mini-lbl">Pedals</span><canvas id="rcPedalsDial" width="150" height="150"></canvas></div>
         </div>
       </div>
 
@@ -2499,8 +2624,6 @@ body{
     </div>
   </div>
   <div class="race-bottombar">
-    <div class="rc-pedal"><span class="lbl">Accel</span><div class="track"><div class="fill thr" id="thrFill"></div><div class="tgt" id="thrTgt"></div></div><span class="pv" id="vThr">0%</span></div>
-    <div class="rc-pedal"><span class="lbl">Brake</span><div class="track"><div class="fill brk" id="brkFill"></div><div class="tgt" id="brkTgt"></div></div><span class="pv" id="vBrk">0%</span></div>
     <div class="race-tabs">
       <button class="race-tab on">Telemetry</button><button class="race-tab">Mission</button><button class="race-tab">Vision</button><button class="race-tab">System</button>
     </div>
@@ -2589,13 +2712,11 @@ body{
     rcDrawDial($('rcSpeedDial'), RC_DIAL_SPEED, 0);
     rcDrawDial($('rcDialYolo'), RC_DIAL_YOLO, 0);
     rcDrawDial($('rcDialHeap'), RC_DIAL_HEAP, 0);
-    rcDrawClock($('rcClock'));
-    const rcClockId = setInterval(() => rcDrawClock($('rcClock')), 1000);
+    rcDrawPedals($('rcPedalsDial'), 0, 0, 0);
     return () => {
       hudHome.parent.insertBefore(hud, hudHome.next);
       joyHome.parent.insertBefore(joy, joyHome.next);
       rcPwr.innerHTML = rcPwrHtml;
-      clearInterval(rcClockId);
     };
   },
 
@@ -2622,16 +2743,15 @@ body{
     else { af.style.left = (50 + aPct) + '%'; af.style.width = (-aPct) + '%'; af.style.background = 'var(--rc-red)'; }
     $('rcAccelCaption').textContent = `LON ${lonG.toFixed(2)} g · LAT ${latG.toFixed(2)} g`;
     // targets ride the same instruments: amber needle on the steering gauge
-    // (above), amber ticks on the pedal bars, PWM readout under the gauge
+    // (above), amber needles in the pedals dial, PWM readout under the gauge
     $('rcPwmVal').textContent = Math.round(Math.abs(d.esp32_steering_pwm || 0) * 100);
-    $('thrTgt').style.left = Math.round((d.orin_cmd_throttle || 0) * 100) + '%';
-    $('brkTgt').style.left = Math.round((d.orin_cmd_brake || 0) * 100) + '%';
     // G-G mini dial in the telemetry cluster
     drawGG(latG, lonG, '#2c2c2f', '#84848a40', '#e2001a', 8);
     // mini instrument dials
     const yolo = d.yolo_fps || 0, esp = d.esp_fps || 0, heap = d.health_heap_kb || 0;
     rcDrawDial($('rcDialYolo'), RC_DIAL_YOLO, yolo);
     rcDrawDial($('rcDialHeap'), RC_DIAL_HEAP, heap);
+    rcDrawPedals($('rcPedalsDial'), d.esp32_throttle || 0, d.esp32_braking || 0, d.orin_cmd_brake || 0);
     // SYSTEM page
     const sys = (id, txt, cls) => { const el = $(id); el.textContent = txt; el.className = 'val num rc-sysval ' + cls; };
     const agcOk = d.health_agc >= 20 && d.health_agc <= 235;
@@ -2657,9 +2777,9 @@ body{
     const st = $('rcSysState');
     st.textContent = (d.as_state || d.state || '--').toUpperCase();
     st.style.fontSize = '14px';
-    // cenital + shared widgets
+    // cenital + shared widgets (pedals now live in the rcPedalsDial gauge, not a bottom bar)
     drawCenital($('rcCenital'), d.cones_3d_ground || []);
-    updatePedals(d); updatePills(d); updateMissions(d); updateStateButtons(d);
+    updatePills(d); updateMissions(d); updateStateButtons(d);
   }
 };
 
