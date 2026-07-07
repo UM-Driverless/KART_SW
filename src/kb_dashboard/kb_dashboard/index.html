@@ -2387,8 +2387,15 @@ body{
 @keyframes rcPulse{ 0%,100%{opacity:1;} 50%{opacity:.25;} }
 /* Danger glow — a panel whose gauge is in its RED (act-now) zone pulses red. Reserve for real
    danger (battery <15%, tank out of range), never amber and never the pedals' brake-red. */
-.rc-panel.rc-danger{ border-color:var(--rc-red) !important; animation:rcDangerPulse 1s ease-in-out infinite; }
-@keyframes rcDangerPulse{ 0%,100%{ box-shadow:none; } 50%{ box-shadow:0 0 16px rgba(226,0,26,.75), inset 0 0 12px rgba(226,0,26,.22); } }
+.rc-panel.rc-danger{ border-color:var(--rc-red) !important; animation:rcDangerPulse 1.15s ease-out infinite; }
+/* Heartbeat: two sharp red flashes then a low glow "rest" between beats — reads as an alarm. */
+@keyframes rcDangerPulse{
+  0%       { box-shadow:0 0 2px rgba(226,0,26,.2),  inset 0 0 3px rgba(226,0,26,.06); border-color:var(--rc-red-dark); }
+  9%       { box-shadow:0 0 26px 3px rgba(255,48,66,.98), inset 0 0 22px rgba(226,0,26,.5); border-color:#ff5566; }
+  22%      { box-shadow:0 0 6px rgba(226,0,26,.3),  inset 0 0 6px rgba(226,0,26,.12); border-color:var(--rc-red); }
+  33%      { box-shadow:0 0 26px 3px rgba(255,48,66,.98), inset 0 0 22px rgba(226,0,26,.5); border-color:#ff5566; }
+  55%,100% { box-shadow:0 0 3px rgba(226,0,26,.2),  inset 0 0 3px rgba(226,0,26,.06); border-color:var(--rc-red-dark); }
+}
 .skin-btn{ background:var(--rc-raised); border:1px solid var(--rc-line-hard); color:var(--rc-white);
   font-family:'Rajdhani',sans-serif; font-weight:700; letter-spacing:1.5px; text-transform:uppercase;
   height:38px; padding:0 16px; font-size:12px;
