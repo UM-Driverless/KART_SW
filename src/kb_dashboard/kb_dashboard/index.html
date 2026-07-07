@@ -2325,11 +2325,13 @@ function rcDrawClock(canvas) {
 }
 const RC_DIAL_SPEED = { min: 0, max: 50, major: 10, minor: 5, numbers: true, label: 'km/h',
   arcs: [{ from: 45, to: 50, color: '#5c0009' }] };
-// Battery: 13S Molicel P42A pack. 4.2 V/cell full = 54.6 V, 3.6 V nominal = 46.8 V, 2.5 V cutoff = 32.5 V.
-// Green ≥44 V (~3.38 V/cell), amber 40-44 V, red <40 V (~3.08 V/cell = about to run out under load).
-const RC_DIAL_BATTERY = { min: 35, max: 55, major: 5, minor: 1, numbers: true, label: 'BATT',
-  fmt: v => (v == null || isNaN(v)) ? '-- V' : v.toFixed(1) + ' V',
-  arcs: [{ from: 35, to: 40, color: '#5c0009' }, { from: 40, to: 44, color: '#7a5510' }, { from: 44, to: 55, color: '#1e5c37' }] };
+// Battery gauge shows SOC (state of charge), not voltage — SOC is the BMS's coulomb-counted
+// "charge left" and is immune to voltage sag under load (a red voltage would false-alarm while
+// accelerating). Green >30 %, amber 15-30 %, red <15 % (about to run out). Voltage is shown as a
+// neutral secondary readout (13S Molicel P42A pack: 54.6 V full / 46.8 V nominal / 41.6 V ~empty).
+const RC_DIAL_SOC = { min: 0, max: 100, major: 20, minor: 10, numbers: true, label: 'BATT',
+  fmt: v => (v == null || isNaN(v)) ? '--' : Math.round(v) + '%',
+  arcs: [{ from: 0, to: 15, color: '#5c0009' }, { from: 15, to: 30, color: '#7a5510' }, { from: 30, to: 100, color: '#1e5c37' }] };
 const RC_DIAL_YOLO = { min: 0, max: 100, major: 20, minor: 10, numbers: true, label: 'YOLO', fmt: v => v.toFixed(0) + ' Hz',
   arcs: [{ from: 0, to: 15, color: '#5c0009' }, { from: 15, to: 30, color: '#7a5510' }, { from: 30, to: 100, color: '#1e5c37' }] };
 const RC_DIAL_HEAP = { min: 0, max: 300, major: 100, minor: 25, numbers: true, label: 'HEAP', fmt: v => v.toFixed(0) + ' kB',
@@ -2622,7 +2624,7 @@ body{
         <div class="rc-minis">
           <div class="rc-panel rc-mini"><canvas id="rcDialYolo" width="150" height="150"></canvas></div>
           <div class="rc-panel rc-mini rc-mini-col"><span class="rc-mini-lbl">G</span><canvas id="ggCanvas" width="140" height="140"></canvas><div class="rc-gcap" id="rcGCap">LON 0.00 · LAT 0.00 g</div></div>
-          <div class="rc-panel rc-mini rc-mini-col"><canvas id="rcBatDial" width="150" height="150"></canvas><div class="rc-gcap" id="rcBatCap">SOC --</div></div>
+          <div class="rc-panel rc-mini rc-mini-col"><canvas id="rcBatDial" width="150" height="150"></canvas><div class="rc-gcap" id="rcBatCap">-- V</div></div>
           <div class="rc-panel rc-mini"><span class="rc-mini-lbl">Pedals</span><canvas id="rcPedalsDial" width="150" height="150"></canvas></div>
         </div>
       </div>
@@ -2776,7 +2778,7 @@ body{
     drawGG(0, 0, '#2c2c2f', '#84848a40', '#e2001a', 8);
     rcDrawDial($('rcSpeedDial'), RC_DIAL_SPEED, 0);
     rcDrawDial($('rcDialYolo'), RC_DIAL_YOLO, 0);
-    rcDrawDial($('rcBatDial'), RC_DIAL_BATTERY, NaN);
+    rcDrawDial($('rcBatDial'), RC_DIAL_SOC, NaN);
     rcDrawPedals($('rcPedalsDial'), 0, 0, 0);
     rcDrawDial($('rcPneuDial'), RC_DIAL_TANK, NaN);  // '-- bar' until the sensor reports
     return () => {
@@ -2814,12 +2816,12 @@ body{
     // mini instrument dials
     const yolo = d.yolo_fps || 0, esp = d.esp_fps || 0, heap = d.health_heap_kb || 0;
     rcDrawDial($('rcDialYolo'), RC_DIAL_YOLO, yolo);
-    // battery (13S Molicel P42A) — dial with red "about to run out" zone; null → '-- V'. Heap moved to System.
+    // battery: SOC dial (charge left, colour zones, red = about to run out) + voltage number (live, shows sag)
     const batV = d.battery_voltage, batSoc = d.battery_soc;
     const haveBat = batV != null && !isNaN(batV);
     const socLow = batSoc != null && batSoc < 15;
-    rcDrawDial($('rcBatDial'), RC_DIAL_BATTERY, haveBat ? batV : NaN);
-    $('rcBatCap').textContent = (batSoc != null) ? 'SOC ' + Math.round(batSoc) + '%' : 'SOC --';
+    rcDrawDial($('rcBatDial'), RC_DIAL_SOC, (batSoc != null && !isNaN(batSoc)) ? batSoc : NaN);
+    $('rcBatCap').textContent = haveBat ? batV.toFixed(1) + ' V' : '-- V';
     rcDrawPedals($('rcPedalsDial'), d.esp32_throttle || 0, d.esp32_braking || 0, d.orin_cmd_brake || 0);
     // SYSTEM page
     const sys = (id, txt, cls) => { const el = $(id); el.textContent = txt; el.className = 'val num rc-sysval ' + cls; };
