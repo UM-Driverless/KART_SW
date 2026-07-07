@@ -2270,14 +2270,18 @@ function rcDrawPedals(canvas, thr, brkReal, brkTgt) {
   ctx.beginPath(); ctx.arc(CX, CY, R * 0.08, 0, 6.2832);
   ctx.fillStyle = '#141416'; ctx.fill();
   ctx.strokeStyle = '#e2001a'; ctx.lineWidth = 2; ctx.stroke();
-  // legend (red = real, amber = target) in the lower half
-  ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-  ctx.font = '700 ' + Math.round(R * 0.115) + 'px Rajdhani, system-ui, sans-serif';
-  const ly = CY + R * 0.50;
-  ctx.fillStyle = '#e2001a'; ctx.beginPath(); ctx.arc(CX - R * 0.50, ly, R * 0.04, 0, 6.2832); ctx.fill();
-  ctx.fillStyle = '#8a8a92'; ctx.fillText('REAL', CX - R * 0.50 + R * 0.09, ly);
-  ctx.fillStyle = '#ffb020'; ctx.beginPath(); ctx.arc(CX + R * 0.12, ly, R * 0.04, 0, 6.2832); ctx.fill();
-  ctx.fillStyle = '#8a8a92'; ctx.fillText('TGT', CX + R * 0.12 + R * 0.09, ly);
+  // legend (red = real, amber = target) in the lower half — centered, sized to match the dial labels
+  ctx.textBaseline = 'middle';
+  ctx.font = '700 ' + Math.round(R * 0.14) + 'px Rajdhani, system-ui, sans-serif';
+  const ly = CY + R * 0.50, dotR = R * 0.05, dgap = R * 0.09, mid = R * 0.22;
+  const wReal = ctx.measureText('REAL').width, wTgt = ctx.measureText('TARGET').width;
+  let lx = CX - (dotR * 4 + dgap * 2 + wReal + wTgt + mid) / 2;
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#e2001a'; ctx.beginPath(); ctx.arc(lx + dotR, ly, dotR, 0, 6.2832); ctx.fill();
+  ctx.fillStyle = '#b4b4be'; ctx.fillText('REAL', lx + dotR * 2 + dgap, ly);
+  lx += dotR * 2 + dgap + wReal + mid;
+  ctx.fillStyle = '#ffb020'; ctx.beginPath(); ctx.arc(lx + dotR, ly, dotR, 0, 6.2832); ctx.fill();
+  ctx.fillStyle = '#b4b4be'; ctx.fillText('TARGET', lx + dotR * 2 + dgap, ly);
   // numeric readout
   ctx.textAlign = 'center';
   ctx.fillStyle = '#c8c8ce'; ctx.font = '700 ' + Math.round(R * 0.15) + 'px Orbitron, sans-serif';
