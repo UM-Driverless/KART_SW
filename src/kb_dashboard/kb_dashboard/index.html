@@ -2429,10 +2429,6 @@ body{
   text-shadow:0 0 30px rgba(226,0,26,.35); letter-spacing:.02em; }
 .rc-speed .unit{ font-size:clamp(14px,2.4vh,20px); font-family:'Rajdhani',sans-serif; color:var(--rc-label);
   font-weight:700; padding-bottom:.6em; letter-spacing:.08em; }
-.rc-acceltrack{ width:70%; height:6px; background:var(--rc-raised); margin-top:2vh; position:relative; overflow:hidden; border:1px solid var(--rc-line); }
-.rc-acceltrack .mid{ position:absolute; left:50%; top:0; bottom:0; width:2px; background:var(--rc-line-hard); }
-.rc-acceltrack .fill{ position:absolute; top:0; bottom:0; transition:width .15s linear, left .15s linear; }
-.rc-accelcap{ font-size:9.5px; color:var(--rc-label-dim); letter-spacing:.16em; margin-top:7px; text-transform:uppercase; font-weight:700; }
 .rc-stack{ display:flex; flex-direction:column; gap:6px; height:100%; }
 .rc-card{ background:var(--rc-panel); border:1px solid var(--rc-line); flex:1; display:flex; flex-direction:column;
   justify-content:center; padding:10px 16px; position:relative;
@@ -2447,10 +2443,13 @@ body{
 #rcSpeedDial{ max-height:54%; max-width:82%; width:auto; height:auto; }
 .rc-speed-digital{ display:flex; align-items:baseline; gap:6px; font-size:clamp(18px,4.5vh,30px); text-shadow:0 0 18px rgba(226,0,26,.35); }
 .rc-speed-digital .unit{ font-size:11px; color:var(--rc-label); font-weight:700; font-family:'Rajdhani',sans-serif; letter-spacing:.08em; }
-.rc-speeddial .rc-acceltrack{ margin-top:4px; }
 .rc-minis{ display:grid; grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr; gap:6px; height:100%; min-height:0; }
 .rc-mini{ display:flex; align-items:center; justify-content:center; padding:5px; min-height:0; }
 .rc-mini canvas{ max-height:94%; max-width:94%; width:auto; height:auto; }
+.rc-mini-col{ flex-direction:column; gap:3px; }
+.rc-mini-col canvas{ max-height:80%; }
+.rc-gcap{ font-size:8px; color:var(--rc-label-dim); letter-spacing:.06em; text-transform:uppercase;
+  font-weight:700; font-variant-numeric:tabular-nums; white-space:nowrap; }
 
 #ggCanvas{ background:#0a0a0c; border:1px solid var(--rc-line); border-radius:50%; }
 .rc-mini{ position:relative; }
@@ -2591,8 +2590,6 @@ body{
           <span class="rc-label">Speed</span>
           <canvas id="rcSpeedDial" width="300" height="300"></canvas>
           <div class="rc-speed-digital"><span class="num" id="rcSpeedVal">0.0</span><span class="unit">km/h</span></div>
-          <div class="rc-acceltrack"><div class="mid"></div><div class="fill" id="rcAccelFill"></div></div>
-          <div class="rc-accelcap" id="rcAccelCaption">LON 0.00 g · LAT 0.00 g</div>
         </div>
         <div class="rc-panel rc-steer">
           <div class="rc-corner"></div><div class="rc-rivet tl"></div><div class="rc-rivet bl"></div>
@@ -2619,7 +2616,7 @@ body{
         </div>
         <div class="rc-minis">
           <div class="rc-panel rc-mini"><canvas id="rcDialYolo" width="150" height="150"></canvas></div>
-          <div class="rc-panel rc-mini"><span class="rc-mini-lbl">G</span><canvas id="ggCanvas" width="140" height="140"></canvas></div>
+          <div class="rc-panel rc-mini rc-mini-col"><span class="rc-mini-lbl">G</span><canvas id="ggCanvas" width="140" height="140"></canvas><div class="rc-gcap" id="rcGCap">LON 0.00 · LAT 0.00 g</div></div>
           <div class="rc-panel rc-mini"><canvas id="rcDialHeap" width="150" height="150"></canvas></div>
           <div class="rc-panel rc-mini"><span class="rc-mini-lbl">Pedals</span><canvas id="rcPedalsDial" width="150" height="150"></canvas></div>
         </div>
@@ -2798,20 +2795,17 @@ body{
     const dirPct = 50 + (degAct / 90) * 50, df = $('rcDirFill');
     if (degAct >= 0) { df.style.left = '50%'; df.style.width = (dirPct - 50) + '%'; }
     else { df.style.left = dirPct + '%'; df.style.width = (50 - dirPct) + '%'; }
-    // speed dial + digital + accel bar
+    // speed dial + digital
     const kmh = (d.esp32_speed || 0) * 3.6;
     rcDrawDial($('rcSpeedDial'), RC_DIAL_SPEED, kmh);
     $('rcSpeedVal').textContent = kmh.toFixed(1);
     const lonG = (d.esp32_accel_lon || 0) / 9.81, latG = (d.esp32_accel_lat || 0) / 9.81;
-    const aPct = Math.max(-50, Math.min(50, lonG * 50)), af = $('rcAccelFill');
-    if (aPct >= 0) { af.style.left = '50%'; af.style.width = aPct + '%'; af.style.background = 'var(--rc-green)'; }
-    else { af.style.left = (50 + aPct) + '%'; af.style.width = (-aPct) + '%'; af.style.background = 'var(--rc-red)'; }
-    $('rcAccelCaption').textContent = `LON ${lonG.toFixed(2)} g · LAT ${latG.toFixed(2)} g`;
     // targets ride the same instruments: amber needle on the steering gauge
     // (above), amber needles in the pedals dial, PWM readout under the gauge
     $('rcPwmVal').textContent = Math.round(Math.abs(d.esp32_steering_pwm || 0) * 100);
-    // G-G mini dial in the telemetry cluster
+    // G-G mini dial in the telemetry cluster (holds the exact g-force numbers)
     drawGG(latG, lonG, '#2c2c2f', '#84848a40', '#e2001a', 8);
+    $('rcGCap').textContent = `LON ${lonG.toFixed(2)} · LAT ${latG.toFixed(2)} g`;
     // mini instrument dials
     const yolo = d.yolo_fps || 0, esp = d.esp_fps || 0, heap = d.health_heap_kb || 0;
     rcDrawDial($('rcDialYolo'), RC_DIAL_YOLO, yolo);
