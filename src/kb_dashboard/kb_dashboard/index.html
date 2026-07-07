@@ -2321,9 +2321,9 @@ function rcDrawClock(canvas) {
 }
 const RC_DIAL_SPEED = { min: 0, max: 50, major: 10, minor: 5, numbers: true, label: 'km/h',
   arcs: [{ from: 45, to: 50, color: '#5c0009' }] };
-const RC_DIAL_YOLO = { min: 0, max: 100, major: 20, minor: 10, label: 'YOLO', fmt: v => v.toFixed(0) + ' Hz',
+const RC_DIAL_YOLO = { min: 0, max: 100, major: 20, minor: 10, numbers: true, label: 'YOLO', fmt: v => v.toFixed(0) + ' Hz',
   arcs: [{ from: 0, to: 15, color: '#5c0009' }, { from: 15, to: 30, color: '#7a5510' }, { from: 30, to: 100, color: '#1e5c37' }] };
-const RC_DIAL_HEAP = { min: 0, max: 300, major: 100, minor: 25, label: 'HEAP', fmt: v => v.toFixed(0) + ' kB',
+const RC_DIAL_HEAP = { min: 0, max: 300, major: 100, minor: 25, numbers: true, label: 'HEAP', fmt: v => v.toFixed(0) + ' kB',
   arcs: [{ from: 0, to: 50, color: '#5c0009' }, { from: 50, to: 100, color: '#7a5510' }, { from: 100, to: 300, color: '#1e5c37' }] };
 // Pneumatic EBS reservoir: Festo CRVZS-0.75 (160235), 0.75 L, PS 16 bar. Operating
 // range 6-10 bar: 10 bar charged (FS T9.3.2 caps operating pressure at 10 bar), 6 bar
