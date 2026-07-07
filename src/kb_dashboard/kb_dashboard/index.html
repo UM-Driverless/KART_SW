@@ -2456,32 +2456,46 @@ body{
 .rc-mission{ display:grid; grid-template-columns:1.15fr 1fr 1fr; gap:8px; height:100%; }
 .rc-mpanel{ padding:10px 12px; display:flex; flex-direction:column; gap:8px; min-height:0; overflow-y:auto; }
 .mis-grid{ display:grid; grid-template-columns:1fr 1fr; gap:5px; flex:1; }
-.mis-btn{ border:1px solid var(--rc-line-hard); background:var(--rc-raised); color:var(--rc-label);
+.mis-btn{ border:1px solid var(--rc-line-hard); background:linear-gradient(180deg,#1f1f25,#131317); color:var(--rc-label);
   font-family:'Rajdhani',sans-serif; font-weight:700; font-size:10px; letter-spacing:.1em; text-transform:uppercase;
   cursor:pointer; padding:8px 4px; -webkit-user-select:none; user-select:none;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.05); transition:filter .12s ease, border-color .12s ease;
   clip-path:polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px)); }
+.mis-btn:hover{ filter:brightness(1.3); border-color:var(--rc-label); }
 .mis-btn:active{ transform:scale(0.97); }
-.mis-btn.sel{ background:var(--rc-red-dark); color:#fff; border-color:var(--rc-red); text-shadow:0 0 8px rgba(255,36,56,.6); }
+.mis-btn.sel{ background:linear-gradient(180deg,#8a0012,#5c000c); color:#fff; border-color:var(--rc-red); text-shadow:0 0 8px rgba(255,36,56,.6); }
+/* Read-only status readouts: rounded, flat, with a glowing LED dot — deliberately
+   NOT button-shaped so they are never mistaken for the controls below. */
 .sbar{ display:flex; gap:6px; }
-.spill{ flex:1; text-align:center; padding:5px 4px; font-size:9px; font-weight:700; letter-spacing:.12em;
-  text-transform:uppercase; background:var(--rc-raised); border:1px solid var(--rc-line); color:var(--rc-label);
+.spill{ flex:1; display:flex; align-items:center; justify-content:center; gap:5px; padding:5px 6px; cursor:default;
+  font-size:9px; font-weight:700; letter-spacing:.1em; text-transform:uppercase;
+  background:rgba(255,255,255,.03); border:1px solid var(--rc-line); border-radius:999px; color:var(--rc-label);
   font-family:'Rajdhani',sans-serif; }
-.spill.act{ border-color:var(--rc-red); color:var(--rc-red); }
-.spill.hb-ok{ border-color:var(--rc-green); color:var(--rc-green); }
-.spill.hb-bad{ border-color:var(--rc-red); color:var(--rc-red); }
+.spill::before{ content:''; width:6px; height:6px; border-radius:50%; background:currentColor; flex:none;
+  box-shadow:0 0 5px currentColor; opacity:.9; }
+.spill.act{ color:var(--rc-red); border-color:rgba(226,0,26,.35); background:rgba(226,0,26,.08); }
+.spill.hb-ok{ color:var(--rc-green); border-color:rgba(31,122,52,.4); background:rgba(31,122,52,.10); }
+.spill.hb-bad{ color:var(--rc-red); border-color:rgba(226,0,26,.35); background:rgba(226,0,26,.08); }
+/* Clickable controls: chamfered, raised (gradient + top highlight), hover-brighten,
+   press-down — reads as a physical button, distinct from the status pills above. */
+.ctrl-grouplbl{ font-size:8px; font-weight:700; letter-spacing:.2em; text-transform:uppercase;
+  color:var(--rc-label-dim); margin-top:2px; }
 .ctrl-row{ display:flex; gap:6px; }
-.ctrl-btn{ flex:1; padding:10px 6px; border:1px solid; font-size:10px; font-weight:700; letter-spacing:.12em;
-  cursor:pointer; text-transform:uppercase; font-family:'Rajdhani',sans-serif; background:transparent;
-  -webkit-user-select:none; user-select:none;
+.ctrl-btn{ flex:1; padding:11px 6px; border:1px solid var(--rc-line-hard); font-size:10px; font-weight:700;
+  letter-spacing:.12em; cursor:pointer; text-transform:uppercase; font-family:'Rajdhani',sans-serif; color:var(--rc-white);
+  background:linear-gradient(180deg,#2a2a30,#151519);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.08), 0 2px 3px rgba(0,0,0,.45);
+  transition:filter .12s ease, transform .06s ease; -webkit-user-select:none; user-select:none;
   clip-path:polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px)); }
-.ctrl-btn:active{ transform:scale(0.97); }
-.ctrl-btn.go{ border-color:var(--rc-line-hard); color:var(--rc-green); }
-.ctrl-btn.go.on{ background:var(--rc-green); border-color:var(--rc-green); color:#08080a; }
-.ctrl-btn.stop{ border-color:var(--rc-line-hard); color:var(--rc-label); }
-.ctrl-btn.stop.on{ background:var(--rc-red); border-color:var(--rc-red); color:#fff; }
-.ctrl-btn.ebs{ border-color:rgba(255,176,32,.4); color:var(--rc-amber); }
-.ctrl-btn.ebs.on{ background:var(--rc-amber); border-color:var(--rc-amber); color:#08080a; }
-.ctrl-btn.restart{ border-color:var(--rc-line-hard); color:var(--rc-label); font-size:8px; }
+.ctrl-btn:hover{ filter:brightness(1.3); }
+.ctrl-btn:active{ transform:translateY(1px); box-shadow:inset 0 2px 5px rgba(0,0,0,.55); }
+.ctrl-btn.go{ color:var(--rc-green); }
+.ctrl-btn.go.on{ background:linear-gradient(180deg,#2fd968,#1f9e48); border-color:var(--rc-green); color:#08080a; }
+.ctrl-btn.stop{ color:var(--rc-label); }
+.ctrl-btn.stop.on{ background:linear-gradient(180deg,#ff3b4e,#c8071a); border-color:var(--rc-red); color:#fff; }
+.ctrl-btn.ebs{ color:var(--rc-amber); border-color:rgba(255,176,32,.5); }
+.ctrl-btn.ebs.on{ background:linear-gradient(180deg,#ffc247,#e0920a); border-color:var(--rc-amber); color:#08080a; }
+.ctrl-btn.restart{ color:var(--rc-label); font-size:8px; }
 .algo-label{ color:var(--rc-label-dim); }
 .algo-dropdown{ background-color:var(--rc-raised); border:1px solid var(--rc-line-hard); border-radius:0;
   color:var(--rc-white); font-family:'Rajdhani',sans-serif; font-weight:600; letter-spacing:1px; }
@@ -2608,6 +2622,7 @@ body{
           <div class="rc-corner"></div><div class="rc-rivet tl"></div><div class="rc-rivet bl"></div>
           <span class="rc-label">Status</span>
           <div class="sbar"><div class="spill" id="pillState">IDLE</div><div class="spill" id="pillMission">MANUAL</div><div class="spill" id="pillHb">HB --</div></div>
+          <div class="ctrl-grouplbl">Controls</div>
           <div class="ctrl-row"><button class="ctrl-btn go" data-st="running" onclick="wsSend({action:'set_state',state:'running'})">Start</button><button class="ctrl-btn stop" data-st="idle" onclick="wsSend({action:'set_state',state:'idle'})">Stop</button><button class="ctrl-btn ebs" data-st="ebs" onclick="wsSend({action:'set_state',state:'ebs'})">EBS</button><button class="ctrl-btn restart" onclick="if(confirm('Restart kart-brain service?'))wsSend({action:'restart'})">Restart</button></div>
           <div id="rcJoySlot"></div>
         </div>
