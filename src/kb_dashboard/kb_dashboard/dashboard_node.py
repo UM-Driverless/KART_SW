@@ -19,7 +19,7 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy
 
 from kb_interfaces.msg import Frame
-from sensor_msgs.msg import Image, Imu
+from sensor_msgs.msg import BatteryState, Image, Imu
 from std_msgs.msg import Float32, String
 from vision_msgs.msg import Detection3DArray
 
@@ -94,6 +94,12 @@ class DashboardNode(Node):
         # ZED2 IMU — uses BEST_EFFORT to match the ZED ROS2 wrapper's default QoS
         self.create_subscription(
             Imu, "/zed/zed_node/imu/data", self._on_zed_imu, qos_best_effort
+        )
+
+        # Battery — smart BMS over BLE (kb_bms node). Feeds the BATT gauge
+        # independently of the ESP32 link.
+        self.create_subscription(
+            BatteryState, "/battery/state", self._on_battery, qos_reliable
         )
 
         # Pitch/roll-corrected cones from ground_plane_localizer_node — drives the
@@ -286,6 +292,22 @@ class DashboardNode(Node):
         fields = decode_health(list(msg.payload))
         for k, v in fields.items():
             self.state.update(k, v)
+
+    def _on_battery(self, msg: BatteryState):
+        """@brief Callback for smart-BMS battery state (kb_bms over BLE).
+
+        Feeds the dashboard BATT gauge: voltage number + SOC dial. Also exposes
+        current, temperature, and per-cell voltages for future use.
+        """
+        self.state.update("battery_voltage", round(msg.voltage, 2))
+        self.state.update("battery_soc", round(msg.percentage * 100.0))
+        self.state.update("battery_current", round(msg.current, 2))
+        if msg.cell_temperature:
+            self.state.update("battery_temp", round(msg.cell_temperature[0], 1))
+        if msg.cell_voltage:
+            self.state.update(
+                "battery_cells_mv", [round(v * 1000.0) for v in msg.cell_voltage]
+            )
 
     def _on_orin_throttle(self, msg: Frame):
         """@brief Callback for Orin-to-ESP32 throttle command echo."""

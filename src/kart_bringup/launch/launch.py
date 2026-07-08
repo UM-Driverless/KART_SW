@@ -183,6 +183,17 @@ def generate_launch_description():
         sigkill_timeout="2",
     )
 
+    # Reads the pack's JBD smart BMS over the Orin's Bluetooth and publishes
+    # /battery/state (sensor_msgs/BatteryState). Independent of the ESP32 link.
+    bms = Node(
+        package="kb_bms",
+        executable="bms_node",
+        name="kb_bms",
+        output="screen",
+        sigterm_timeout="3",
+        sigkill_timeout="2",
+    )
+
     return LaunchDescription(
         [
             perception_arg,
@@ -202,5 +213,6 @@ def generate_launch_description():
             cmd_vel_bridge,
             comms,
             dashboard,
+            bms,
         ]
     )

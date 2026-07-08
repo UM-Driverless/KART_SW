@@ -206,3 +206,64 @@ Question: is it worth updating the dashboard faster than 10 Hz?
 **Where faster *would* help, and the cheaper fix:**
 - Visual smoothness of moving elements (G-G dot, needles) looks "steppy" at 10 Hz. Fix in the **browser for free**: interpolate in JS between received values and paint at 60 Hz with `requestAnimationFrame`. Separate data rate (10 Hz, cheap) from render rate (60 Hz, smooth). Don't touch the network rate.
 - Fast transients (accel/G spikes on impact, vibration) alias at 10 Hz. Capture those in a **log on the Orin at the sensor's source rate**, not the live dashboard. Dashboard = human live monitoring; fine-grained analysis = separate recording.
+
+---
+
+## 2026-07-08 — ZED Tracking vs. SLAM architectural decision
+
+**Context:** Designing the algorithmic roadmap for transitioning the kart from a reactive controller (pure pursuit/geometric) to a global trajectory planner capable of mapping the track and running multi-lap optimizations.
+
+**Decision & Architectural Clarity:**
+We need to clearly separate what the ZED SDK does internally versus what we need to build in ROS 2. 
+
+1. **ZED Object Tracking (Enabled):**
+   - **What it is:** A Kalman Filter / Nearest Neighbor tracker that assigns IDs to cones (e.g., "Cone #5").
+   - **Why we need it:** It acts as an "invisible shield" against YOLO dropping frames due to glare or motion blur, and it filters out 1-frame ghost detections. It does **not** perform loop closures or map the track, but it dramatically cleans up the data sent to the downstream nodes.
+   - **Gotcha:** Never assume this builds a map. If you see Cone #5 again a minute later on a second lap, the ZED will think it's a brand new cone.
+
+2. **ZED Positional Tracking (VIO / Area Memory):**
+   - **What it is:** The camera's internal visual odometry (which we already use for `/kart/speed`). If Area Memory is enabled, it *does* run an internal GraphSLAM on visual features (buildings, trees) to correct odometry drift.
+   - **Gotcha:** It corrects the kart's trajectory but **does not map the cones**. We cannot rely on the ZED to give us a track map.
+
+3. **Our ROS 2 SLAM Node (The Missing Piece):**
+   - **What we need to build:** A lightweight GraphSLAM or EKF node that consumes the ZED's high-quality odometry and the ZED's tracked 3D cones.
+   - **Why:** This node will perform the actual "springs" matching (Data Association + Least Squares optimization) on the cones themselves, detect when we cross the start/finish line (Loop Closure), and output the final, globally consistent track map for the trajectory planner.
+
+---
+
+## 2026-07-08 — Dashboard dead after reboot: empty sysctl persist file reverted the port-80 bind
+
+**Symptom:** `kart.rubenayla.xyz` and `http://10.42.0.1/` stopped serving after an Orin reboot, even though `cloudflared` was active, the Orin had internet (iPhone tether up), and `systemctl is-active kart-brain` returned `active`. Nothing was listening on port 80.
+
+**The two facts that pinned it:**
+- `net.ipv4.ip_unprivileged_port_start = 1024` — the sysctl had reverted to the kernel default.
+- `/etc/sysctl.d/99-kart-dashboard.conf` was **empty**.
+
+**Root cause:** The dashboard was migrated from port 9090 to port 80 (commit "Dashboard binds port 80 directly — no iptables redirect"). Binding a port <1024 as a non-root process requires `net.ipv4.ip_unprivileged_port_start=80`. That value had only ever been set *live* (`sysctl -w`); the attempt to persist it wrote an empty file. The persist command was malformed — `echo "net…=80" | (echo 0 | sudo -S tee /etc/sysctl.d/99-kart-dashboard.conf)` — the inner `echo 0` (the sudo password) hijacked `tee`'s stdin, so `tee` wrote nothing. The live value held until the next reboot; then `systemd-sysctl` found an empty file, left the default 1024 in place, and the dashboard's non-root bind to :80 failed with permission denied and the node exited. Remote access was silently lost — nothing in the UI or `systemctl` state hinted at it, because the ROS launch as a whole stayed "active".
+
+**Fix (permanent, verified):** Rewrote the file with `echo 0 | sudo -S sh -c 'echo net.ipv4.ip_unprivileged_port_start=80 > /etc/sysctl.d/99-kart-dashboard.conf'` (password on stdin, file content inside the command string — no stdin collision). Verified boot-proof: `sudo sysctl --system` (the exact path `systemd-sysctl.service` takes at boot) yields `net.ipv4.ip_unprivileged_port_start = 80`; `systemd-sysctl.service` is `static`/active and ordered before `kart-brain`, so the setting is in place before the dashboard binds. Dashboard back on :80, `kart.rubenayla.xyz` → 200.
+
+**Prevention:**
+- Never combine a `sudo -S` password pipe with a content pipe into the same command — they fight over stdin and the content silently loses. Use `sudo -S sh -c '...'` and put the file content inside the command string.
+- After writing any `/etc/sysctl.d/*.conf`, verify with `sudo sysctl --system` (reproduces boot behaviour), not just `sysctl -w` — that catches an empty or ineffective file immediately.
+- Note for reference docs: the dashboard is now on **port 80** (needs this sysctl), not `:9090`. `.agents/orin-environment.md` still says `:9090` in places — stale.
+
+---
+
+## 2026-07-08 — Battery BMS is readable over Bluetooth (JBD/Xiaoxiang protocol)
+
+The 13S4P Molicel P42A pack has a **JBD/Xiaoxiang smart BMS** that advertises over BLE, and the Orin's built-in Bluetooth (`hci0`, IMC Networks radio) connects to it directly — no ESP32/CAN needed. This is a clean, independent source for the dashboard's battery gauge (which was showing `--` because it only reads battery from the now-dead `/esp32/health` link).
+
+**How it was found:** `bluetoothctl scan on` from the Orin. Most hits are phones with randomized MACs and no name; the BMS is the one device advertising a **model-code name**: `SP22S003BP21S100A` at address **`A5:C2:37:39:58:5D`**.
+
+**How to read it (reproducible):**
+- Tooling: Python **bleak** (`pip3 install --user bleak`; `gatttool`/`bluetoothctl` also present). Orin BT service active, `hci0 UP RUNNING`.
+- GATT: standard JBD layout — service `0000ff00`, **notify** char `0000ff01`, **write** char `0000ff02` (write-without-response).
+- Protocol (JBD): write a command to `ff02`, read the reply as notifications on `ff01`. Frames are `DD <reg> <status> <len> <payload…> <chk> <chk> 77`, big-endian.
+  - Basic info: send `DD A5 03 00 FF FD 77`. Payload: volt=`u16/100` V, current=`s16/100` A, remain=`u16/100` Ah, nominal=`u16/100` Ah, cycles=`u16`, protection=`u16@16`, **SOC=`byte@19` %**, cells=`byte@21`, ntc count=`byte@22`, then each temp `u16` in 0.1 K (`(t-2731)/10` °C).
+  - Cell voltages: send `DD A5 04 00 FF FC 77`. Payload = N × `u16` mV.
+- Reader script archived at `.agents/imports/` idea / lives on the Orin at `/tmp/read_bms.py` (to be promoted into a ROS node — see below).
+
+**First reading (idle pack):** 52.84 V, SOC 99 %, 0.00 A, 13.26/16.80 Ah, 6 cycles, temps 28.9/25.9/27.2 °C, protection 0x0000; 13 cells 4056–4066 mV, **10 mV spread** (well balanced). Confirms 13S4P (16.8 Ah = 4 × 4.2 Ah P42A).
+
+**Next step (organize/autostart):** fold this into the one clean startup rather than a side script. `kart-brain.service` → `ros2 launch kart_bringup launch.py` is the single entry point; add a **`kb_bms` ROS node** (bleak reader in a thread + ROS timer publishing `sensor_msgs/BatteryState`) to `launch.py`, and have the dashboard subscribe to it. Then it autostarts with everything else under the same service.
