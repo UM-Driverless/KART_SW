@@ -15,20 +15,44 @@
 | ESP32 | ESP32-D0WD-V3 via USB (`/dev/ttyUSB0`), 115200 baud (CP2102 limit) |
 | Steering sensor | AS5600 magnetic encoder (I2C: SDA=GPIO21, SCL=GPIO22) |
 | Actuators | Steering H-bridge, throttle DAC, brake DAC |
+| Battery | 13S4P Molicel P42A (48 V nom; ~41.6 V empty → ~54.6 V full). **JBD/Xiaoxiang smart BMS readable over Bluetooth LE** — see "Battery BMS over BLE" below |
+| Bluetooth | On-board combo Wi-Fi+BT radio (`hci0`). **Shared with Wi-Fi — see warning below** |
 | CAN bus | `can0`, `can1` interfaces (unused, was for old ESP32 comms) |
 
 ## Access
 ```bash
-ssh orin-local    # LAN — direct WiFi IP (10.7.20.142). Only works on same network.
-ssh orin-remote   # WAN — Cloudflare Tunnel (orin.rubenayla.xyz). Works from anywhere.
+ssh orin-local    # LAN — the kart Wi-Fi AP, Orin is 10.42.0.1. Join SSID `kart` (pwd `umotorsport`) first.
+ssh orin-remote   # WAN — Cloudflare Tunnel (orin.rubenayla.xyz). Only while the Orin has internet (USB tether).
 # Dashboard: https://kart.rubenayla.xyz (password: "0", configurable via ROS param `password`)
 #   Cloudflare Tunnel config: /etc/cloudflared/config.yml (system-level, needs sudo)
-#   Routes kart.rubenayla.xyz → localhost:9090 on Orin
+#   Routes kart.rubenayla.xyz → localhost:80 on Orin (was :9090; moved to :80 on 2026-07-08)
 # There is NO "ssh orin" alias. Always use orin-local or orin-remote.
 # Try orin-local first (faster), fall back to orin-remote if unreachable.
 # AnyDesk for GUI (needs dummy HDMI plug)
 # sudo password: 0
 ```
+
+## Dashboard on port 80 — needs a sysctl (else it dies silently after reboot)
+Since 2026-07-08 the dashboard binds **port 80** directly (default `port` param = 80 in `dashboard_node.py`), so URLs need no `:9090` suffix. Binding a port <1024 as the non-root `orin` user requires:
+
+```
+net.ipv4.ip_unprivileged_port_start=80
+```
+
+persisted in **`/etc/sysctl.d/99-kart-dashboard.conf`** (applied at boot by `systemd-sysctl`, before `kart-brain` starts). The Cloudflare tunnel (`/etc/cloudflared/config.yml`) routes `kart.rubenayla.xyz → localhost:80`.
+
+**Failure mode to recognize:** if the sysctl is missing/reverts to 1024, the dashboard can't bind :80, the node exits, and nothing listens on 80 — yet `systemctl is-active kart-brain` still says `active` (the ROS launch as a whole stays up). The dashboard just vanishes. Verify the file with `sudo sysctl --system` (reproduces boot behaviour), not just `sysctl -w`. See `history.md` 2026-07-08.
+
+## ⚠️ Wi-Fi and Bluetooth share ONE combo radio
+The Orin's on-board Wi-Fi and Bluetooth are the same chip. **Restarting the `bluetooth` service, `hciX reset`, or a BT adapter power-cycle drops the Wi-Fi too** — which kills the `kart` AP and any `orin-local` SSH going through it. Consequences:
+- Don't `systemctl restart bluetooth` while connected via `orin-local`; you'll cut your own link.
+- To clear a stuck BLE connection/bond, use **D-Bus** (`busctl call org.bluez /org/bluez/hci0 org.bluez.Adapter1 RemoveDevice o /org/bluez/hci0/dev_<MAC-with-underscores>`) or just **reboot** — not a bluetooth-service restart.
+- `bluetoothctl` run non-interactively over SSH (no TTY) tends to hang; prefer `busctl`/`journalctl`/filesystem checks for BT status.
+
+## Battery BMS over BLE
+The pack's **JBD/Xiaoxiang smart BMS** advertises over BLE as **`SP22S003BP21S100A`** (address seen: `A5:C2:37:39:58:5D`, but scan by name — BLE MACs can rotate). The `kb_bms` ROS node (in `launch.py`, autostarts with `kart-brain`) reads it and publishes `sensor_msgs/BatteryState` on **`/battery/state`**; the dashboard's BATT gauge reads that. Independent of the ESP32 link.
+
+Protocol (JBD, via `bleak`): GATT service `ff00`, **notify** `ff01`, **write** `ff02`. Write `DD A5 03 00 FF FD 77` for pack summary (voltage, SOC@byte19, current, temps), `DD A5 04 00 FF FC 77` for per-cell mV. Frames `DD <reg> <status> <len> <payload> <chk> <chk> 77`, big-endian. Full parser in `src/kb_bms/kb_bms/bms_node.py`; see `history.md` 2026-07-08. `bleak` is a pip `--user` install for the `orin` user (the service runs as `orin`). A connected BLE device stops advertising, so only one client at a time — the node reconnects forever.
 
 ## WiFi Networks (priority order)
 | Priority | Connection Name | SSID | Password | Notes |
@@ -42,9 +66,9 @@ ssh orin-remote   # WAN — Cloudflare Tunnel (orin.rubenayla.xyz). Works from a
 | Address | What | When it works |
 |---|---|---|
 | `http://kart/` | Dashboard, memorable name | On the `kart` Wi-Fi (pwd `umotorsport`). Needs the dnsmasq+port-80 setup below — NOT applied yet (Orin was off) |
-| `http://10.42.0.1` | Dashboard, bare IP | On the `kart` Wi-Fi. Always works, zero internet needed. (`:9090` until the port-80 deploy lands) |
+| `http://10.42.0.1` | Dashboard, bare IP | On the `kart` Wi-Fi. Always works, zero internet needed. **Now port 80** (no `:9090` suffix) |
 | `ssh orin@10.42.0.1` (`orin-local`) | SSH | On the `kart` Wi-Fi |
-| `http://172.20.10.2` | Dashboard from the USB-tethered iPhone itself | Phone plugged in via USB-C with Personal Hotspot on. (`:9090` until the port-80 deploy lands) |
+| `http://172.20.10.2` | Dashboard from the USB-tethered iPhone itself | Phone plugged in via USB-C with Personal Hotspot on. **Now port 80** |
 | `https://kart.rubenayla.xyz` | Dashboard from anywhere | Only while the Orin has internet (USB tether plugged, or other) |
 | `ssh orin-remote` | SSH from anywhere (Cloudflare) | Only while the Orin has internet |
 
