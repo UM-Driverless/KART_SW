@@ -305,7 +305,7 @@ function updateJoystickWidget() {
 
 function updateMissionUI() {
   const isAuto = AUTONOMOUS_MISSIONS.has(currentMission);
-  document.querySelectorAll('.act-grid, .ctrl-row, .t-ctrl-row, .h-ctrl-row').forEach(
+  document.querySelectorAll('.act-grid, .ctrl-row, .ctrl-grouplbl, .t-ctrl-row, .h-ctrl-row').forEach(
     el => el.style.display = isAuto ? '' : 'none'
   );
   document.querySelectorAll('.algo-select').forEach(el => {
@@ -315,6 +315,13 @@ function updateMissionUI() {
       el.style.display = isAuto ? 'block' : 'none';
     }
   });
+  // Race skin: hide the whole Algorithms pane when no algorithm applies (manual/remote), and give
+  // the joystick its own pane on the right only in remote. The .rc-mission grid auto-distributes
+  // whichever panes stay visible, so nothing is left as an empty column.
+  const algoPane = $('rcAlgoPane');
+  if (algoPane) algoPane.style.display = (isAuto || currentMission === 'inspection') ? '' : 'none';
+  const joyPane = $('rcJoyPane');
+  if (joyPane) joyPane.style.display = currentMission === 'remote_control' ? '' : 'none';
   updateAlgoButtons();
 }
 
@@ -2157,61 +2164,124 @@ function drawGGhud(latG, lonG) {
 const RC_LOGO = 'data:image/png;base64,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';
 
 // ── Race-skin instruments: airplane-style round dials on canvas ──
-function rcDialAngle(cfg, v) {
-  const t = (Math.max(cfg.min, Math.min(cfg.max, v)) - cfg.min) / (cfg.max - cfg.min);
-  return (-225 + t * 270) * Math.PI / 180;   // 270° sweep, gap at the bottom
+// Progress-ring gauge (donut): a track circle + a rounded arc filling clockwise from
+// 12 o'clock, big value in the centre. Race-styled version of the reference SOC ring.
+// opts: { frac 0-1, color, big (centre text), sub (small line under big), label (top) }.
+function rcDrawRing(canvas, o) {
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, CX = W / 2, CY = W / 2, lw = W * 0.11, R = W / 2 - lw / 2 - 3;
+  ctx.clearRect(0, 0, W, W);
+  ctx.beginPath(); ctx.arc(CX, CY, R, 0, 6.2832);
+  ctx.strokeStyle = '#26262a'; ctx.lineWidth = lw; ctx.stroke();
+  const frac = Math.max(0, Math.min(1, o.frac || 0));
+  if (frac > 0.001) {
+    const start = -Math.PI / 2, end = start + frac * 6.2832;
+    ctx.beginPath(); ctx.arc(CX, CY, R, start, end);
+    ctx.strokeStyle = o.color; ctx.lineWidth = lw; ctx.lineCap = 'round';
+    ctx.shadowColor = o.color; ctx.shadowBlur = 10; ctx.stroke(); ctx.shadowBlur = 0;
+  }
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  if (o.label) {
+    ctx.fillStyle = '#54545a';
+    ctx.font = '700 ' + Math.round(W * 0.075) + 'px Rajdhani, sans-serif';
+    ctx.fillText(o.label, CX, CY - W * 0.22);
+  }
+  ctx.fillStyle = o.dim ? '#5c5c62' : '#f2f2f0';
+  ctx.font = '700 ' + Math.round(W * 0.23) + 'px Orbitron, sans-serif';
+  ctx.fillText(o.big != null ? o.big : '--', CX, CY - (o.sub ? W * 0.035 : 0));
+  if (o.sub) {
+    ctx.fillStyle = '#84848a';
+    ctx.font = '700 ' + Math.round(W * 0.095) + 'px Rajdhani, sans-serif';
+    ctx.fillText(o.sub, CX, CY + W * 0.17);
+  }
 }
-function rcDrawDial(canvas, cfg, value) {
+// Hybrid-gauge angle map: a longer 300° sweep (vs the classic dial's 270°), gap centred at the
+// bottom. Overridable per-config via cfg.start / cfg.sweep (degrees).
+// The scale is ALWAYS uniform — one constant degrees-per-unit for the whole dial. If cfg.center is
+// set (e.g. 0 for a bidirectional ammeter) that value is anchored at the TOP (12 o'clock) and the
+// needle swings ±(v−center)·k from there. With asymmetric limits the two sides simply have different
+// arc LENGTHS (the side that can carry more current reaches further round) — the scale never warps.
+function rcGaugeAngle(cfg, v) {
+  v = Math.max(cfg.min, Math.min(cfg.max, v));
+  const sweep = cfg.sweep != null ? cfg.sweep : 300;
+  const k = sweep / (cfg.max - cfg.min);   // degrees per unit — constant across the whole dial
+  if (cfg.center != null) {
+    return (-90 + (v - cfg.center) * k) * Math.PI / 180;   // center value at the top (−90°)
+  }
+  const start = cfg.start != null ? cfg.start : -240;
+  return (start + (v - cfg.min) * k) * Math.PI / 180;
+}
+// Which coloured zone a value falls in (or null). Used to tint the hybrid gauge's centre number.
+function rcZoneColor(cfg, v) {
+  for (const seg of (cfg.arcs || [])) {
+    const lo = Math.min(seg.from, seg.to), hi = Math.max(seg.from, seg.to);
+    if (v >= lo && v <= hi) return seg.color;
+  }
+  return null;
+}
+// Ferrari-Luce-style hybrid gauge: analog tick scale + coloured zone arcs + a short needle
+// marker on the rim, with the big DIGITAL value in the centre. Merges analog (position/rate,
+// danger zones at a glance) and digital (exact number) in one compact dial. The centre number
+// turns amber/red when the value enters a warning/danger zone.
+function rcDrawGauge(canvas, cfg, value) {
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
   const W = canvas.width, CX = W / 2, CY = W / 2, R = W / 2 - 4;
+  const have = value != null && !isNaN(value);
   ctx.clearRect(0, 0, W, W);
   ctx.beginPath(); ctx.arc(CX, CY, R, 0, 6.2832);
   ctx.fillStyle = '#0a0a0c'; ctx.fill();
   ctx.strokeStyle = '#2c2c2f'; ctx.lineWidth = 2; ctx.stroke();
-  for (const seg of (cfg.arcs || [])) {
-    ctx.beginPath(); ctx.arc(CX, CY, R - R * 0.06, rcDialAngle(cfg, seg.from), rcDialAngle(cfg, seg.to));
-    ctx.strokeStyle = seg.color; ctx.lineWidth = R * 0.07; ctx.stroke();
+  for (const seg of (cfg.arcs || [])) {   // coloured warning/danger bands
+    ctx.beginPath(); ctx.arc(CX, CY, R - R * 0.055, rcGaugeAngle(cfg, seg.from), rcGaugeAngle(cfg, seg.to));
+    ctx.strokeStyle = seg.color; ctx.lineWidth = R * 0.08; ctx.stroke();
   }
   for (let v0 = cfg.min; v0 <= cfg.max + 1e-9; v0 += cfg.minor) {
     const maj = Math.abs(v0 / cfg.major - Math.round(v0 / cfg.major)) < 1e-6;
-    const a = rcDialAngle(cfg, v0), c = Math.cos(a), sn = Math.sin(a);
+    const a = rcGaugeAngle(cfg, v0), c = Math.cos(a), sn = Math.sin(a);
     ctx.beginPath();
     ctx.moveTo(CX + c * (R - 3), CY + sn * (R - 3));
-    ctx.lineTo(CX + c * (R - (maj ? R * 0.16 : R * 0.10)), CY + sn * (R - (maj ? R * 0.16 : R * 0.10)));
-    ctx.strokeStyle = maj ? '#9a9a9f' : '#3f3f43';
-    ctx.lineWidth = maj ? 2 : 1;
-    ctx.stroke();
+    ctx.lineTo(CX + c * (R - (maj ? R * 0.15 : R * 0.09)), CY + sn * (R - (maj ? R * 0.15 : R * 0.09)));
+    ctx.strokeStyle = maj ? '#9a9a9f' : '#3f3f43'; ctx.lineWidth = maj ? 2 : 1; ctx.stroke();
     if (maj && cfg.numbers) {
       ctx.fillStyle = '#5c5c62';
-      ctx.font = '700 ' + Math.round(R * 0.15) + 'px Rajdhani, sans-serif';
+      ctx.font = '700 ' + Math.round(R * 0.11) + 'px Rajdhani, sans-serif';
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(String(Math.round(v0)), CX + c * (R - R * 0.30), CY + sn * (R - R * 0.30));
+      ctx.fillText(String(Math.round(v0)), CX + c * (R - R * 0.27), CY + sn * (R - R * 0.27));
     }
   }
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  if (cfg.label) {
-    ctx.fillStyle = '#84848a';
-    ctx.font = '700 ' + Math.round(R * 0.14) + 'px Rajdhani, sans-serif';
-    ctx.fillText(cfg.label, CX, CY + R * 0.42);
+  // Only warn/danger (amber/red) tint the centre number, caption and needle — a green "ok" band
+  // is drawn on the ring but must NOT dye the number (which would make a healthy reading unreadable).
+  const zone = have ? rcZoneColor(cfg, value) : null;
+  const tint = (zone === '#e2001a' || zone === '#ffb020') ? zone : null;
+  // static top label (e.g. scope/unit "PACK AMPS") — sits inside the tick ring
+  if (cfg.topLabel) {
+    ctx.fillStyle = '#6a6a70';
+    ctx.font = '700 ' + Math.round(R * 0.10) + 'px Rajdhani, sans-serif';
+    ctx.fillText(cfg.topLabel, CX, CY - R * 0.35);
   }
-  if (cfg.fmt) {
-    ctx.fillStyle = '#f2f2f0';
-    ctx.font = '700 ' + Math.round(R * 0.17) + 'px Orbitron, sans-serif';
-    ctx.fillText(cfg.fmt(value), CX, CY + R * 0.66);
+  ctx.fillStyle = !have ? '#5c5c62' : (tint || '#f2f2f0');
+  ctx.font = '700 ' + Math.round(R * 0.32) + 'px Orbitron, sans-serif';
+  ctx.fillText(have ? cfg.fmt(value) : '--', CX, CY - R * 0.02);
+  // bottom label — static string, or a function(value) for a dynamic caption (e.g. CHARGE/DISCHARGE)
+  const lbl = typeof cfg.label === 'function' ? cfg.label(value) : cfg.label;
+  if (lbl) {
+    ctx.fillStyle = tint || '#8a8a90';
+    ctx.font = '700 ' + Math.round(R * 0.115) + 'px Rajdhani, sans-serif';
+    ctx.fillText(lbl, CX, CY + R * 0.29);
   }
-  const a = rcDialAngle(cfg, value);
-  ctx.strokeStyle = '#e2001a';
-  ctx.shadowColor = 'rgba(226,0,26,.7)'; ctx.shadowBlur = 6;
-  ctx.lineWidth = Math.max(2.5, R * 0.045); ctx.lineCap = 'round';
-  ctx.beginPath();
-  ctx.moveTo(CX - Math.cos(a) * R * 0.16, CY - Math.sin(a) * R * 0.16);
-  ctx.lineTo(CX + Math.cos(a) * R * 0.78, CY + Math.sin(a) * R * 0.78);
-  ctx.stroke();
-  ctx.shadowBlur = 0;
-  ctx.beginPath(); ctx.arc(CX, CY, R * 0.09, 0, 6.2832);
-  ctx.fillStyle = '#141416'; ctx.fill();
-  ctx.strokeStyle = '#e2001a'; ctx.lineWidth = 2; ctx.stroke();
+  if (have) {   // short bright needle marker on the rim (keeps the centre clear for the number)
+    const a = rcGaugeAngle(cfg, value);
+    ctx.strokeStyle = tint || '#e2001a';
+    ctx.shadowColor = tint || 'rgba(226,0,26,.8)'; ctx.shadowBlur = 8;
+    ctx.lineWidth = Math.max(3, R * 0.05); ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(CX + Math.cos(a) * R * 0.70, CY + Math.sin(a) * R * 0.70);
+    ctx.lineTo(CX + Math.cos(a) * R * 0.96, CY + Math.sin(a) * R * 0.96);
+    ctx.stroke(); ctx.shadowBlur = 0;
+  }
 }
 // Pedals — two vertical bars, filling bottom→up (more pedal = taller bar).
 // LEFT/green = accelerator, RIGHT/red = brake.
@@ -2329,17 +2399,46 @@ function rcDrawClock(canvas) {
   ctx.fillStyle = '#141416'; ctx.fill();
   ctx.strokeStyle = '#e2001a'; ctx.lineWidth = 2; ctx.stroke();
 }
-const RC_DIAL_SPEED = { min: 0, max: 50, major: 10, minor: 5, numbers: true, label: 'km/h',
-  arcs: [{ from: 45, to: 50, color: '#5c0009' }] };
+const RC_DIAL_SPEED = { min: 0, max: 50, major: 10, minor: 5, numbers: true, topLabel: 'KM/H',
+  fmt: v => v.toFixed(0) };
+// PACK current (whole 13S4P pack, = 4× per-cell), bidirectional. Sign per the JBD BMS convention:
+// POSITIVE = CHARGE (regen / plugged in), NEGATIVE = DISCHARGE (motoring). The dial states this
+// itself — static "PACK AMPS" top label + a dynamic CHARGE/DISCHARGE/IDLE caption.
+//   Discharge: full 2 kW motor draw ≈ 48 A pack (12 A/cell); nickel strips sized right at that peak.
+//     → amber −40..−50, red beyond −50.
+//   Charge: ~8 A/cell max (internal figure — this P42A charges unusually well) × 4P ≈ 32 A pack.
+//     → amber +24..+32 (6–8 A/cell), red beyond +32.
+const RC_GAUGE_CURRENT = { min: -60, max: 40, center: 0, major: 20, minor: 10, numbers: true,
+  topLabel: 'PACK AMPS',
+  label: v => (v == null || isNaN(v)) ? '' : (v > 0.5 ? 'CHARGE' : v < -0.5 ? 'DISCHARGE' : 'IDLE'),
+  fmt: v => (v > 0 ? '+' : '') + v.toFixed(0),
+  arcs: [
+    { from: -60, to: -50, color: '#e2001a' }, { from: -50, to: -40, color: '#ffb020' },
+    { from: 24, to: 32, color: '#ffb020' }, { from: 32, to: 40, color: '#e2001a' },
+  ] };
+// Pack voltage, 13S: 41.6 V empty (3.2 V/cell) → 46.8 V nominal → 54.6 V full (4.2 V/cell). Voltage
+// sags under load so it's a secondary read (SOC is the true charge gauge) — zones only at genuinely
+// bad levels: red below 42 V / amber 42–44 (nearly empty), red above 54.6 V (overcharge, >4.2 V/cell).
+const RC_GAUGE_VOLTAGE = { min: 40, max: 56, major: 4, minor: 2, numbers: true, topLabel: 'PACK V',
+  fmt: v => v.toFixed(1),
+  arcs: [{ from: 40, to: 42, color: '#e2001a' }, { from: 42, to: 44, color: '#ffb020' },
+         { from: 54.6, to: 56, color: '#e2001a' }] };
+// Pack temperature. Li-ion is happy ~15–45 °C; warm 45–55 under hard use; >55 °C is the danger line
+// (matches the OVERHEAT pack-health flag). Cold <10 °C is sluggish, worse for charging.
+const RC_GAUGE_TEMP = { min: 0, max: 70, major: 10, minor: 5, numbers: true, topLabel: 'TEMP °C',
+  fmt: v => v.toFixed(0),
+  arcs: [{ from: 0, to: 10, color: '#ffb020' }, { from: 45, to: 55, color: '#ffb020' },
+         { from: 55, to: 70, color: '#e2001a' }] };
 // Battery gauge shows SOC (state of charge), not voltage — SOC is the BMS's coulomb-counted
 // "charge left" and is immune to voltage sag under load (a red voltage would false-alarm while
 // accelerating). Green >30 %, amber 15-30 %, red <15 % (about to run out). Voltage is shown as a
 // neutral secondary readout (13S Molicel P42A pack: 54.6 V full / 46.8 V nominal / 41.6 V ~empty).
-const RC_DIAL_SOC = { min: 0, max: 100, major: 20, minor: 10, numbers: true, label: 'BATT',
+const RC_DIAL_SOC = { min: 0, max: 100, major: 20, minor: 10, numbers: true, topLabel: 'BATT',
   fmt: v => (v == null || isNaN(v)) ? '--' : Math.round(v) + '%',
-  arcs: [{ from: 0, to: 15, color: '#5c0009' }, { from: 15, to: 30, color: '#7a5510' }, { from: 30, to: 100, color: '#1e5c37' }] };
-const RC_DIAL_YOLO = { min: 0, max: 100, major: 20, minor: 10, numbers: true, label: 'YOLO', fmt: v => v.toFixed(0) + ' Hz',
-  arcs: [{ from: 0, to: 15, color: '#5c0009' }, { from: 15, to: 30, color: '#7a5510' }, { from: 30, to: 100, color: '#1e5c37' }] };
+  arcs: [{ from: 0, to: 15, color: '#e2001a' }, { from: 15, to: 30, color: '#ffb020' }] };
+const RC_DIAL_YOLO = { min: 0, max: 100, major: 20, minor: 10, numbers: true, topLabel: 'YOLO', label: 'Hz',
+  fmt: v => v.toFixed(0),
+  arcs: [{ from: 0, to: 15, color: '#e2001a' }, { from: 15, to: 30, color: '#ffb020' }] };
 const RC_DIAL_HEAP = { min: 0, max: 300, major: 100, minor: 25, numbers: true, label: 'HEAP', fmt: v => v.toFixed(0) + ' kB',
   arcs: [{ from: 0, to: 50, color: '#5c0009' }, { from: 50, to: 100, color: '#7a5510' }, { from: 100, to: 300, color: '#1e5c37' }] };
 // Pneumatic EBS reservoir: Festo CRVZS-0.75 (160235), 0.75 L, PS 16 bar. Operating
@@ -2347,8 +2446,10 @@ const RC_DIAL_HEAP = { min: 0, max: 300, major: 100, minor: 25, numbers: true, l
 // minimum to guarantee ~3 brake activations (10->6 bar). Tank sensor: Festo SDE5-D10
 // (567465), 0-10 bar. Source: ~/dv/kart/pneumatics/README.md + history.md.
 const PNEU_MAX_BAR = 10, PNEU_TANK_MIN = 6, PNEU_TANK_MAX = 10;
-const RC_DIAL_TANK = { min: 0, max: PNEU_MAX_BAR, major: 2, minor: 1, numbers: true, label: 'TANK',
-  fmt: v => (v == null || isNaN(v)) ? '-- bar' : v.toFixed(1) + ' bar',
+const RC_DIAL_TANK = { min: 0, max: PNEU_MAX_BAR, major: 2, minor: 1, numbers: true, topLabel: 'TANK', label: 'bar',
+  fmt: v => (v == null || isNaN(v)) ? '--' : v.toFixed(1),
+  // dim bands (the below-min region is a big slice of the scale, so bright red would look alarming
+  // even when healthy): dim red below the 6-bar operating minimum, dim green in the 6–10 safe band.
   arcs: [{ from: 0, to: PNEU_TANK_MIN, color: '#5c0009' }, { from: PNEU_TANK_MIN, to: PNEU_MAX_BAR, color: '#1e5c37' }] };
 
 const skinRace = {
@@ -2465,8 +2566,6 @@ body{
 .rc-card .bar .fill{ height:100%; width:0%; transition:width .3s ease; background:var(--rc-green); }
 .rc-speeddial{ display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; padding:8px 6px 6px; }
 #rcSpeedDial{ max-height:54%; max-width:82%; width:auto; height:auto; }
-.rc-speed-digital{ display:flex; align-items:baseline; gap:6px; font-size:clamp(18px,4.5vh,30px); text-shadow:0 0 18px rgba(226,0,26,.35); }
-.rc-speed-digital .unit{ font-size:11px; color:var(--rc-label); font-weight:700; font-family:'Rajdhani',sans-serif; letter-spacing:.08em; }
 .rc-minis{ display:grid; grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr; gap:6px; height:100%; min-height:0; }
 .rc-mini{ display:flex; align-items:center; justify-content:center; padding:5px; min-height:0; }
 .rc-mini canvas{ max-height:94%; max-width:94%; width:auto; height:auto; }
@@ -2489,8 +2588,13 @@ body{
 .rc-legend .lg-t{ background:#ffb020; }
 
 /* ---- page 2: MISSION ---- */
-.rc-mission{ display:grid; grid-template-columns:1.15fr 1fr 1fr; gap:8px; height:100%; }
+/* auto-flow columns so only the *visible* panes share the width: [Mission | Algorithms | Status]
+   for autonomous, [Mission | Status | Joystick] for remote, [Mission | Status] for manual. */
+.rc-mission{ display:grid; grid-auto-flow:column; grid-auto-columns:1fr; gap:8px; height:100%; min-height:0; }
 .rc-mpanel{ padding:10px 12px; display:flex; flex-direction:column; gap:8px; min-height:0; overflow-y:auto; }
+/* joystick gets its own pane on the right — centred, never scrollable (was cramped inside Status) */
+.rc-joypane{ overflow:hidden; align-items:center; }
+.rc-joypane #rcJoySlot{ flex:1; min-height:0; width:100%; display:flex; align-items:center; justify-content:center; }
 .mis-grid{ display:grid; grid-template-columns:1fr 1fr; gap:5px; flex:1; }
 .mis-btn{ border:1px solid var(--rc-line-hard); background:linear-gradient(180deg,#1f1f25,#131317); color:var(--rc-label);
   font-family:'Rajdhani',sans-serif; font-weight:700; font-size:10px; letter-spacing:.1em; text-transform:uppercase;
@@ -2572,6 +2676,44 @@ body{
 .rc-sysdesc{ font-size:8.5px; color:var(--rc-label-dim); letter-spacing:.08em; text-transform:uppercase; margin-top:6px; font-weight:600; line-height:1.5; }
 .rc-ok{ color:var(--rc-green); } .rc-bad{ color:var(--rc-red); } .rc-dim{ color:var(--rc-label); }
 
+/* ---- page 5: BATTERY ---- */
+.rc-battery{ display:grid; grid-template-columns:1fr 1.9fr; gap:8px; height:100%; min-height:0; }
+.rc-battery > *{ min-height:0; min-width:0; }
+.rc-batsummary{ padding:12px 14px; display:flex; flex-direction:column; align-items:center; gap:10px; }
+.rc-batsummary .rc-label{ align-self:flex-start; }
+.bat-gauges{ display:grid; grid-template-columns:1fr 1fr; gap:8px; width:100%; justify-items:center;
+  align-content:center; flex:1; min-height:0; }
+.bat-gauge{ width:100%; max-width:190px; aspect-ratio:1; min-width:0; }
+.bat-gauge canvas{ width:100%; height:100%; display:block; }
+.bat-health{ margin-top:auto; align-self:stretch; display:flex; align-items:center; gap:8px; font-size:10px; font-weight:700;
+  letter-spacing:.12em; text-transform:uppercase; font-family:'Rajdhani',sans-serif; color:var(--rc-green); }
+.bat-health::before{ content:''; width:8px; height:8px; border-radius:50%; background:currentColor;
+  box-shadow:0 0 6px currentColor; flex:none; }
+.bat-health.bad{ color:var(--rc-red); }
+
+.rc-batcells{ padding:10px 14px; display:flex; flex-direction:column; gap:8px; }
+.bat-cellhdr{ display:flex; align-items:baseline; justify-content:space-between; }
+.bat-balance{ display:flex; gap:12px; font-size:10px; font-weight:700; letter-spacing:.08em;
+  text-transform:uppercase; color:var(--rc-label); font-family:'Rajdhani',sans-serif; font-variant-numeric:tabular-nums; }
+.bat-balance b{ color:var(--rc-white); font-weight:700; }
+.bat-balance .delta.warn{ color:var(--rc-amber); } .bat-balance .delta.bad{ color:var(--rc-red); }
+/* compact per-cell "battery pill": green level fill with the voltage printed inside it */
+.bat-cellgrid{ flex:1; min-height:0; display:grid; grid-template-columns:repeat(2,1fr); grid-auto-rows:1fr; gap:6px 16px; }
+.bat-cell{ display:flex; align-items:center; gap:9px; min-height:0; }
+.bat-cell-idx{ width:24px; text-align:right; font-size:12px; font-weight:700; color:var(--rc-label);
+  font-family:'Rajdhani',sans-serif; font-variant-numeric:tabular-nums; flex:none; }
+.bat-cell-pill{ flex:1; position:relative; height:100%; min-height:22px; max-height:32px; background:var(--rc-raised);
+  border:1.5px solid var(--rc-line-hard); overflow:hidden; display:flex; align-items:center; justify-content:center; }
+.bat-cell-fill{ position:absolute; left:0; top:0; bottom:0; width:0%; background:var(--rc-green);
+  transition:width .3s ease, background .3s ease; }
+.bat-cell-mv{ position:relative; z-index:1; font-size:13px; font-weight:700; font-variant-numeric:tabular-nums;
+  color:#f2f2f0; font-family:'Rajdhani',sans-serif; letter-spacing:.03em; text-shadow:0 1px 2px rgba(0,0,0,.65); }
+.bat-cell::after{ content:''; width:3px; height:36%; background:var(--rc-line-hard); border-radius:1px; flex:none; align-self:center; }
+.bat-cell.lo .bat-cell-pill{ border-color:var(--rc-red); box-shadow:0 0 8px rgba(226,0,26,.5); }
+.bat-cell.hi .bat-cell-pill{ border-color:var(--rc-amber); }
+.bat-empty{ grid-column:1/-1; display:flex; align-items:center; justify-content:center; color:var(--rc-label-dim);
+  font-family:'Rajdhani',sans-serif; font-weight:700; font-size:11px; letter-spacing:.3em; }
+
 /* ---- bottom bar (persistent) ---- */
 .race-bottombar{ display:flex; align-items:center; gap:12px; padding:0 12px;
   border-top:1px solid var(--rc-line); background:var(--rc-panel); }
@@ -2614,7 +2756,6 @@ body{
           <div class="rc-corner"></div><div class="rc-rivet tl"></div><div class="rc-rivet bl"></div>
           <span class="rc-label">Speed</span>
           <canvas id="rcSpeedDial" width="300" height="300"></canvas>
-          <div class="rc-speed-digital"><span class="num" id="rcSpeedVal">0.0</span><span class="unit">km/h</span></div>
         </div>
         <div class="rc-panel rc-steer">
           <div class="rc-corner"></div><div class="rc-rivet tl"></div><div class="rc-rivet bl"></div>
@@ -2653,7 +2794,7 @@ body{
           <span class="rc-label">Mission</span>
           <div class="mis-grid" id="misGrid"><button class="mis-btn sel" data-m="manual">Manual</button><button class="mis-btn" data-m="remote_control">Remote</button><button class="mis-btn" data-m="inspection">Inspect</button><button class="mis-btn" data-m="autonomous">Auto</button><button class="mis-btn" data-m="acceleration">Accel</button><button class="mis-btn" data-m="skidpad">Skidpad</button><button class="mis-btn" data-m="autocross">Autocross</button><button class="mis-btn" data-m="trackdrive">Trackdrive</button></div>
         </div>
-        <div class="rc-panel rc-mpanel">
+        <div class="rc-panel rc-mpanel" id="rcAlgoPane">
           <div class="rc-corner"></div><div class="rc-rivet tl"></div><div class="rc-rivet bl"></div>
           <span class="rc-label">Algorithms</span>
           <div class="algo-select svo-select" style="display:none"><div class="algo-label">Video Input</div><select class="algo-dropdown svo-dropdown" onchange="onSvoChange(this)"><option value="live">Live Camera</option></select></div>
@@ -2666,6 +2807,10 @@ body{
           <div class="sbar"><div class="spill" id="pillState">IDLE</div><div class="spill" id="pillMission">MANUAL</div><div class="spill" id="pillHb">HB --</div></div>
           <div class="ctrl-grouplbl">Controls</div>
           <div class="ctrl-row"><button class="ctrl-btn go" data-st="running" onclick="wsSend({action:'set_state',state:'running'})">Start</button><button class="ctrl-btn stop" data-st="idle" onclick="wsSend({action:'set_state',state:'idle'})">Stop</button><button class="ctrl-btn ebs" data-st="ebs" onclick="wsSend({action:'set_state',state:'ebs'})">EBS</button><button class="ctrl-btn restart" onclick="if(confirm('Restart kart-brain service?'))wsSend({action:'restart'})">Restart</button></div>
+        </div>
+        <div class="rc-panel rc-mpanel rc-joypane" id="rcJoyPane" style="display:none">
+          <div class="rc-corner"></div><div class="rc-rivet tl"></div><div class="rc-rivet bl"></div>
+          <span class="rc-label">Remote control</span>
           <div id="rcJoySlot"></div>
         </div>
       </div>
@@ -2704,11 +2849,36 @@ body{
         </div>
       </div>
 
+      <div class="race-page rc-battery">
+        <div class="rc-panel rc-batsummary">
+          <div class="rc-corner"></div><div class="rc-rivet tl"></div><div class="rc-rivet bl"></div>
+          <span class="rc-label">Pack</span>
+          <div class="bat-gauges">
+            <div class="bat-gauge"><canvas id="rcBatRing" width="300" height="300"></canvas></div>
+            <div class="bat-gauge"><canvas id="rcBatCurGauge" width="300" height="300"></canvas></div>
+            <div class="bat-gauge"><canvas id="rcBatVoltGauge" width="300" height="300"></canvas></div>
+            <div class="bat-gauge"><canvas id="rcBatTempGauge" width="300" height="300"></canvas></div>
+          </div>
+          <div class="bat-health" id="rcBatHealth">— no data</div>
+        </div>
+        <div class="rc-panel rc-batcells">
+          <div class="rc-corner"></div><div class="rc-rivet tl"></div><div class="rc-rivet bl"></div>
+          <div class="bat-cellhdr">
+            <span class="rc-label">Cells · <span id="rcBatCount">--</span></span>
+            <div class="bat-balance">
+              <span>min <b id="rcBatMin">--</b></span><span>max <b id="rcBatMax">--</b></span>
+              <span class="delta" id="rcBatDelta">Δ --</span>
+            </div>
+          </div>
+          <div class="bat-cellgrid" id="rcCellStrip"><div class="bat-empty">NO CELL DATA</div></div>
+        </div>
+      </div>
+
     </div>
   </div>
   <div class="race-bottombar">
     <div class="race-tabs">
-      <button class="race-tab on">Telemetry</button><button class="race-tab">Mission</button><button class="race-tab">Vision</button><button class="race-tab">System</button>
+      <button class="race-tab on">Telemetry</button><button class="race-tab">Mission</button><button class="race-tab">Vision</button><button class="race-tab">System</button><button class="race-tab">Battery</button>
     </div>
   </div>
 </div>`; },
@@ -2754,7 +2924,7 @@ body{
     let page = 0;
     const track = $('rcTrack');
     const go = i => {
-      page = Math.max(0, Math.min(3, i));
+      page = Math.max(0, Math.min(4, i));
       track.style.transform = `translateX(${-page * 100}%)`;
       document.querySelectorAll('.race-tab').forEach((t, j) => t.classList.toggle('on', j === page));
     };
@@ -2791,14 +2961,19 @@ body{
     const dbgHome = dbg ? { parent: dbg.parentElement, next: dbg.nextSibling } : null;
     $('rcHudSlot').appendChild(hud);
     $('rcJoySlot').appendChild(joy);
+    updateMissionUI();   // set the Algorithms/Joystick pane visibility for the current mission on load
     if (dbg) { $('rcDbgSlot').appendChild(dbg); if (!dbgOpen) toggleDbg(); }  // show it expanded on the System page
     drawCenital($('rcCenital'), []);
     drawGG(0, 0, '#2c2c2f', '#84848a40', '#e2001a', 8);
-    rcDrawDial($('rcSpeedDial'), RC_DIAL_SPEED, 0);
-    rcDrawDial($('rcDialYolo'), RC_DIAL_YOLO, 0);
-    rcDrawDial($('rcBatDial'), RC_DIAL_SOC, NaN);
+    rcDrawGauge($('rcSpeedDial'), RC_DIAL_SPEED, 0);
+    rcDrawGauge($('rcDialYolo'), RC_DIAL_YOLO, 0);
+    rcDrawGauge($('rcBatDial'), RC_DIAL_SOC, NaN);
+    rcDrawRing($('rcBatRing'), { frac: 0, color: '#33d17a', dim: true, label: 'SOC', big: '--' });
+    rcDrawGauge($('rcBatCurGauge'), RC_GAUGE_CURRENT, NaN);
+    rcDrawGauge($('rcBatVoltGauge'), RC_GAUGE_VOLTAGE, NaN);
+    rcDrawGauge($('rcBatTempGauge'), RC_GAUGE_TEMP, NaN);
     rcDrawPedals($('rcPedalsDial'), 0, 0, 0);
-    rcDrawDial($('rcPneuDial'), RC_DIAL_TANK, NaN);  // '-- bar' until the sensor reports
+    rcDrawGauge($('rcPneuDial'), RC_DIAL_TANK, NaN);  // '-- bar' until the sensor reports
     return () => {
       hudHome.parent.insertBefore(hud, hudHome.next);
       joyHome.parent.insertBefore(joy, joyHome.next);
@@ -2808,7 +2983,7 @@ body{
   },
 
   update(d) {
-    if (!$('rcSpeedVal')) return;
+    if (!$('rcSpeedDial')) return;
     // steering gauge — actual (red) + commanded target (amber ghost).
     // Positive rad renders right, same visual convention as every other skin.
     const degAct = Math.max(-90, Math.min(90, d.esp32_steering_rad * 180 / Math.PI));
@@ -2820,10 +2995,9 @@ body{
     const dirPct = 50 + (degAct / 90) * 50, df = $('rcDirFill');
     if (degAct >= 0) { df.style.left = '50%'; df.style.width = (dirPct - 50) + '%'; }
     else { df.style.left = dirPct + '%'; df.style.width = (50 - dirPct) + '%'; }
-    // speed dial + digital
+    // speed hybrid dial (value shown in the dial centre)
     const kmh = (d.esp32_speed || 0) * 3.6;
-    rcDrawDial($('rcSpeedDial'), RC_DIAL_SPEED, kmh);
-    $('rcSpeedVal').textContent = kmh.toFixed(1);
+    rcDrawGauge($('rcSpeedDial'), RC_DIAL_SPEED, kmh);
     const lonG = (d.esp32_accel_lon || 0) / 9.81, latG = (d.esp32_accel_lat || 0) / 9.81;
     // targets ride the same instruments: amber needle on the steering gauge
     // (above), amber needles in the pedals dial, PWM readout under the gauge
@@ -2833,14 +3007,18 @@ body{
     $('rcGCap').textContent = `LON ${lonG.toFixed(2)} · LAT ${latG.toFixed(2)} g`;
     // mini instrument dials
     const yolo = d.yolo_fps || 0, esp = d.esp_fps || 0, heap = d.health_heap_kb || 0;
-    rcDrawDial($('rcDialYolo'), RC_DIAL_YOLO, yolo);
+    rcDrawGauge($('rcDialYolo'), RC_DIAL_YOLO, yolo);
     // battery: SOC dial (charge left, colour zones, red = about to run out) + voltage number (live, shows sag)
     const batV = d.battery_voltage, batSoc = d.battery_soc;
     const haveBat = batV != null && !isNaN(batV);
     const socLow = batSoc != null && batSoc < 15;
-    rcDrawDial($('rcBatDial'), RC_DIAL_SOC, (batSoc != null && !isNaN(batSoc)) ? batSoc : NaN);
+    rcDrawGauge($('rcBatDial'), RC_DIAL_SOC, (batSoc != null && !isNaN(batSoc)) ? batSoc : NaN);
     $('rcBatCap').textContent = haveBat ? batV.toFixed(1) + ' V' : '-- V';
     $('rcBatDial').closest('.rc-panel')?.classList.toggle('rc-danger', socLow);
+    // BATTERY page (per-cell strip + pack readouts); flag the Battery tab if unhealthy
+    const batBad = rcUpdateBattery(d);
+    const batTab = document.querySelectorAll('.race-tab')[4];
+    if (batTab) batTab.classList.toggle('bad', batBad);
     rcDrawPedals($('rcPedalsDial'), d.esp32_throttle || 0, d.esp32_braking || 0, d.orin_cmd_brake || 0);
     // SYSTEM page
     const sys = (id, txt, cls) => { const el = $(id); el.textContent = txt; el.className = 'val num rc-sysval ' + cls; };
@@ -2863,7 +3041,7 @@ body{
     const tank = d.pneu_tank_bar, pist = d.pneu_piston_bar;
     const haveTank = tank != null && !isNaN(tank);
     const tankOk = haveTank && tank >= PNEU_TANK_MIN && tank <= PNEU_TANK_MAX;
-    rcDrawDial($('rcPneuDial'), RC_DIAL_TANK, haveTank ? tank : NaN);
+    rcDrawGauge($('rcPneuDial'), RC_DIAL_TANK, haveTank ? tank : NaN);
     const pf = $('rcPneuPistFill'), pv = $('rcPneuPistVal');
     if (pf) pf.style.width = (pist != null ? Math.max(0, Math.min(100, pist / PNEU_MAX_BAR * 100)) : 0) + '%';
     if (pv) pv.textContent = (pist != null ? pist.toFixed(1) + ' bar' : '-- bar');
@@ -2882,6 +3060,82 @@ body{
     updatePills(d); updateMissions(d); updateStateButtons(d);
   }
 };
+
+// Battery tab renderer: pack summary + per-cell balance strip. Returns true when the
+// pack is worth flagging (SOC <15%, a cell <3.0 V, imbalance >80 mV, or >55 °C) so the
+// caller can pulse the Battery tab red. The strip DOM is rebuilt only when the cell
+// count changes, then just fills/labels update each frame.
+const RC_CELL_MIN_MV = 2800, RC_CELL_MAX_MV = 4200;  // Li-ion display window for the bars
+function rcUpdateBattery(d) {
+  if (!$('rcCellStrip')) return false;
+  const v = d.battery_voltage, soc = d.battery_soc, cur = d.battery_current;
+  const ah = d.battery_charge, temps = d.battery_temps, cells = d.battery_cells_mv;
+  const have = v != null && !isNaN(v);
+  const haveSoc = soc != null && !isNaN(soc);
+  // SOC progress ring (green >30, amber 15-30, red <15) with remaining Ah as the sub-line
+  const socCol = !haveSoc ? '#33d17a' : soc < 15 ? '#e2001a' : soc < 30 ? '#ffb020' : '#33d17a';
+  rcDrawRing($('rcBatRing'), {
+    frac: haveSoc ? soc / 100 : 0, color: socCol, dim: !haveSoc, label: 'SOC',
+    big: haveSoc ? Math.round(soc) + '%' : '--',
+    sub: (ah != null && !isNaN(ah)) ? ah.toFixed(1) + ' Ah' : null,
+  });
+  // current: bidirectional analog gauge (− discharge / + charge) with amber/red over-limit zones,
+  // exact signed value in the centre. Danger if it sits in a red zone (over-current either way).
+  const haveCur = cur != null && !isNaN(cur);
+  rcDrawGauge($('rcBatCurGauge'), RC_GAUGE_CURRENT, haveCur ? cur : NaN);
+  const curOver = haveCur && rcZoneColor(RC_GAUGE_CURRENT, cur) === '#e2001a';
+  // pack voltage + temperature as their own zoned dials (voltage secondary — SOC is the charge gauge)
+  rcDrawGauge($('rcBatVoltGauge'), RC_GAUGE_VOLTAGE, have ? v : NaN);
+  const tMax = (temps && temps.length) ? Math.max.apply(null, temps) : (d.battery_temp ?? null);
+  const tempHot = tMax != null && tMax >= 55;
+  rcDrawGauge($('rcBatTempGauge'), RC_GAUGE_TEMP, (tMax != null && !isNaN(tMax)) ? tMax : NaN);
+  // per-cell battery-pill grid (fill = charge level, number = voltage printed inside)
+  $('rcBatCount').textContent = (cells && cells.length) ? cells.length + 'S' : '--';
+  const strip = $('rcCellStrip');
+  let minMv = null, maxMv = null, minIdx = -1, maxIdx = -1, cellBad = false;
+  if (cells && cells.length) {
+    minMv = Math.min.apply(null, cells); maxMv = Math.max.apply(null, cells);
+    minIdx = cells.indexOf(minMv); maxIdx = cells.indexOf(maxMv);
+    if (strip.children.length !== cells.length || strip.querySelector('.bat-empty')) {
+      strip.innerHTML = cells.map((_, i) =>
+        `<div class="bat-cell"><span class="bat-cell-idx">${i + 1}</span>` +
+        `<div class="bat-cell-pill"><div class="bat-cell-fill"></div><span class="bat-cell-mv"></span></div></div>`).join('');
+    }
+    const span = RC_CELL_MAX_MV - RC_CELL_MIN_MV;
+    cells.forEach((mv, i) => {
+      const el = strip.children[i];
+      el.querySelector('.bat-cell-mv').textContent = (mv / 1000).toFixed(3);
+      const fill = el.querySelector('.bat-cell-fill');
+      fill.style.width = Math.max(0, Math.min(100, (mv - RC_CELL_MIN_MV) / span * 100)) + '%';
+      fill.style.background = mv < 3000 ? 'var(--rc-red)' : mv < 3300 ? 'var(--rc-amber)' : 'var(--rc-green)';
+      el.classList.toggle('lo', i === minIdx && cells.length > 1 && maxMv !== minMv);
+      el.classList.toggle('hi', i === maxIdx && cells.length > 1 && maxMv !== minMv);
+    });
+    if (minMv < 3000) cellBad = true;
+  } else if (!strip.querySelector('.bat-empty')) {
+    strip.innerHTML = '<div class="bat-empty">NO CELL DATA</div>';
+  }
+  const delta = (minMv != null) ? (maxMv - minMv) : null;
+  $('rcBatMin').textContent = minMv != null ? (minMv / 1000).toFixed(3) + ' V' : '--';
+  $('rcBatMax').textContent = maxMv != null ? (maxMv / 1000).toFixed(3) + ' V' : '--';
+  const dEl = $('rcBatDelta');
+  dEl.textContent = delta != null ? 'Δ ' + delta + ' mV' : 'Δ --';
+  dEl.className = 'delta' + (delta == null ? '' : delta > 80 ? ' bad' : delta > 30 ? ' warn' : '');
+  const imbalance = delta != null && delta > 80;
+  const socLow = soc != null && soc < 15;
+  const bad = have && (socLow || cellBad || imbalance || tempHot || curOver);
+  const hEl = $('rcBatHealth');
+  if (!have) { hEl.textContent = '— no data'; hEl.className = 'bat-health'; hEl.style.color = 'var(--rc-label-dim)'; }
+  else {
+    hEl.style.color = '';
+    hEl.className = 'bat-health' + (bad ? ' bad' : '');
+    hEl.textContent = bad
+      ? (cellBad ? 'CELL LOW' : socLow ? 'PACK LOW' : curOver ? 'OVERCURRENT' : imbalance ? 'IMBALANCE' : 'OVERHEAT')
+      : 'Healthy';
+  }
+  document.querySelector('.rc-batsummary')?.classList.toggle('rc-danger', bad);
+  return bad;
+}
 
 const SKINS = { race: skinRace, legacy: skinLegacy, kitt: skinKitt, tesla: skinTesla, hud: skinHud, artemis: skinArtemis };
 if (currentSkin === 'default') currentSkin = 'legacy';   // migrate the old stored id for anyone who chose Legacy
@@ -2941,6 +3195,13 @@ if (new URLSearchParams(location.search).has('demo')) {
     pneuPist = br * (pneuTank * 0.85);                                        // piston pressure tracks braking
     batSoc = 48 + 48 * Math.sin(t * 0.5);                                    // demo: sweeps 0↔96% every ~13s so you see green→amber→red (+ danger glow) and back
     const batV = 41.6 + batSoc / 100 * 13;                                   // 13S P42A: 41.6 V (0%) → 54.6 V (100%)
+    // 13 cells around the per-cell average, with a couple deliberately sagging so the
+    // balance strip shows min/max/Δ and highlights the weak cell.
+    const cellAvg = batV / 13 * 1000;                                        // mV
+    const batCells = Array.from({ length: 13 }, (_, i) =>
+      Math.round(cellAvg + Math.sin(t * 0.6 + i) * 8 - (i === 4 ? 55 : 0) - (i === 9 ? 25 : 0)));
+    const batCur = -(th * 52) + (br * 9);                                    // demo: up to ~52 A discharge under throttle (into red), slight regen on brake
+    const batTemp = 32 + th * 14 + Math.sin(t * 0.3) * 2;                    // warms under load
     const cones = [];
     for (let row = 0; row < 4; row++) {
       const z = 2.5 + row * 3.5 - (t % 3.5);
@@ -2962,6 +3223,8 @@ if (new URLSearchParams(location.search).has('demo')) {
       yolo_fps: 68 + Math.sin(t * 0.7) * 6, esp_fps: 95 + Math.sin(t * 1.3) * 8,
       pneu_tank_bar: pneuTank, pneu_piston_bar: pneuPist,
       battery_voltage: batV, battery_soc: batSoc,
+      battery_current: batCur, battery_temp: batTemp, battery_temps: [batTemp, batTemp - 1.5],
+      battery_charge: 42 * batSoc / 100, battery_cells_mv: batCells,
       cones_3d_ground: cones,
       mission: demoMission, state: demoState,
       as_state: demoState === 'running' ? 'AS_DRIVING' : (demoState === 'ebs' ? 'AS_EMERGENCY_BRAKE' : 'AS_READY'),

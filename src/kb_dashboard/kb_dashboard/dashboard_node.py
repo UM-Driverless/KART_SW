@@ -296,14 +296,17 @@ class DashboardNode(Node):
     def _on_battery(self, msg: BatteryState):
         """@brief Callback for smart-BMS battery state (kb_bms over BLE).
 
-        Feeds the dashboard BATT gauge: voltage number + SOC dial. Also exposes
-        current, temperature, and per-cell voltages for future use.
+        Feeds the Telemetry BATT gauge (voltage number + SOC dial) and the
+        dedicated Battery tab (per-cell strip + current/temp/charge readouts).
         """
         self.state.update("battery_voltage", round(msg.voltage, 2))
         self.state.update("battery_soc", round(msg.percentage * 100.0))
         self.state.update("battery_current", round(msg.current, 2))
+        self.state.update("battery_charge", round(msg.charge, 2))  # remaining Ah
         if msg.cell_temperature:
-            self.state.update("battery_temp", round(msg.cell_temperature[0], 1))
+            temps = [round(t, 1) for t in msg.cell_temperature]
+            self.state.update("battery_temp", temps[0])   # kept for existing gauge
+            self.state.update("battery_temps", temps)     # all NTCs, Battery tab
         if msg.cell_voltage:
             self.state.update(
                 "battery_cells_mv", [round(v * 1000.0) for v in msg.cell_voltage]
