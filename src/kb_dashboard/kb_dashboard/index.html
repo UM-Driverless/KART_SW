@@ -544,9 +544,9 @@ function toggleSkinMenu() { const dd = $('skinDropdown'); if (dd) dd.classList.t
 document.addEventListener('click', e => { if (!e.target.closest('.skin-select')) { const dd = $('skinDropdown'); if (dd) dd.classList.remove('open'); }});
 
 // ═══════════════════════════════════════════════════════
-// SKIN: DEFAULT — Clean modern dark
+// SKIN: LEGACY — Clean modern dark (NOT the default; the default skin is 'race')
 // ═══════════════════════════════════════════════════════
-const skinDefault = {
+const skinLegacy = {
   name: 'Legacy',
   css: `
 body { font-family:'Inter',-apple-system,BlinkMacSystemFont,'SF Pro',system-ui,sans-serif; background:#0a0a0f; color:#e0e0e8; }
@@ -2882,8 +2882,9 @@ body{
   }
 };
 
-const SKINS = { race: skinRace, default: skinDefault, kitt: skinKitt, tesla: skinTesla, hud: skinHud, artemis: skinArtemis };
-if (!SKINS[currentSkin]) currentSkin = 'default';
+const SKINS = { race: skinRace, legacy: skinLegacy, kitt: skinKitt, tesla: skinTesla, hud: skinHud, artemis: skinArtemis };
+if (currentSkin === 'default') currentSkin = 'legacy';   // migrate the old stored id for anyone who chose Legacy
+if (!SKINS[currentSkin]) currentSkin = 'race';           // unknown/removed skin → fall back to the real default
 
 function applySkin(id) {
   if (skinCleanup) { skinCleanup(); skinCleanup = null; }
