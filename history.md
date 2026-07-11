@@ -267,3 +267,25 @@ The 13S4P Molicel P42A pack has a **JBD/Xiaoxiang smart BMS** that advertises ov
 **First reading (idle pack):** 52.84 V, SOC 99 %, 0.00 A, 13.26/16.80 Ah, 6 cycles, temps 28.9/25.9/27.2 °C, protection 0x0000; 13 cells 4056–4066 mV, **10 mV spread** (well balanced). Confirms 13S4P (16.8 Ah = 4 × 4.2 Ah P42A).
 
 **Next step (organize/autostart):** fold this into the one clean startup rather than a side script. `kart-brain.service` → `ros2 launch kart_bringup launch.py` is the single entry point; add a **`kb_bms` ROS node** (bleak reader in a thread + ROS timer publishing `sensor_msgs/BatteryState`) to `launch.py`, and have the dashboard subscribe to it. Then it autostarts with everything else under the same service.
+
+---
+
+## 2026-07-11 — AS5600 steering encoder: decided on PWM-out (sensor mounted far), OTP burn justified
+
+**Context / goal:** the **AS5600** magnetic rotary encoder (12-bit, addr `0x36`) is the kart's **steering-angle sensor**, mounted off-board on the steering shaft. It will sit **< 2 m** from the medulla PCB. Decision this session: read it as **PWM on the `OUT` pin**, *not* over I²C, because **I²C won't survive the cable run** to where the sensor is mounted (the handoff doc itself warns I²C doesn't tolerate long/noisy runs). `kart_medulla` (ESP32-S3 firmware) is the consumer. Handoff doc: `~/Downloads/as5600-esp32s3-handoff.md`.
+
+**Bench wiring already done (4 wires, I²C — for configuration only):** `SCL→CN4-1`, `SDA→CN4-2`, `VCC→CN1-1 (+3V3)`, `GND→CN10-3`. **Powered at 3.3 V, not 5 V** (the module's 10 kΩ SDA/SCL pull-ups would otherwise push 5 V into the S3 GPIOs). GND on CN10-3 (CN1-3 occupied); CN9-3 avoided on purpose (steering/hydraulic actuator ground = noisy). USB alone powers 3V3 for bench work — no kart battery needed. On the S3 the I²C bus is **`SDA = GPIO 8`, `SCL = GPIO 9`** (per `kart_medulla/.agents/esp32s3-pinmap.md`, from the KiCad netlist); shared with on-board **PCF8574 `U25` at `0x20`**, so an I²C scan should show both `0x20` and `0x36`.
+
+**Why PWM + why burn (the key decision — reverses my earlier "do not burn"):** OUTS defaults to `00` = analog. PWM is enabled by writing **CONF** (`0x08`, low byte) with **OUTS bits 5:4 = `10`** and **PWMF bits 7:6** = frequency. But CONF in RAM is **volatile** — and since I²C won't reach the sensor in the field, the ESP32 **cannot re-apply it every boot**. So the config must be made permanent by **burning the OTP** (`BURN_SETTING`, `0x40`, **once** — burns CONF+MANG). This is exactly the standalone-PWM-without-a-configuring-micro case that justifies burning. Burn procedure (irreversible): **on the bench**, 3.3 V with a **10 µF cap on VDD3V3→GND**, supply resistance **< 1 Ω** (short/thick wires), magnet present + detected (`STATUS 0x0B` bit5 MD=1); write CONF → `BURN_SETTING 0x40` → wait ≥1 ms → **power-cycle** → re-read CONF to confirm `OUTS==0b10`. Optional `BURN_ANGLE 0x80` (ZPOS/MPOS, ≤3× per ZMCO) to set a steering zero — not required; offset/scale can live in firmware instead.
+```c
+uint8_t lo = readReg8(0x08);
+lo &= ~0xF0; lo |= (0b00 << 6) /*PWMF=115 Hz, robust over cable*/ | (0b10 << 4) /*OUTS=PWM*/;
+writeReg8(0x08, lo);   // then BURN_SETTING to make it permanent
+```
+
+**Where the PWM lands on medulla — checked against the `dv-hardware` schematic:** **no free CN terminal** exists that reaches a PWM-capable ESP32 GPIO (the `EXP_P*` pins on CN3/CN5 are **PCF8574 expander outputs**, not raw GPIOs — useless for reading a pulse). The only unconstrained free S3 GPIOs are **38, 39, 13(MISO)**, and they come out on the **dev-module LEFT_HEADER, not on any CN**. GPIO 38 is earmarked for the EBS compressor PWM, so:
+> **Route `OUT` → GPIO 39 (LEFT_HEADER Pin 14).** Solder to the header pin; flag hardware to break a spare GPIO out to a CN in the next PCB rev.
+
+**Electrical (distance < 2 m):** PWM push-pull 3.3 V goes **direct** — no buffer needed at this length. Still: twist the OUT wire with GND, add a ~100–330 Ω series resistor at the source, and use the **low PWM frequency (115 Hz)** — edges degrade less over cable and steering needs almost no bandwidth. (Only past ~10 m would a Schmitt buffer / differential driver / I²C extender like P82B715 be worth it.)
+
+**Firmware still to write (does not exist):** `km_medulla/components/km_sdir` is the existing AS5600 driver but it is **I²C-only** (reads `RAW_ANGLE 0x0C/0x0D`) and hardcodes the **classic-ESP32 pins SDA=21/SCL=22** in `KM_SDIR_ResetI2C`. For the PWM path we need **new pulse-width-capture** code — cleanest on the S3 is an **MCPWM capture unit** timestamping both edges → high-time / period → duty → angle. Calibrate duty→angle empirically (absorbs the steering zero). **Also blocking:** the **S3 build doesn't exist yet** — `platformio.ini` has only `esp32dev`/`native`, `km_gpio.h` is still the WROOM-32E map, and (per `.agents/error-log.md` 2026-07-10) that classic map puts `STEER_PWM` on GPIO 18, which on the S3 board is the safety-critical SDC MOSFET gate — so porting must guard the pin map with `#if CONFIG_IDF_TARGET_ESP32S3`, never flat-reuse it.
