@@ -307,6 +307,8 @@ Continuing the entry above. Agreed procedure and open points so tomorrow's flash
 
 - Supply at **3.3 V not 5 V** (module ties VDD3V3/VDD5V; also its 10 kΩ SDA/SCL pull-ups would push 5 V into S3 GPIOs). USB alone powers 3V3 for bench work — no kart battery needed.
 
+- **Pin correction 2026-07-11:** the entry above says "GPIO 38 earmarked for compressor, so steering → GPIO 39." The steering→39 conclusion stands, but the premise is stale — the compressor PWM was finalized on **CN8.2 / GPIO 3** (ex-buzzer MOSFET), so GPIO 38 is *also* free. GPIO 39 (LEFT_HEADER pin 14) is a **header solder** for the prototype, not on a CN. Cleaner permanent option (next PCB rev): repurpose a spare **pressure** input CN — we over-provisioned (3 pneumatic + 2 hydraulic; keeping both hydraulics, freeing one pneumatic). Best candidate **PRESSURE_3 (CN5.2, GPIO 1)** — straight to the ESP32, divider is 10 kΩ series + 10 k∥10 k pulldown, so **keep the 10 kΩ series as the PWM series resistor, remove the pulldown**. Full analysis + designators in `dv/kart/steering/as5600-pwm-burn-runbook.md`.
+
 Hardware-side companion note lives in the DV vault `kart/steering/history.md` (2026-07-11) — the two entries are the hardware and firmware halves of the same decision.
 
 ## 2026-07-11 — Dashboard Battery tab + pack current limits
