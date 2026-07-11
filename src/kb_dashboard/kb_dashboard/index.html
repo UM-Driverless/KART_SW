@@ -2213,79 +2213,85 @@ function rcDrawDial(canvas, cfg, value) {
   ctx.fillStyle = '#141416'; ctx.fill();
   ctx.strokeStyle = '#e2001a'; ctx.lineWidth = 2; ctx.stroke();
 }
-// Pedals dial — a centre-zero needle set on the top semicircle. Needles up =
-// idle. RIGHT/green = throttle, LEFT/red = brake.
-//   • Throttle: ONE needle. The kart has no independent throttle sensor — the
-//     value is the electronic effort we command — so there is no target-vs-real
-//     split to show.
-//   • Brake: TWO needles chasing each other — amber = commanded target,
-//     red = real (brake-pressure sensor channel, esp32_braking).
+// Pedals — two vertical bars, filling bottom→up (more pedal = taller bar).
+// LEFT/green = accelerator, RIGHT/red = brake.
+//   • Accel: ONE fill. The kart has no independent throttle sensor — the value
+//     is the electronic effort we command — so there is no target-vs-real split.
+//   • Brake: red fill = real (brake-pressure channel, esp32_braking); an amber
+//     tick marks the commanded target (orin_cmd_brake). The gap between the red
+//     level and the amber tick is the actuator-tracking error.
 // Same red = real / amber = target convention as the steering gauge.
 function rcDrawPedals(canvas, thr, brkReal, brkTgt) {
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
-  const W = canvas.width, CX = W / 2, CY = W / 2, R = W / 2 - 4;
-  ctx.clearRect(0, 0, W, W);
-  ctx.beginPath(); ctx.arc(CX, CY, R, 0, 6.2832);
-  ctx.fillStyle = '#0a0a0c'; ctx.fill();
-  ctx.strokeStyle = '#2c2c2f'; ctx.lineWidth = 2; ctx.stroke();
-  // angle for a pedal reading: side +1 = throttle (up→right), -1 = brake (up→left); v in 0..1
-  const ang = (side, v) => -Math.PI / 2 + side * Math.max(0, Math.min(1, v)) * (Math.PI / 2);
-  // colored scale arcs on the top semicircle
-  ctx.lineWidth = R * 0.08; ctx.lineCap = 'butt';
-  ctx.beginPath(); ctx.arc(CX, CY, R - R * 0.10, ang(1, 0), ang(1, 1)); ctx.strokeStyle = '#1f7a34'; ctx.stroke();
-  ctx.beginPath(); ctx.arc(CX, CY, R - R * 0.10, ang(-1, 1), ang(-1, 0)); ctx.strokeStyle = '#7a1420'; ctx.stroke();
-  // ticks + 0/.5/1 scale labels on both sides (0 = idle at top, 1 = full at the ends)
-  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  for (const side of [1, -1]) {
-    for (let t = 0; t <= 1.0001; t += 0.25) {
-      const maj = Math.abs(t - 0) < 1e-6 || Math.abs(t - 0.5) < 1e-6 || Math.abs(t - 1) < 1e-6;
-      const a = ang(side, t), c = Math.cos(a), s = Math.sin(a);
-      const rout = R - 3, rin = R - (maj ? R * 0.17 : R * 0.10);
-      ctx.beginPath(); ctx.moveTo(CX + c * rout, CY + s * rout); ctx.lineTo(CX + c * rin, CY + s * rin);
-      ctx.strokeStyle = maj ? '#9a9a9f' : '#3f3f43'; ctx.lineWidth = maj ? 2 : 1; ctx.stroke();
-      if (maj && !(Math.abs(t - 0) < 1e-6 && side === -1)) {   // draw the shared top "0" once
-        ctx.fillStyle = '#6a6a72'; ctx.font = '700 ' + Math.round(R * 0.12) + 'px Rajdhani, system-ui, sans-serif';
-        const rl = R - R * 0.32;
-        ctx.fillText(t === 0 ? '0' : (t === 1 ? '1' : '.5'), CX + c * rl, CY + s * rl);
-      }
-    }
-  }
-  // side labels
-  ctx.fillStyle = '#b4b4be'; ctx.font = '700 ' + Math.round(R * 0.14) + 'px Rajdhani, system-ui, sans-serif';
-  ctx.fillText('THR', CX + R * 0.60, CY - R * 0.28);
-  ctx.fillText('BRK', CX - R * 0.60, CY - R * 0.28);
-  // needles
-  const needle = (side, v, color, len, w, glow) => {
-    const a = ang(side, v);
-    ctx.strokeStyle = color; ctx.lineWidth = w; ctx.lineCap = 'round';
-    if (glow) { ctx.shadowColor = color; ctx.shadowBlur = 6; }
-    ctx.beginPath(); ctx.moveTo(CX, CY); ctx.lineTo(CX + Math.cos(a) * R * len, CY + Math.sin(a) * R * len); ctx.stroke();
-    ctx.shadowBlur = 0;
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+  const clamp01 = v => Math.max(0, Math.min(1, v || 0));
+  const rr = (x, y, w, h, r) => { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); };
+
+  // layout: labels on top, bars in the middle, numbers + legend at the bottom
+  const trackTop = H * 0.15, botPad = H * 0.30;
+  const trackH = H - trackTop - botPad, trackBot = trackTop + trackH;
+  const bw = W * 0.26, gap = W * 0.14, x0 = (W - (bw * 2 + gap)) / 2;
+  const thrX = x0, brkX = x0 + bw + gap;
+
+  const drawTrack = (x) => {
+    rr(x, trackTop, bw, trackH, 6); ctx.fillStyle = '#141416'; ctx.fill();
+    ctx.strokeStyle = '#2c2c2f'; ctx.lineWidth = 1.5; ctx.stroke();
+    const midY = trackBot - trackH * 0.5;   // 50% reference line
+    ctx.strokeStyle = '#3f3f43'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x, midY); ctx.lineTo(x + bw, midY); ctx.stroke();
   };
-  needle(-1, brkTgt || 0, '#ffb020', 0.64, Math.max(2, R * 0.035), false);  // brake target (amber)
-  needle(-1, brkReal || 0, '#e2001a', 0.76, Math.max(2.5, R * 0.05), true); // brake real (red)
-  needle(1, thr || 0, '#e2001a', 0.76, Math.max(2.5, R * 0.05), true);      // throttle (red)
-  // hub
-  ctx.beginPath(); ctx.arc(CX, CY, R * 0.08, 0, 6.2832);
-  ctx.fillStyle = '#141416'; ctx.fill();
-  ctx.strokeStyle = '#e2001a'; ctx.lineWidth = 2; ctx.stroke();
-  // legend (red = real, amber = target) in the lower half — centered, sized to match the dial labels
+  const drawFill = (x, v, cTop, cBot, cap) => {
+    v = clamp01(v); if (v <= 0) return;
+    const fh = trackH * v, fy = trackBot - fh;
+    ctx.save();
+    rr(x, trackTop, bw, trackH, 6); ctx.clip();
+    const g = ctx.createLinearGradient(0, fy, 0, trackBot);
+    g.addColorStop(0, cTop); g.addColorStop(1, cBot);
+    ctx.fillStyle = g; ctx.fillRect(x, fy, bw, fh);
+    ctx.strokeStyle = cap; ctx.lineWidth = 2; ctx.shadowColor = cap; ctx.shadowBlur = 6;
+    ctx.beginPath(); ctx.moveTo(x, fy); ctx.lineTo(x + bw, fy); ctx.stroke();  // bright cap at the level
+    ctx.restore(); ctx.shadowBlur = 0;
+  };
+  const drawTick = (x, v) => {   // amber target marker (brake only)
+    const ty = trackBot - trackH * clamp01(v);
+    ctx.strokeStyle = '#ffb020'; ctx.lineWidth = 2; ctx.shadowColor = '#ffb020'; ctx.shadowBlur = 6;
+    ctx.beginPath(); ctx.moveTo(x - 3, ty); ctx.lineTo(x + bw + 3, ty); ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#ffb020';
+    ctx.beginPath(); ctx.moveTo(x + bw + 3, ty); ctx.lineTo(x + bw + 9, ty - 4); ctx.lineTo(x + bw + 9, ty + 4); ctx.closePath(); ctx.fill();
+  };
+
+  drawTrack(thrX); drawTrack(brkX);
+  drawFill(thrX, thr, '#2ecc71', '#1f7a34', '#2ecc71');
+  drawFill(brkX, brkReal, '#e2001a', '#7a1420', '#ff5a5a');
+  drawTick(brkX, brkTgt);
+
+  // labels above each bar
+  ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+  ctx.font = '700 ' + Math.round(H * 0.075) + 'px Rajdhani, system-ui, sans-serif';
+  ctx.fillStyle = '#2ecc71'; ctx.fillText('ACCEL', thrX + bw / 2, trackTop - H * 0.035);
+  ctx.fillStyle = '#e74c3c'; ctx.fillText('BRAKE', brkX + bw / 2, trackTop - H * 0.035);
+
+  // numeric readouts below each bar
+  ctx.font = '700 ' + Math.round(H * 0.12) + 'px Orbitron, sans-serif'; ctx.fillStyle = '#c8c8ce';
+  const numY = trackBot + H * 0.13;
+  ctx.fillText(Math.round(clamp01(thr) * 100), thrX + bw / 2, numY);
+  ctx.fillText(Math.round(clamp01(brkReal) * 100), brkX + bw / 2, numY);
+
+  // legend (red = real, amber = target) centered at the bottom
   ctx.textBaseline = 'middle';
-  ctx.font = '700 ' + Math.round(R * 0.14) + 'px Rajdhani, system-ui, sans-serif';
-  const ly = CY + R * 0.50, dotR = R * 0.05, dgap = R * 0.09, mid = R * 0.22;
+  ctx.font = '700 ' + Math.round(H * 0.062) + 'px Rajdhani, system-ui, sans-serif';
+  const ly = trackBot + H * 0.24, dotR = H * 0.022, dgap = H * 0.03, mid = H * 0.07;
   const wReal = ctx.measureText('REAL').width, wTgt = ctx.measureText('TARGET').width;
-  let lx = CX - (dotR * 4 + dgap * 2 + wReal + wTgt + mid) / 2;
+  let lx = W / 2 - (dotR * 4 + dgap * 2 + wReal + wTgt + mid) / 2;
   ctx.textAlign = 'left';
   ctx.fillStyle = '#e2001a'; ctx.beginPath(); ctx.arc(lx + dotR, ly, dotR, 0, 6.2832); ctx.fill();
   ctx.fillStyle = '#b4b4be'; ctx.fillText('REAL', lx + dotR * 2 + dgap, ly);
   lx += dotR * 2 + dgap + wReal + mid;
   ctx.fillStyle = '#ffb020'; ctx.beginPath(); ctx.arc(lx + dotR, ly, dotR, 0, 6.2832); ctx.fill();
   ctx.fillStyle = '#b4b4be'; ctx.fillText('TARGET', lx + dotR * 2 + dgap, ly);
-  // numeric readout
-  ctx.textAlign = 'center';
-  ctx.fillStyle = '#c8c8ce'; ctx.font = '700 ' + Math.round(R * 0.15) + 'px Orbitron, sans-serif';
-  ctx.fillText('T' + Math.round((thr || 0) * 100) + ' B' + Math.round((brkReal || 0) * 100), CX, CY + R * 0.72);
 }
 function rcDrawClock(canvas) {
   if (!canvas) return;
