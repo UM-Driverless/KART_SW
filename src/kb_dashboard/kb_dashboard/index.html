@@ -2230,9 +2230,9 @@ function rcDrawPedals(canvas, thr, brkReal, brkTgt) {
   const rr = (x, y, w, h, r) => { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); };
 
   // layout: labels on top, bars in the middle, numbers + legend at the bottom
-  const trackTop = H * 0.15, botPad = H * 0.30;
+  const trackTop = H * 0.10, botPad = H * 0.18;
   const trackH = H - trackTop - botPad, trackBot = trackTop + trackH;
-  const bw = W * 0.26, gap = W * 0.14, x0 = (W - (bw * 2 + gap)) / 2;
+  const bw = W * 0.30, gap = W * 0.10, x0 = (W - (bw * 2 + gap)) / 2;
   const thrX = x0, brkX = x0 + bw + gap;
 
   const drawTrack = (x) => {
@@ -2270,20 +2270,20 @@ function rcDrawPedals(canvas, thr, brkReal, brkTgt) {
 
   // labels above each bar
   ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
-  ctx.font = '700 ' + Math.round(H * 0.075) + 'px Rajdhani, system-ui, sans-serif';
-  ctx.fillStyle = '#2ecc71'; ctx.fillText('ACCEL', thrX + bw / 2, trackTop - H * 0.035);
-  ctx.fillStyle = '#e74c3c'; ctx.fillText('BRAKE', brkX + bw / 2, trackTop - H * 0.035);
+  ctx.font = '700 ' + Math.round(H * 0.06) + 'px Rajdhani, system-ui, sans-serif';
+  ctx.fillStyle = '#2ecc71'; ctx.fillText('ACCEL', thrX + bw / 2, trackTop - H * 0.04);
+  ctx.fillStyle = '#e74c3c'; ctx.fillText('BRAKE', brkX + bw / 2, trackTop - H * 0.04);
 
   // numeric readouts below each bar
-  ctx.font = '700 ' + Math.round(H * 0.12) + 'px Orbitron, sans-serif'; ctx.fillStyle = '#c8c8ce';
-  const numY = trackBot + H * 0.13;
+  ctx.font = '700 ' + Math.round(H * 0.10) + 'px Orbitron, sans-serif'; ctx.fillStyle = '#c8c8ce';
+  const numY = trackBot + H * 0.10;
   ctx.fillText(Math.round(clamp01(thr) * 100), thrX + bw / 2, numY);
   ctx.fillText(Math.round(clamp01(brkReal) * 100), brkX + bw / 2, numY);
 
   // legend (red = real, amber = target) centered at the bottom
   ctx.textBaseline = 'middle';
-  ctx.font = '700 ' + Math.round(H * 0.062) + 'px Rajdhani, system-ui, sans-serif';
-  const ly = trackBot + H * 0.24, dotR = H * 0.022, dgap = H * 0.03, mid = H * 0.07;
+  ctx.font = '700 ' + Math.round(H * 0.05) + 'px Rajdhani, system-ui, sans-serif';
+  const ly = trackBot + H * 0.16, dotR = H * 0.02, dgap = H * 0.025, mid = H * 0.055;
   const wReal = ctx.measureText('REAL').width, wTgt = ctx.measureText('TARGET').width;
   let lx = W / 2 - (dotR * 4 + dgap * 2 + wReal + wTgt + mid) / 2;
   ctx.textAlign = 'left';
@@ -2472,6 +2472,7 @@ body{
 .rc-mini canvas{ max-height:94%; max-width:94%; width:auto; height:auto; }
 .rc-mini-col{ flex-direction:column; gap:3px; }
 .rc-mini-col canvas{ max-height:80%; }
+.rc-mini-col #rcPedalsDial{ max-height:96%; }
 .rc-gcap{ font-size:8px; color:var(--rc-label-dim); letter-spacing:.06em; text-transform:uppercase;
   font-weight:700; font-variant-numeric:tabular-nums; white-space:nowrap; }
 
@@ -2642,7 +2643,7 @@ body{
           <div class="rc-panel rc-mini"><canvas id="rcDialYolo" width="150" height="150"></canvas></div>
           <div class="rc-panel rc-mini rc-mini-col"><span class="rc-mini-lbl">G</span><canvas id="ggCanvas" width="140" height="140"></canvas><div class="rc-gcap" id="rcGCap">LON 0.00 · LAT 0.00 g</div></div>
           <div class="rc-panel rc-mini rc-mini-col"><canvas id="rcBatDial" width="150" height="150"></canvas><div class="rc-gcap" id="rcBatCap">-- V</div></div>
-          <div class="rc-panel rc-mini"><span class="rc-mini-lbl">Pedals</span><canvas id="rcPedalsDial" width="150" height="150"></canvas></div>
+          <div class="rc-panel rc-mini rc-mini-col"><canvas id="rcPedalsDial" width="120" height="200"></canvas></div>
         </div>
       </div>
 
