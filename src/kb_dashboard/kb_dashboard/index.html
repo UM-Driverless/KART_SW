@@ -2711,8 +2711,8 @@ body{
 .bat-cell::after{ content:''; width:3px; height:36%; background:var(--rc-line-hard); border-radius:1px; flex:none; align-self:center; }
 /* min/max are balance markers (weakest / strongest cell), not alarms — cool→warm,
    never red. Real low-voltage shows via the pill fill + the CELL LOW health badge. */
-.bat-cell.lo .bat-cell-pill{ border-color:var(--rc-cyan); box-shadow:0 0 8px rgba(43,184,208,.45); }
-.bat-cell.hi .bat-cell-pill{ border-color:var(--rc-amber); box-shadow:0 0 8px rgba(255,176,32,.4); }
+.bat-cell.lo .bat-cell-pill{ border-color:var(--rc-amber); box-shadow:0 0 8px rgba(255,176,32,.4); }
+.bat-cell.hi .bat-cell-pill{ border-color:var(--rc-cyan); box-shadow:0 0 8px rgba(43,184,208,.45); }
 .bat-empty{ grid-column:1/-1; display:flex; align-items:center; justify-content:center; color:var(--rc-label-dim);
   font-family:'Rajdhani',sans-serif; font-weight:700; font-size:11px; letter-spacing:.3em; }
 
