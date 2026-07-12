@@ -2460,7 +2460,7 @@ const skinRace = {
   --rc-line:#2c2c2f; --rc-line-hard:#3a3a3d;
   --rc-red:#e2001a; --rc-red-glow:#ff2438; --rc-red-dark:#5c0009;
   --rc-white:#f2f2f0; --rc-label:#84848a; --rc-label-dim:#54545a;
-  --rc-amber:#ffb020; --rc-green:#33d17a;
+  --rc-amber:#ffb020; --rc-green:#33d17a; --rc-cyan:#2bb8d0;
 }
 html,body{ height:100%; }
 body{
@@ -2709,8 +2709,10 @@ body{
 .bat-cell-mv{ position:relative; z-index:1; font-size:13px; font-weight:700; font-variant-numeric:tabular-nums;
   color:#f2f2f0; font-family:'Rajdhani',sans-serif; letter-spacing:.03em; text-shadow:0 1px 2px rgba(0,0,0,.65); }
 .bat-cell::after{ content:''; width:3px; height:36%; background:var(--rc-line-hard); border-radius:1px; flex:none; align-self:center; }
-.bat-cell.lo .bat-cell-pill{ border-color:var(--rc-red); box-shadow:0 0 8px rgba(226,0,26,.5); }
-.bat-cell.hi .bat-cell-pill{ border-color:var(--rc-amber); }
+/* min/max are balance markers (weakest / strongest cell), not alarms — cool→warm,
+   never red. Real low-voltage shows via the pill fill + the CELL LOW health badge. */
+.bat-cell.lo .bat-cell-pill{ border-color:var(--rc-cyan); box-shadow:0 0 8px rgba(43,184,208,.45); }
+.bat-cell.hi .bat-cell-pill{ border-color:var(--rc-amber); box-shadow:0 0 8px rgba(255,176,32,.4); }
 .bat-empty{ grid-column:1/-1; display:flex; align-items:center; justify-content:center; color:var(--rc-label-dim);
   font-family:'Rajdhani',sans-serif; font-weight:700; font-size:11px; letter-spacing:.3em; }
 
