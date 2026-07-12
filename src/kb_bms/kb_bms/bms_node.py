@@ -112,6 +112,7 @@ class BmsNode(Node):
         self._latest = None       # dict from _parse_basic + optional "cells"
         self._latest_t = 0.0      # monotonic time of last successful read
         self._connected = False
+        self._fail_count = 0      # consecutive BLE failures (drives self-heal)
 
         # Publish from the spin thread (cross-thread publish from asyncio no-ops).
         self.create_timer(period, self._publish)
@@ -147,6 +148,7 @@ class BmsNode(Node):
 
                 try:
                     self._connected = True
+                    self._fail_count = 0
                     self.get_logger().info(f"BMS connected ({address})")
                     buf = bytearray()
 
@@ -183,8 +185,38 @@ class BmsNode(Node):
                         pass
             except Exception as e:  # noqa: BLE stack raises many types
                 self._connected = False
+                self._fail_count += 1
                 self.get_logger().warn(f"BMS BLE error ({e}); retrying in 5s")
+                # Self-heal: a crashed/leaked client can leave BlueZ holding a
+                # stale "Connected: yes" for the BMS. While connected it stops
+                # advertising, so both connect-by-MAC and scan-by-name fail
+                # forever and the node loops here until a human clears it by
+                # hand. Every few consecutive failures, force BlueZ to drop and
+                # forget the device so the next attempt re-discovers it fresh.
+                if self._fail_count % 3 == 0:
+                    await self._bluez_recover()
                 await asyncio.sleep(5.0)
+
+    async def _bluez_recover(self):
+        """@brief Clear a stale BlueZ connection to the BMS (see _ble_main).
+
+        Runs `bluetoothctl disconnect`/`remove` for the target MAC. Best-effort:
+        any failure is logged and ignored — the retry loop tries again anyway.
+        """
+        self.get_logger().warn(
+            f"BMS unreachable for {self._fail_count} tries — "
+            f"clearing stale BlueZ state for {self.mac}"
+        )
+        for verb in ("disconnect", "remove"):
+            try:
+                proc = await asyncio.create_subprocess_exec(
+                    "bluetoothctl", verb, self.mac,
+                    stdout=asyncio.subprocess.DEVNULL,
+                    stderr=asyncio.subprocess.DEVNULL,
+                )
+                await asyncio.wait_for(proc.wait(), timeout=10)
+            except Exception as e:  # noqa: bluetoothctl absent / timeout
+                self.get_logger().warn(f"bluetoothctl {verb} failed: {e}")
 
     # ── ROS side (spin thread) ──────────────────────────────────────────
     def _publish(self):
