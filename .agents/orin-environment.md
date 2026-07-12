@@ -54,6 +54,8 @@ The pack's **JBD/Xiaoxiang smart BMS** advertises over BLE as **`SP22S003BP21S10
 
 Protocol (JBD, via `bleak`): GATT service `ff00`, **notify** `ff01`, **write** `ff02`. Write `DD A5 03 00 FF FD 77` for pack summary (voltage, SOC@byte19, current, temps), `DD A5 04 00 FF FC 77` for per-cell mV. Frames `DD <reg> <status> <len> <payload> <chk> <chk> 77`, big-endian. Full parser in `src/kb_bms/kb_bms/bms_node.py`; see `history.md` 2026-07-08. `bleak` is a pip `--user` install for the `orin` user (the service runs as `orin`). A connected BLE device stops advertising, so only one client at a time — the node reconnects forever.
 
+**Stale-BlueZ failure mode (dashboard Battery tab blank / "NO CELL DATA"):** if a bleak client crashes or leaks, BlueZ can be left holding a stale `Connected: yes` for the BMS. While "connected" the pack stops advertising, so both connect-by-MAC and scan-by-name fail and the node loops forever on `BMS BLE error (BMS not found by MAC or name)`. Confirm with `bluetoothctl info A5:C2:37:39:58:5D | grep Connected`. Manual clear: `bluetoothctl disconnect A5:C2:37:39:58:5D && bluetoothctl remove A5:C2:37:39:58:5D` (add a `power off`/`power on` adapter cycle if it persists), then it re-advertises and reconnects. The node now **self-heals**: after every 3rd consecutive failure it runs `bluetoothctl disconnect`+`remove` itself (`_bluez_recover`), so it recovers without a human — expect a `clearing stale BlueZ state` log then `BMS connected` within ~30s. Restarting `kart-brain` while the node holds the link can itself trigger one round of this, which the self-heal then clears.
+
 ## WiFi Networks (priority order)
 | Priority | Connection Name | SSID | Password | Notes |
 |---|---|---|---|---|
