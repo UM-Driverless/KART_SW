@@ -167,3 +167,21 @@ Both sides provide functions to send data. Create an `int32_t` array and pass it
 7. [ ] Add case to `KM_COMS_ProccessPayload` in `km_coms.c` (kart-medulla)
 8. [ ] `colcon build` on Orin + flash ESP32
 9. [ ] Test round-trip
+
+---
+
+## Design note — reducing the manual cross-file sync (option, not yet adopted; 2026-07-12)
+
+The 9-step checklist above is the cost of the current design: `Frame.msg` is a **generic envelope** (`uint8 type` + untyped `int32[] payload`). It keeps `kb_coms_micro` a dumb pass-through (add a command → no bridge logic change), but the tag number and the payload layout are hand-synced across ~4 files in 2 repos, and the payload is untyped. Consequences we've actually hit:
+
+- **Payload-length/order drift** — the "receiver must parse in the same order" rule and the historical health-payload mismatch (*4 int32s, not 7*) are the same failure mode: nothing in the schema pins how many int32s a given `type` carries. CRC does not catch this — it checks byte integrity, not field agreement.
+- **Blind tooling** — `ros2 topic echo` shows `type: 11, payload: [...]`, not named fields, because the structure is hidden inside the `int32[]`.
+
+**Alternative worth evaluating: one schema, generated both sides.** Define each message's fields *once* in a `.proto`, then generate both ends:
+
+- **ESP32 (C):** [nanopb](https://github.com/nanopb/nanopb) — protobuf for microcontrollers (already used protobuf here once; it worked first-try).
+- **Orin (ROS 2):** [proto2ros](https://github.com/bdaiinstitute/proto2ros) — generates typed ROS 2 `.msg` **and** bidirectional `convert()` functions from the `.proto`. (Alt: [rosidl_typesupport_protobuf](https://github.com/eclipse-ecal/rosidl_typesupport_protobuf) makes ROS 2 serialize with Protobuf directly.)
+
+Payoff: protobuf on the wire, **typed** messages on the ROS graph (per-message type safety → the 4-vs-7 class becomes unrepresentable; `echo`/`bag` show named fields), and the tag/layout sync collapses to editing one `.proto` instead of the 9 steps. This is **not** micro-ROS — no framework adoption, no on-MCU agent; it's plain codegen. Trade-off: `kb_coms_micro` gains generated per-type conversion (no longer a blind pass-through), and there's a build-time protobuf/codegen dependency.
+
+Not a decision — captured from a design discussion so the option is on record next time the manual sync bites. See also personal write-up: `~/vault/notes/learning/history.md` (2026-07-12).
