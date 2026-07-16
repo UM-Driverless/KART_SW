@@ -142,11 +142,11 @@ Three ways to let Claude Code work autonomously on this repo:
 
 ### `/tasks` skill (interactive, recommended)
 
-From inside a Claude Code session, run `/tasks` (or `/tasks 3` for 3 in parallel). Claude launches subagents that pick tasks from `.agents/tasks.md`, update status, do the work, and commit — while you stay in the loop to unblock and steer. Also: `/tasks list` to check status, `/tasks add <description>` to add new tasks.
+From inside a Claude Code session, run `/tasks` (or `/tasks 3` for 3 in parallel). Claude launches subagents that pick tasks from `tasks.md` (repo root), update status, do the work, and commit — while you stay in the loop to unblock and steer. Also: `/tasks list` to check status, `/tasks add <description>` to add new tasks.
 
 ### Autopilot (unattended)
 
-Same task board, but fully headless — runs `claude -p` in a loop from the terminal. Walk away and come back to commits. Blocked tasks need manual intervention (edit `.agents/tasks.md` to answer and move back to Ready).
+Same task board, but fully headless — runs `claude -p` in a loop from the terminal. Walk away and come back to commits. Blocked tasks need manual intervention (edit `tasks.md` in the repo root to answer and move back to Ready).
 
 ```bash
 ./scripts/autopilot.sh
