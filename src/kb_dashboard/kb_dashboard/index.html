@@ -2846,6 +2846,7 @@ body{
             <span class="rc-label">Pneumatics</span>
             <canvas id="rcPneuDial" width="300" height="300"></canvas>
             <div class="pneu-pist"><span class="pneu-lbl">Piston</span><div class="pneu-bar"><div class="pneu-fill" id="rcPneuPistFill"></div></div><span class="pneu-val" id="rcPneuPistVal">-- bar</span></div>
+            <div class="pneu-pist"><span class="pneu-lbl">Comp</span><div class="pneu-bar"><div class="pneu-fill" id="rcPneuCompFill"></div></div><span class="pneu-val" id="rcPneuCompVal">--</span></div>
           </div>
           <div class="rc-sysconsole" id="rcDbgSlot"></div>
         </div>
@@ -3047,6 +3048,11 @@ body{
     const pf = $('rcPneuPistFill'), pv = $('rcPneuPistVal');
     if (pf) pf.style.width = (pist != null ? Math.max(0, Math.min(100, pist / PNEU_MAX_BAR * 100)) : 0) + '%';
     if (pv) pv.textContent = (pist != null ? pist.toFixed(1) + ' bar' : '-- bar');
+    // compressor: fill tracks the soft-start duty (0-255), label shows ON/off
+    const compDuty = d.esp32_compressor_duty, compOn = d.esp32_compressor_on;
+    const cf = $('rcPneuCompFill'), cv = $('rcPneuCompVal');
+    if (cf) cf.style.width = (compDuty != null ? Math.max(0, Math.min(100, compDuty / 255 * 100)) : 0) + '%';
+    if (cv) cv.textContent = compOn ? 'ON ' + Math.round((compDuty || 0) / 255 * 100) + '%' : 'off';
     document.querySelector('.rc-pneu')?.classList.toggle('rc-danger', haveTank && !tankOk);
     // any unhealthy item → the System tab pulses red (tank out of its safe band counts)
     const sysBad = !d.health_magnet_ok || !d.health_i2c_ok || !d.health_heap_ok || !agcOk ||
@@ -3195,6 +3201,7 @@ if (new URLSearchParams(location.search).has('demo')) {
     br = lon < -0.15 ? Math.min(1, br + 0.15) : br * 0.75;
     pneuTank = 8 + Math.sin(t * 0.15) * 0.7 + (Math.random() - 0.5) * 0.08;  // drifts inside the 6–10 safe band
     pneuPist = br * (pneuTank * 0.85);                                        // piston pressure tracks braking
+    const pneuComp = pneuTank < 7.6 ? 153 : 0;                                // demo: compressor kicks in at the low end of the drift
     batSoc = 48 + 48 * Math.sin(t * 0.5);                                    // demo: sweeps 0↔96% every ~13s so you see green→amber→red (+ danger glow) and back
     const batV = 41.6 + batSoc / 100 * 13;                                   // 13S P42A: 41.6 V (0%) → 54.6 V (100%)
     // 13 cells around the per-cell average, with a couple deliberately sagging so the
@@ -3224,6 +3231,7 @@ if (new URLSearchParams(location.search).has('demo')) {
       stack_comms: 620, stack_control: 540, stack_heartbeat: 810, stack_health: 760,
       yolo_fps: 68 + Math.sin(t * 0.7) * 6, esp_fps: 95 + Math.sin(t * 1.3) * 8,
       pneu_tank_bar: pneuTank, pneu_piston_bar: pneuPist,
+      esp32_compressor_duty: pneuComp, esp32_compressor_on: pneuComp > 0,
       battery_voltage: batV, battery_soc: batSoc,
       battery_current: batCur, battery_temp: batTemp, battery_temps: [batTemp, batTemp - 1.5],
       battery_charge: 42 * batSoc / 100, battery_cells_mv: batCells,

@@ -35,6 +35,7 @@ from kb_dashboard.protocol import (
     decode_braking,
     decode_throttle,
     decode_health,
+    decode_pneumatic,
     encode_steer_mode,
 )
 from kb_dashboard.server import run_websocket_server
@@ -89,6 +90,9 @@ class DashboardNode(Node):
         )
         self.create_subscription(
             Frame, "/esp32/health", self._on_esp_health, qos_reliable
+        )
+        self.create_subscription(
+            Frame, "/esp32/pneumatic", self._on_esp_pneumatic, qos_reliable
         )
 
         # ZED2 IMU — uses BEST_EFFORT to match the ZED ROS2 wrapper's default QoS
@@ -290,6 +294,12 @@ class DashboardNode(Node):
     def _on_esp_health(self, msg: Frame):
         """@brief Callback for ESP32 health status frames. Updates magnet, I2C, heap fields."""
         fields = decode_health(list(msg.payload))
+        for k, v in fields.items():
+            self.state.update(k, v)
+
+    def _on_esp_pneumatic(self, msg: Frame):
+        """@brief Callback for ESP32 pneumatics frames. Updates tank pressure + compressor state."""
+        fields = decode_pneumatic(list(msg.payload))
         for k, v in fields.items():
             self.state.update(k, v)
 

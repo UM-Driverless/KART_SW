@@ -35,6 +35,8 @@ KB_coms_micro::KB_coms_micro() : Node("kb_coms_micro_node") {
 
     esp_diag_steering_pub_ = create_publisher<kb_interfaces::msg::Frame>("/esp32/diag_steering", 10);
 
+    esp_pneumatic_pub_ = create_publisher<kb_interfaces::msg::Frame>("/esp32/pneumatic", 10);
+
     esp_fps_pub_ = create_publisher<std_msgs::msg::Float32>("/esp32/fps", 10);
 
     // Create Subscriptors
@@ -232,6 +234,16 @@ void KB_coms_micro::kb_coms_RXcallback(const SerialDriver::Frame &frame_esp) {
         diag_steering_msg.type = frame_esp.type;
         diag_steering_msg.payload = frame_esp.payload;
         esp_diag_steering_pub_->publish(diag_steering_msg);
+
+        break;
+    }
+
+    case kb_interfaces::msg::Frame::ESP_PNEUMATIC: {
+        // ESP32 sends 2 int32s: [tank_pressure_adc, compressor_duty (0-255, 0=off)]
+        kb_interfaces::msg::Frame pneumatic_msg;
+        pneumatic_msg.type = frame_esp.type;
+        pneumatic_msg.payload = frame_esp.payload;
+        esp_pneumatic_pub_->publish(pneumatic_msg);
 
         break;
     }

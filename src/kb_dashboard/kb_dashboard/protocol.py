@@ -141,6 +141,46 @@ def decode_health(payload) -> dict:
     }
 
 
+# Tank pressure calibration (verified 2026-07-12 bench, kart-brain tasks.md):
+# tank sensor = Festo SDE5-D10 on PRESSURE_1 (CN7.1 → GPIO 6). The SDE5 outputs
+# 1 V/bar and the on-board divider (R11+R12 series / R13 to GND) scales it ÷3, so
+# at the ADC pin the signal is (1/3) V/bar and bar = 3.0 * V_adc.
+# The firmware sends the raw 12-bit ADC count, so we recover V_adc with a LINEAR
+# ADC model (count → volts). This ignores the ESP32-S3 ADC's nonlinearity; for an
+# accurate reading the firmware should convert with esp_adc_cal / analogReadMilliVolts
+# and send millivolts instead. NOTE: this is unrelated to main.c's ADC_1_BAR/ADC_2_BAR,
+# which are the compressor's (separately uncalibrated) pump-on/off trip points, not a
+# bar display — do not "sync" the two.
+ADC_FULL_SCALE = 4095.0     # 12-bit
+ADC_VREF_V = 3.3            # nominal full-scale volts at ADC_ATTEN_DB_11 (approx)
+DIVIDER_RATIO = 3.0        # bar per volt-at-pin (SDE5 1 V/bar through the ÷3 divider)
+
+
+def decode_pneumatic(payload) -> dict:
+    """@brief Decode pneumatics telemetry to dict.
+
+    Payload: [tank_pressure_adc, compressor_duty].
+    tank_pressure_adc: raw 12-bit ADC (0-4095). compressor_duty: 0-255, 0 = MOSFET off.
+
+    @param payload List of int32 values from the Frame.
+    @return Dict with pneu_tank_bar (float, feeds the tank dial), esp32_compressor_on
+            (bool), and esp32_compressor_duty (int 0-255).
+    """
+    if len(payload) < 2:
+        return {
+            "pneu_tank_bar": None,
+            "esp32_compressor_on": False,
+            "esp32_compressor_duty": 0,
+        }
+    pressure_adc, comp_duty = payload[0], payload[1]
+    v_adc = pressure_adc / ADC_FULL_SCALE * ADC_VREF_V
+    return {
+        "pneu_tank_bar": round(DIVIDER_RATIO * v_adc, 2),
+        "esp32_compressor_on": comp_duty > 0,
+        "esp32_compressor_duty": comp_duty,
+    }
+
+
 def decode_heartbeat(payload) -> int:
     """@brief Decode heartbeat payload to uptime in milliseconds.
 
@@ -294,6 +334,9 @@ class DashboardState:
             "health_agc": 0,
             "health_heap_kb": 0,
             "health_i2c_errors": 0,
+            "pneu_tank_bar": None,          # tank pressure (bar); None → dial shows "-- bar"
+            "esp32_compressor_on": False,   # EBS compressor MOSFET on/off
+            "esp32_compressor_duty": 0,     # compressor PWM duty 0-255 (soft-start ramp)
             "yolo_fps": 0.0,
             "esp_fps": 0.0,
             "cones_3d_ground": [],  # [{"x": float, "z": float, "c": str}, ...] from /perception/cones_3d_ground

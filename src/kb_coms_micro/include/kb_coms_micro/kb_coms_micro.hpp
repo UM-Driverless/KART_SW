@@ -34,6 +34,7 @@ class KB_coms_micro : public rclcpp::Node {
       ESP_COMPLETE            = 0x09,
       ESP_DIAG_STEERING       = 0x0A,
       ESP_HEALTH_STATUS       = 0x0B,
+      ESP_PNEUMATIC           = 0x0C,
 
       // ==========================
       // Orin --> ESP32 (0x20 - 0x3F)
@@ -83,6 +84,7 @@ class KB_coms_micro : public rclcpp::Node {
     // health status
     rclcpp::Publisher<kb_interfaces::msg::Frame>::SharedPtr esp_health_flags_pub_;
     rclcpp::Publisher<kb_interfaces::msg::Frame>::SharedPtr esp_health_data_pub_;
+    rclcpp::Publisher<kb_interfaces::msg::Frame>::SharedPtr esp_pneumatic_pub_;
 
     // Declaration of all subscribers
     rclcpp::Subscription<kb_interfaces::msg::Frame>::SharedPtr orin_throttle_sub_;

@@ -14,6 +14,7 @@ from kb_dashboard.protocol import (
     decode_throttle,
     decode_braking,
     decode_health,
+    decode_pneumatic,
     encode_steering,
     encode_act_steering,
     encode_act_speed,
@@ -94,6 +95,33 @@ class TestDecodeEffort:
     def test_zero(self):
         assert decode_throttle(encode_throttle(0.0)) == 0.0
         assert decode_braking(encode_braking(0.0)) == 0.0
+
+
+# ── decode_pneumatic ─────────────────────────────────────────────────
+
+class TestDecodePneumatic:
+    def test_compressor_on(self):
+        # verified calibration: bar = 3.0 * (raw/4095 * 3.3); 1 bar ≈ 413.6 ADC.
+        # duty 153 → compressor on.
+        fields = decode_pneumatic([414, 153])
+        assert abs(fields["pneu_tank_bar"] - 1.0) < 0.02
+        assert fields["esp32_compressor_on"] is True
+        assert fields["esp32_compressor_duty"] == 153
+
+    def test_full_scale(self):
+        # raw 4095 → ~9.9 bar (near the sensor's 10 bar top of range)
+        fields = decode_pneumatic([4095, 0])
+        assert abs(fields["pneu_tank_bar"] - 9.9) < 0.1
+
+    def test_compressor_off(self):
+        fields = decode_pneumatic([1365, 0])
+        assert fields["esp32_compressor_on"] is False
+        assert fields["esp32_compressor_duty"] == 0
+
+    def test_short_payload(self):
+        fields = decode_pneumatic([100])
+        assert fields["pneu_tank_bar"] is None
+        assert fields["esp32_compressor_on"] is False
 
 
 # ── DashboardState ────────────────────────────────────────────────────

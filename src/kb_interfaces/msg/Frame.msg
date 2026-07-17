@@ -12,6 +12,7 @@ uint8 ESP_HEARTBEAT         = 0x08
 uint8 ESP_COMPLETE          = 0x09
 uint8 ESP_DIAG_STEERING     = 0x0A
 uint8 ESP_HEALTH_STATUS     = 0x0B
+uint8 ESP_PNEUMATIC         = 0x0C
 
 
 # ==========================
