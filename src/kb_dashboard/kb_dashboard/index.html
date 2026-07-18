@@ -1119,7 +1119,7 @@ body{
 /* Fixed height, so the bar is NOT driven by its tallest child. Without this a 48px power
    button pushes the bar to 64px and every page loses 10px of dial height — and the dials
    here are height-limited, so that comes straight off them. */
-#topbar{ max-width:none; width:100%; margin:0; flex:none; height:54px; padding:0 16px;
+#topbar{ max-width:none; width:100%; margin:0; flex:none; height:46px; padding:0 0 0 16px;
   background:var(--rc-panel); border-bottom:1px solid var(--rc-line); position:relative; z-index:10; }
 #topbar::after{ content:''; position:absolute; left:0; right:0; top:100%; height:5px;
   background:repeating-linear-gradient(-45deg, var(--rc-red) 0 8px, #0d0d0e 8px 16px); opacity:.9; }
@@ -1426,16 +1426,18 @@ body{
 .rc-fs:active{ background:var(--rc-red-dark); color:var(--rc-white); }
 .rc-fs.rc-fs-top{ width:38px; height:38px; margin-right:4px; }
 .rc-fs.rc-fs-top svg{ width:19px; height:19px; }
-/* 62x48: the one control people reach for with gloves on, at arm's length, beside a moving
-   kart. 48 tall clears Material's 48dp and Apple's 44pt; the extra width is free because
-   width is the abundant axis on an 844x390 landscape phone, and for a right-edge button
-   horizontal extent is real target size under Fitts's law at zero cost to dial height.
-   The 16px gap (neighbours use 10) keeps a destructive control separated from the benign
-   ones rather than letting a near-miss land on it. */
+/* A CORNER target: flush to the top and right edges of the bar, so it can be hit by
+   overshooting into the corner instead of aiming. Under Fitts's law a screen corner is
+   effectively an infinite target — that beats any amount of extra pixels in open space,
+   which is why this is worth more than the button simply being big.
+   76x46 = 3496px², 2.4x the 38x38 it started at, without the bar growing at all.
+   The chamfer is on the BOTTOM-LEFT only: clip-path clips hit-testing as well as painting,
+   so chamfering the top-right would cut away the very corner this relies on.
+   The 16px gap (neighbours use 8) keeps a destructive control away from the benign ones. */
 #powerOffBtn{ background:var(--rc-raised) !important; border:1px solid var(--rc-red-dark) !important;
   color:var(--rc-red) !important; border-radius:0 !important; padding:0 !important;
-  width:62px; height:48px; display:flex; align-items:center; justify-content:center; margin-left:16px;
-  clip-path:polygon(0 0, calc(100% - 7px) 0, 100% 7px, 100% 100%, 7px 100%, 0 calc(100% - 7px)); }
+  width:76px; height:46px; display:flex; align-items:center; justify-content:center; margin-left:16px;
+  clip-path:polygon(0 0, 100% 0, 100% 100%, 9px 100%, 0 calc(100% - 9px)); }
 #powerOffBtn:active{ background:var(--rc-red-dark) !important; color:#fff !important; }
 #netInfoBtn{ background:var(--rc-raised) !important; border:1px solid var(--rc-line-hard) !important;
   color:var(--rc-white) !important; border-radius:0 !important; width:38px !important; height:38px !important;
