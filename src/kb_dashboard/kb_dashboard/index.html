@@ -1157,8 +1157,12 @@ body{
    reclaimed 40px goes straight into dial size. */
 .race-stage{ flex:1; min-height:0; display:flex; flex-direction:row; }
 .race-pages{ flex:1; overflow:hidden; position:relative; min-height:0; min-width:0; }
-.race-track{ display:flex; flex-direction:column; height:100%; transition:transform .28s cubic-bezier(.4,0,.2,1); }
-.race-page{ flex:0 0 100%; min-width:0; min-height:0; padding:8px 10px; overflow:hidden; }
+/* The pages are a ring, exactly like the nav wheel: each one is absolutely positioned at its
+   shortest signed distance from the current position, so every move slides by one step —
+   including across the seam from the last page back to the first. A linear track cannot do
+   that; it has to jump when it wraps, which is what made some moves animate and others not. */
+.race-track{ position:absolute; inset:0; }
+.race-page{ position:absolute; inset:0; padding:8px 10px; overflow:hidden; will-change:transform; }
 
 /* chamfered panel with rivets, straight from the mockup */
 .rc-panel{ background:var(--rc-panel); border:1px solid var(--rc-line); position:relative;
@@ -1661,7 +1665,6 @@ body{
     }
     // page slider: tabs + horizontal swipe
     let page = 0;
-    const track = $('rcTrack');
     const lastPage = document.querySelectorAll('.race-page').length - 1;  // derived, so adding a page can't strand it
     // ── nav rail: an endless wheel, like a camera's mode dial. The selected name sits in a
     // fixed centre slot and the whole ring is dragged past it, so selecting costs no aiming
@@ -1675,47 +1678,48 @@ body{
     // railPos is a continuous position on the ring, in items: 0 = first name centred.
     let railPos = 0, railAnim = null;
 
-    // Lay the ring out: each name is placed at its shortest signed distance from the centre,
-    // so the six nodes are reused endlessly instead of being cloned.
+    // Lay both rings out from ONE position, so the wheel and the pages can never disagree
+    // about where they are or animate differently. Each element sits at its shortest signed
+    // distance from the current position, so six nodes serve an endless ring with no cloning.
+    const pageEls = [...document.querySelectorAll('.race-page')];
+    const relOf = (i, pos) => mod(i - pos + N / 2, N) - N / 2;
     const paintRail = pos => {
       const h = itemH(), mid = railWin.clientHeight / 2, sel = mod(Math.round(pos), N);
       tabs.forEach((t, i) => {
-        let rel = mod(i - pos + N / 2, N) - N / 2;          // signed distance in items, wrapped
-        const dist = Math.abs(rel);
+        const rel = relOf(i, pos), dist = Math.abs(rel);
         t.style.transform = `translateY(${mid + rel * h - h / 2}px) scale(${dist < 0.5 ? 1 : Math.max(0.84, 1 - dist * 0.06)})`;
         t.style.opacity = dist < 0.5 ? 1 : Math.max(0.18, 1 - dist * 0.32);
         t.classList.toggle('on', i === sel);
       });
       return sel;
     };
+    const paintPages = pos => pageEls.forEach((el, i) => {
+      el.style.transform = `translateY(${relOf(i, pos) * 100}%)`;
+    });
+    const paint = pos => { paintPages(pos); return paintRail(pos); };
 
     // Animate the ring to a target position (in items), taking the short way round.
     const railTo = (target, animate) => {
       if (railAnim) { cancelAnimationFrame(railAnim); railAnim = null; }
-      if (!animate) { railPos = target; paintRail(railPos); return; }
+      if (!animate) { railPos = target; paint(railPos); return; }
       const from = railPos, delta = mod(target - from + N / 2, N) - N / 2;   // shortest arc
       const t0 = performance.now(), dur = 220;
       const step = now => {
         const k = Math.min(1, (now - t0) / dur);
         const eased = 1 - Math.pow(1 - k, 3);
         railPos = from + delta * eased;
-        paintRail(railPos);
+        paint(railPos);
         if (k < 1) railAnim = requestAnimationFrame(step);
-        else { railPos = mod(target, N); paintRail(railPos); railAnim = null; }
+        else { railPos = mod(target, N); paint(railPos); railAnim = null; }
       };
       railAnim = requestAnimationFrame(step);
     };
 
-    const go = (i, animateRail = true) => {
-      const next = mod(i, N);                       // wrapping the wheel wraps the pages too
-      // The page track does not wrap, so a wrap-around would slide through every page in
-      // between. Jump without animation in that case; animate only for adjacent moves.
-      const wrapped = Math.abs(next - page) > 1;
-      track.style.transition = wrapped ? 'none' : '';
-      page = next;
-      track.style.transform = `translateY(${-page * 100}%)`;
-      if (wrapped) requestAnimationFrame(() => { track.style.transition = ''; });
-      railTo(page, animateRail);
+    // Every move animates the same way — the wheel and the pages are the same ring, and the
+    // shortest arc across the seam is one step, so there is no case that has to jump.
+    const go = (i, animate = true) => {
+      page = mod(i, N);
+      railTo(page, animate);
     };
 
     let rDragging = false, rStartY = 0, rStartPos = 0, rMoved = 0;
@@ -1729,7 +1733,7 @@ body{
       const dy = e.clientY - rStartY;
       rMoved = Math.max(rMoved, Math.abs(dy));
       railPos = rStartPos - dy / itemH();          // unbounded: the ring never hits an end
-      paintRail(railPos);                          // live feedback while dragging
+      paint(railPos);                              // pages track the finger with the wheel
     });
     const endRailDrag = e => {
       if (!rDragging) return;
@@ -1748,7 +1752,7 @@ body{
     rail.addEventListener('pointerup', endRailDrag);
     rail.addEventListener('pointercancel', endRailDrag);
     // the window's centre moves when the viewport resizes, so re-seat the ring
-    window.addEventListener('resize', () => paintRail(railPos));
+    window.addEventListener('resize', () => paint(railPos));
     let sx = 0, sy = 0, swipeOk = false;
     const pages = $('rcPages');
     pages.addEventListener('touchstart', e => {
@@ -1762,7 +1766,7 @@ body{
       // because there is less height to travel than there was width.
       if (Math.abs(dy) > 45 && Math.abs(dy) > 1.5 * Math.abs(dx)) go(page + (dy < 0 ? 1 : -1));
     }, { passive: true });
-    go(0);
+    go(0, false);   // seat the ring without animating on first render
     // fullscreen + landscape lock
     const rcToggleFs = () => {
       const el = document.documentElement;
