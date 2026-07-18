@@ -3,12 +3,31 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<!-- Added to the iOS Home Screen the dashboard launches standalone. Without these it gets
+     the default opaque status bar — a band above the page that the skin never paints, so it
+     reads as a black margin. black-translucent puts the status bar over the page instead, and
+     the safe-area padding on body (see below) keeps content clear of the clock and notch.
+     iOS caches this at add-to-Home-Screen time: re-add the icon after changing it. -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#111113">
 <title>Kart Dashboard</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&family=Rajdhani:wght@400;500;600;700&family=VT323&family=JetBrains+Mono:wght@300;400;500;600;700&family=Titillium+Web:ital,wght@0,400;0,600;0,700;1,700&display=swap" rel="stylesheet">
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-body { min-height: 100vh; -webkit-tap-highlight-color: transparent; }
+body {
+  min-height: 100vh; -webkit-tap-highlight-color: transparent;
+  /* viewport-fit=cover extends the page under the notch, status bar and home indicator.
+     Inset the content by the safe area so nothing lands there. Padding (not margin) is
+     deliberate: backgrounds paint across the padding box, so the skin's colour fills the
+     status-bar band instead of leaving bare black. In landscape the notch is on a side,
+     which is why left/right are included. Every skin inherits this — none override padding. */
+  padding:
+    env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
+    env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+}
 .container { max-width: 480px; margin: 0 auto; padding: 12px; }
 
 /* Skin selector (floats top-right, styled per skin via body class) */
