@@ -53,15 +53,25 @@ class TestDecodeSteering:
 class TestDecodeSteeringRaw:
     def test_with_encoder(self):
         payload = encode_act_steering(0.3, 2243)
-        angle, raw = decode_steering_raw(payload)
+        angle, raw, pid_pwm = decode_steering_raw(payload)
         assert abs(angle - 0.3) < 0.001
         assert raw == 2243
+        # encode_act_steering emits two elements, so the PID term is absent and reads 0.0
+        assert pid_pwm == 0.0
 
     def test_without_encoder(self):
         payload = encode_act_steering(0.1)
-        angle, raw = decode_steering_raw(payload)
+        angle, raw, pid_pwm = decode_steering_raw(payload)
         assert abs(angle - 0.1) < 0.001
         assert raw == 0
+        assert pid_pwm == 0.0
+
+    def test_with_pid_term(self):
+        # what the real firmware sends: [angle x1000, raw encoder, pid_out x1000]
+        angle, raw, pid_pwm = decode_steering_raw([300, 2243, -750])
+        assert abs(angle - 0.3) < 0.001
+        assert raw == 2243
+        assert abs(pid_pwm - (-0.75)) < 0.001
 
 
 # ── decode_speed ─────────────────────────────────────────────────────
@@ -203,5 +213,5 @@ class TestMissions:
         assert len(ids) == len(set(ids))
 
     def test_expected_missions(self):
-        expected = {"manual", "remote_control", "acceleration", "skidpad", "autocross", "trackdrive", "ebs_test", "inspection"}
+        expected = {"manual", "remote_control", "autonomous", "acceleration", "skidpad", "autocross", "trackdrive", "ebs_test", "inspection"}
         assert set(MISSIONS.keys()) == expected

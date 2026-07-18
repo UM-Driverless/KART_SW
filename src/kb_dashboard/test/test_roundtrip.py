@@ -63,7 +63,7 @@ class TestSteeringCommandRoundTrip:
 class TestSteeringFeedbackRoundTrip:
     def test_angle_only(self):
         payload = encode_act_steering(0.3)
-        angle, raw = decode_steering_raw(payload)
+        angle, raw, _pwm = decode_steering_raw(payload)
         assert abs(angle - 0.3) < STEER_TOL
         assert raw == 0
 
@@ -71,13 +71,13 @@ class TestSteeringFeedbackRoundTrip:
         angle = 0.3
         raw_encoder = 2048 + int(angle * 650)
         payload = encode_act_steering(angle, raw_encoder)
-        decoded_angle, decoded_raw = decode_steering_raw(payload)
+        decoded_angle, decoded_raw, _pwm = decode_steering_raw(payload)
         assert abs(decoded_angle - angle) < STEER_TOL
         assert decoded_raw == raw_encoder
 
     def test_negative_angle(self):
         payload = encode_act_steering(-0.15, 1900)
-        angle, raw = decode_steering_raw(payload)
+        angle, raw, _pwm = decode_steering_raw(payload)
         assert abs(angle - (-0.15)) < STEER_TOL
         assert raw == 1900
 
