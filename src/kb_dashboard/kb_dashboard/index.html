@@ -1415,8 +1415,8 @@ body{
    over the edge of a drum rather than being cut off. */
 .rail-window{ position:absolute; left:0; right:0; top:50%; transform:translateY(-50%);
   height:calc(var(--rail-item) * 5); overflow:hidden;
-  -webkit-mask-image:linear-gradient(transparent 0%, #000 22%, #000 78%, transparent 100%);
-  mask-image:linear-gradient(transparent 0%, #000 22%, #000 78%, transparent 100%); }
+  -webkit-mask-image:linear-gradient(transparent 0%, #000 13%, #000 87%, transparent 100%);
+  mask-image:linear-gradient(transparent 0%, #000 13%, #000 87%, transparent 100%); }
 /* the fixed centre slot: it marks where selection happens, and it does not move */
 .rail-slot{ position:absolute; left:0; right:0; top:50%; height:var(--rail-item);
   transform:translateY(-50%); background:var(--rc-raised);
@@ -1687,8 +1687,12 @@ body{
       const h = itemH(), mid = railWin.clientHeight / 2, sel = mod(Math.round(pos), N);
       tabs.forEach((t, i) => {
         const rel = relOf(i, pos), dist = Math.abs(rel);
-        t.style.transform = `translateY(${mid + rel * h - h / 2}px) scale(${dist < 0.5 ? 1 : Math.max(0.84, 1 - dist * 0.06)})`;
-        t.style.opacity = dist < 0.5 ? 1 : Math.max(0.18, 1 - dist * 0.32);
+        // Flat-topped falloff: a linear ramp dimmed the very next name to 0.68 and the one
+        // after to 0.36, so only the centre really read. The 4th power keeps the near names
+        // near-full and spends the whole fade in the last slot, where it belongs — more
+        // names readable, and the drop-off happens further out and more abruptly.
+        t.style.transform = `translateY(${mid + rel * h - h / 2}px) scale(${Math.max(0.92, 1 - dist * 0.03)})`;
+        t.style.opacity = Math.max(0.1, 1 - Math.pow(dist / 2.9, 4));
         t.classList.toggle('on', i === sel);
       });
       return sel;
