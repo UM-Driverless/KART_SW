@@ -455,3 +455,104 @@ side. No skin overrides body padding, so all six inherit it.
 **iOS caches the launch config when the icon is added.** Changing these metas has no effect
 on an existing Home Screen icon — it must be deleted and re-added. Plain Safari tabs pick
 the change up on reload. Confirmed fixed on the kart the same day.
+
+---
+
+## 2026-07-18 — Dashboard reduced to one skin, navigation moved to a left wheel, EBS tab added
+
+Several related changes to `src/kb_dashboard/kb_dashboard/index.html`, all in the Race skin,
+which is now the only skin.
+
+**Five skins deleted.** Legacy, KITT, Tesla, HUD and Artemis are gone, along with the
+selector that switched between them and six helpers left orphaned by their removal
+(`updateControlPanel`, `drawControlPad`, `updateCenitalPanel`, `updateSteerBar`,
+`updatePedals`, `updateTargets`). `applySkin` no longer takes an id or reads localStorage.
+The file went from 3366 to about 2050 lines.
+
+**Navigation moved from a bottom bar to a left rail, and pages now slide vertically.** The
+dashboard is used on a phone in landscape, 844x390: width is the plentiful axis and height
+the scarce one, and the round gauges are height-limited, so a 40px bottom bar cost dial size
+on every page while an 88px rail costs nothing that matters. The EBS tank dial grew from
+229px to 259px on that measurement.
+
+**The rail is an endless wheel**, like a camera's mode dial: the selected name sits in a
+fixed centre slot and the whole ring is dragged past it, wrapping in both directions.
+Selecting by dragging needs no pointing accuracy, which is the reason for it — picking a
+page with gloves on a moving kart should not require hitting a 36px target. Three things
+this needed that are not obvious:
+- The window is capped at five slots against six pages. The rail is ~334px but six names are
+  only 216px, so a wrapped list in the full rail would show one name at the top *and* bottom
+  at once, which destroys the illusion. Strictly fewer slots than items is the rule.
+- Snapping animates with `requestAnimationFrame`, not a CSS transition, because the snap has
+  to take the shortest arc; a transition interpolates the raw number and travels the long way
+  round whenever the short way crosses the seam.
+- The pages are a ring too, driven by the *same* position value as the wheel. An earlier
+  version kept a linear page track and skipped the animation when wrapping, which also caught
+  every ordinary multi-page jump, so some page changes slid and others snapped. Sharing one
+  position makes the two incapable of disagreeing.
+
+**Tap-to-select needs the pointer position, not `e.target`.** `setPointerCapture` retargets
+every later pointer event to the element that captured, so `e.target` is never the button
+that was tapped. Deriving the index from the pointer's Y coordinate is what makes tapping
+work at all.
+
+**Power button.** The complaint was that it was hard to hit. It is now 76x46 flush into the
+top-right corner, 2.4x its original area, while the top bar got *smaller* (54px to 46px).
+Two things made that possible: pinning the bar's height so it is not driven by its tallest
+child, and putting the button in the corner — a screen corner can be hit by overshooting
+rather than aiming, which is worth more than extra pixels in open space. Its chamfer is on
+the bottom-left only, because `clip-path` clips hit-testing as well as painting and a
+top-right chamfer would cut away the exact corner the approach depends on.
+
+**An EBS tab** now holds the tank dial, piston and compressor bars, and rows for EBS state
+and valve. Those two are not wired to anything yet and read NOT WIRED in grey. They are
+backed by `ebs_state` and `ebs_valve_on` in `protocol.py`, defaulting to `None` rather than
+`False` deliberately: a safety indicator that looks healthy because a field defaulted is
+worse than one that reads unknown. States follow FS 2026 T 14.8 — unavailable / armed /
+activated.
+
+---
+
+## 2026-07-18 — kb_dashboard test suite: six stale tests and one real bug in the test client
+
+The suite was failing 6 to 9 of ~154 tests. Verified against unmodified `origin/dev` in a
+scratch worktree before assuming anything, since recent dashboard work was the obvious
+suspect and was in fact innocent — those commits touched only `index.html`, which no Python
+test exercises. Two unrelated problems.
+
+**Six deterministic failures were stale tests, not product bugs.** `decode_steering_raw` has
+returned three values since commit `ae802d9` added the PID term, and production
+(`dashboard_node.py`) already unpacked three; the tests still unpacked two. Separately,
+`test_expected_missions` listed eight missions while commit `f41f1b7` had added
+`autonomous`, which is a live button in the dashboard. In both cases the code was right and
+the test was behind.
+
+**The intermittent failures were a bug in the test's WebSocket client, not in the server.**
+A WebSocket starts life as an HTTP request asking to upgrade; the server answers `101
+Switching Protocols` and the connection speaks WebSocket from then on. The test read that
+answer with `recv(1024)` — but `recv` means "up to this many bytes of whatever has arrived",
+not "one message", because TCP is a byte stream with no message boundaries. The 101 response
+is about 130 bytes and the server sends its `{"your_id": ...}` welcome immediately after, so
+the two often arrive coalesced in one segment. The test checked the buffer contained "101",
+then discarded the whole thing — welcome included — and afterwards waited five seconds for a
+message it had already thrown away. When the two arrived separately the same code passed,
+which is what made it intermittent, and a busier machine made it worse because more delay
+before reading means more chance both are waiting together.
+
+The fix is to read exactly to the end of the HTTP headers (the blank line `\r\n\r\n`) one
+byte at a time and leave the rest of the stream untouched. 154/154 then passed on thirteen
+consecutive runs, at a flat 7.4s instead of a jittery 8-22s — the spread had been nothing but
+tests burning five-second timeouts.
+
+Two hardening changes were made while chasing wrong theories and were kept, neither being the
+cause: the fixtures now bind port 0 and learn the real port from the server via
+`ready_callback`, rather than picking a free port and binding it moments later (two fixtures
+could pick the same one); and `stop()` joins the server thread, since cancelling the task only
+asks it to stop and every finished test was leaking a live thread. `ready_callback` has no
+production caller, so its new argument is test-only, and the server now logs the port it
+actually bound rather than the one it was asked for.
+
+**Found underneath:** `encode_act_steering` builds a two-element payload while
+`decode_steering_raw` reads three, and the ESP32 simulator uses that encoder — so the
+dashboard's steering PWM readout is permanently 0% in simulation. Real firmware sends all
+three. Logged in `tasks.md`.
