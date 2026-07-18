@@ -337,6 +337,12 @@ class DashboardState:
             "pneu_tank_bar": None,          # tank pressure (bar); None → dial shows "-- bar"
             "esp32_compressor_on": False,   # EBS compressor MOSFET on/off
             "esp32_compressor_duty": 0,     # compressor PWM duty 0-255 (soft-start ramp)
+            # EBS (emergency brake system) — no signal reaches the Orin yet, nothing publishes
+            # these. None means "not wired" and the dashboard renders it as NOT WIRED in grey.
+            # Keep None as the default rather than a boolean: a safety indicator that reads
+            # healthy because a field defaulted to False is worse than one that reads unknown.
+            "ebs_state": None,              # None | "unavailable" | "armed" | "activated" (FS 2026 T 14.8)
+            "ebs_valve_on": None,           # None | bool — electrovalve energised, i.e. brakes held off
             "yolo_fps": 0.0,
             "esp_fps": 0.0,
             "cones_3d_ground": [],  # [{"x": float, "z": float, "c": str}, ...] from /perception/cones_3d_ground

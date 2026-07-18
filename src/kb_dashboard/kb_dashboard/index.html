@@ -2739,6 +2739,45 @@ body{
 .bat-empty{ grid-column:1/-1; display:flex; align-items:center; justify-content:center; color:var(--rc-label-dim);
   font-family:'Rajdhani',sans-serif; font-weight:700; font-size:11px; letter-spacing:.3em; }
 
+/* ---- page 6: EBS (emergency brake system) ---- */
+.rc-ebs{ display:grid; grid-template-columns:1fr 1fr; gap:8px; height:100%; min-height:0; }
+.rc-ebs > *{ min-height:0; min-width:0; }
+.rc-ebstank{ padding:10px 14px; display:flex; flex-direction:column; align-items:center; gap:8px; }
+.rc-ebstank .rc-label{ align-self:flex-start; }
+/* Well above the 250 px cap this dial had as one widget among many in System, but still
+   capped: the below-6-bar danger band is 60% of the 0-10 scale, so at full-panel size it
+   fills the view with red while the tank is perfectly healthy.
+   Cap the HEIGHT and let aspect-ratio derive the width — capping width instead lets a tall
+   column stretch the box and the dial renders as an ellipse. */
+.ebs-dial{ flex:1; min-height:0; aspect-ratio:1; max-height:420px; max-width:100%; margin:0 auto; }
+.ebs-dial canvas{ width:100%; height:100%; display:block; }
+
+.rc-ebsstatus{ padding:10px 12px; display:flex; flex-direction:column; gap:7px; }
+/* sized to its content — stretching it leaves a large empty box around two words. Spacing is
+   tight because the whole column has to fit a 390 px-tall phone in landscape without scrolling. */
+.ebs-state{ flex:none; display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:6px; padding:14px 12px; background:var(--rc-raised); border:1px solid var(--rc-line); }
+.ebs-state-val{ font-family:'Orbitron',sans-serif; font-weight:900; font-size:22px; letter-spacing:.05em;
+  text-align:center; line-height:1.1; }
+/* Unknown must never look like a pass. Grey = no signal, and it is the default. */
+.ebs-state-val.unwired{ color:var(--rc-label-dim); }
+.ebs-state-val.unavailable{ color:var(--rc-amber); text-shadow:0 0 14px rgba(255,176,32,.4); }
+.ebs-state-val.armed{ color:var(--rc-green); text-shadow:0 0 14px rgba(51,209,122,.45); }
+.ebs-state-val.activated{ color:var(--rc-red); text-shadow:0 0 16px rgba(255,36,56,.6);
+  animation:rcPulse 1s ease-in-out infinite; }
+.ebs-state-desc{ font-size:9px; font-weight:700; letter-spacing:.09em; text-transform:uppercase;
+  color:var(--rc-label-dim); font-family:'Rajdhani',sans-serif; text-align:center; line-height:1.5; }
+.ebs-rows{ flex:none; display:flex; flex-direction:column; gap:6px; }
+.ebs-row{ display:flex; align-items:center; justify-content:space-between; gap:10px;
+  padding:7px 9px; background:var(--rc-raised); border:1px solid var(--rc-line);
+  font-family:'Rajdhani',sans-serif; font-size:10px; font-weight:700; letter-spacing:.1em;
+  text-transform:uppercase; color:var(--rc-label); }
+.ebs-row .v{ font-variant-numeric:tabular-nums; color:var(--rc-white); }
+.ebs-row .v.unwired{ color:var(--rc-label-dim); }
+.ebs-bars{ display:flex; flex-direction:column; gap:7px; }
+.ebs-note{ margin-top:auto; font-size:8.5px; font-weight:600; letter-spacing:.07em; text-transform:uppercase;
+  color:var(--rc-label-dim); font-family:'Rajdhani',sans-serif; line-height:1.6; }
+
 /* ---- bottom bar (persistent) ---- */
 .race-bottombar{ display:flex; align-items:center; gap:12px; padding:0 12px;
   border-top:1px solid var(--rc-line); background:var(--rc-panel); }
@@ -2865,12 +2904,6 @@ body{
         <div class="rc-card"><div class="row1"><span class="rc-label">AS state</span><span class="val num rc-sysval" id="rcSysState" style="font-size:14px">--</span></div><div class="rc-sysdesc">autonomous system state machine</div></div>
         </div>
         <div class="rc-sysbottom">
-          <div class="rc-panel rc-pneu">
-            <span class="rc-label">Pneumatics</span>
-            <canvas id="rcPneuDial" width="300" height="300"></canvas>
-            <div class="pneu-pist"><span class="pneu-lbl">Piston</span><div class="pneu-bar"><div class="pneu-fill" id="rcPneuPistFill"></div></div><span class="pneu-val" id="rcPneuPistVal">-- bar</span></div>
-            <div class="pneu-pist"><span class="pneu-lbl">Comp</span><div class="pneu-bar"><div class="pneu-fill" id="rcPneuCompFill"></div></div><span class="pneu-val" id="rcPneuCompVal">--</span></div>
-          </div>
           <div class="rc-sysconsole" id="rcDbgSlot"></div>
         </div>
       </div>
@@ -2900,11 +2933,37 @@ body{
         </div>
       </div>
 
+      <div class="race-page rc-ebs">
+        <div class="rc-panel rc-ebstank">
+          <div class="rc-corner"></div><div class="rc-rivet tl"></div><div class="rc-rivet bl"></div>
+          <span class="rc-label">Tank pressure</span>
+          <div class="ebs-dial"><canvas id="rcPneuDial" width="300" height="300"></canvas></div>
+        </div>
+        <div class="rc-panel rc-ebsstatus">
+          <div class="rc-corner"></div><div class="rc-rivet tl"></div><div class="rc-rivet bl"></div>
+          <span class="rc-label">Emergency brake system</span>
+          <div class="ebs-state">
+            <div class="ebs-state-val unwired" id="rcEbsState">NOT WIRED</div>
+            <div class="ebs-state-desc" id="rcEbsDesc">no EBS signal reaches the Orin yet</div>
+          </div>
+          <div class="ebs-rows">
+            <div class="ebs-row"><span>Valve</span><span class="v unwired" id="rcEbsValve">NOT WIRED</span></div>
+            <div class="ebs-row"><span>Tank in range</span><span class="v" id="rcEbsTankOk">--</span></div>
+            <div class="ebs-row"><span>AS state</span><span class="v" id="rcEbsAs">--</span></div>
+          </div>
+          <div class="ebs-bars">
+            <div class="pneu-pist"><span class="pneu-lbl">Piston</span><div class="pneu-bar"><div class="pneu-fill" id="rcPneuPistFill"></div></div><span class="pneu-val" id="rcPneuPistVal">-- bar</span></div>
+            <div class="pneu-pist"><span class="pneu-lbl">Comp</span><div class="pneu-bar"><div class="pneu-fill" id="rcPneuCompFill"></div></div><span class="pneu-val" id="rcPneuCompVal">--</span></div>
+          </div>
+          <div class="ebs-note">Pressures are live. EBS state and valve read NOT WIRED until connected.</div>
+        </div>
+      </div>
+
     </div>
   </div>
   <div class="race-bottombar">
     <div class="race-tabs">
-      <button class="race-tab on">Telemetry</button><button class="race-tab">Mission</button><button class="race-tab">Vision</button><button class="race-tab">System</button><button class="race-tab">Battery</button>
+      <button class="race-tab on" data-page="telemetry">Telemetry</button><button class="race-tab" data-page="mission">Mission</button><button class="race-tab" data-page="vision">Vision</button><button class="race-tab" data-page="system">System</button><button class="race-tab" data-page="battery">Battery</button><button class="race-tab" data-page="ebs">EBS</button>
     </div>
   </div>
 </div>`; },
@@ -2949,8 +3008,9 @@ body{
     // page slider: tabs + horizontal swipe
     let page = 0;
     const track = $('rcTrack');
+    const lastPage = document.querySelectorAll('.race-page').length - 1;  // derived, so adding a page can't strand it
     const go = i => {
-      page = Math.max(0, Math.min(4, i));
+      page = Math.max(0, Math.min(lastPage, i));
       track.style.transform = `translateX(${-page * 100}%)`;
       document.querySelectorAll('.race-tab').forEach((t, j) => t.classList.toggle('on', j === page));
     };
@@ -3043,7 +3103,7 @@ body{
     $('rcBatDial').closest('.rc-panel')?.classList.toggle('rc-danger', socLow);
     // BATTERY page (per-cell strip + pack readouts); flag the Battery tab if unhealthy
     const batBad = rcUpdateBattery(d);
-    const batTab = document.querySelectorAll('.race-tab')[4];
+    const batTab = document.querySelector('.race-tab[data-page="battery"]');
     if (batTab) batTab.classList.toggle('bad', batBad);
     rcDrawPedals($('rcPedalsDial'), d.esp32_throttle || 0, d.esp32_braking || 0, d.orin_cmd_brake || 0);
     // SYSTEM page
@@ -3076,13 +3136,43 @@ body{
     const cf = $('rcPneuCompFill'), cv = $('rcPneuCompVal');
     if (cf) cf.style.width = (compDuty != null ? Math.max(0, Math.min(100, compDuty / 255 * 100)) : 0) + '%';
     if (cv) cv.textContent = compOn ? 'ON ' + Math.round((compDuty || 0) / 255 * 100) + '%' : 'off';
-    document.querySelector('.rc-pneu')?.classList.toggle('rc-danger', haveTank && !tankOk);
-    // any unhealthy item → the System tab pulses red (tank out of its safe band counts)
+    document.querySelector('.rc-ebstank')?.classList.toggle('rc-danger', haveTank && !tankOk);
+    // any unhealthy item → the System tab pulses red. Tank pressure is judged on the EBS
+    // tab now, so it is not counted here — otherwise one fault pulses two tabs.
     const sysBad = !d.health_magnet_ok || !d.health_i2c_ok || !d.health_heap_ok || !agcOk ||
-      !d.esp32_heartbeat || yolo < 15 || esp < 30 || (stkMin !== null && stkMin < 200) ||
-      (haveTank && !tankOk) || socLow;
-    const sysTab = document.querySelectorAll('.race-tab')[3];
+      !d.esp32_heartbeat || yolo < 15 || esp < 30 || (stkMin !== null && stkMin < 200) || socLow;
+    const sysTab = document.querySelector('.race-tab[data-page="system"]');
     if (sysTab) sysTab.classList.toggle('bad', sysBad);
+
+    // EBS page. Tank/piston/compressor above are live sensor readings; the EBS state and the
+    // valve are not wired yet and must read NOT WIRED rather than defaulting to a healthy look.
+    const EBS_TEXT = {
+      unavailable: ['UNAVAILABLE', 'cannot brake — check tank pressure and valve power'],
+      armed:       ['ARMED', 'charged and holding — brakes apply if power is cut'],
+      activated:   ['ACTIVATED', 'brakes applied — release at the deactivation point'],
+    };
+    const ebsState = d.ebs_state, ebsValve = d.ebs_valve_on;
+    const esEl = $('rcEbsState');
+    if (esEl) {
+      const [txt, desc] = EBS_TEXT[ebsState] || ['NOT WIRED', 'no EBS signal reaches the Orin yet'];
+      esEl.textContent = txt;
+      esEl.className = 'ebs-state-val ' + (EBS_TEXT[ebsState] ? ebsState : 'unwired');
+      $('rcEbsDesc').textContent = desc;
+    }
+    const evEl = $('rcEbsValve');
+    if (evEl) {
+      evEl.textContent = ebsValve == null ? 'NOT WIRED' : (ebsValve ? 'ENERGISED' : 'OPEN');
+      evEl.className = 'v ' + (ebsValve == null ? 'unwired' : ebsValve ? 'rc-ok' : 'rc-bad');
+    }
+    const etEl = $('rcEbsTankOk');
+    if (etEl) {
+      etEl.textContent = haveTank ? (tankOk ? 'YES' : 'OUT OF RANGE') : '--';
+      etEl.className = 'v ' + (!haveTank ? 'unwired' : tankOk ? 'rc-ok' : 'rc-bad');
+    }
+    const eaEl = $('rcEbsAs');
+    if (eaEl) eaEl.textContent = (d.as_state || d.state || '--').toUpperCase();
+    const ebsTab = document.querySelector('.race-tab[data-page="ebs"]');
+    if (ebsTab) ebsTab.classList.toggle('bad', (haveTank && !tankOk) || ebsState === 'activated');
     const st = $('rcSysState');
     st.textContent = (d.as_state || d.state || '--').toUpperCase();
     st.style.fontSize = '14px';
