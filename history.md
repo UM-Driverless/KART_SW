@@ -432,3 +432,26 @@ connect is the part that matters; repopulating alone is a race.
   own retry scans, so stop `kart-brain` before using it to diagnose.
 - The pack's address is **LE Public**, so it does not rotate. Connect-by-MAC is the reliable path and
   the name lookup is only a safety net for a replaced pack.
+
+---
+
+## 2026-07-18 — Black band at the top of the dashboard on iPhone Home Screen
+
+Reported as a black margin above the topbar, visible on the phone but not in desktop Chrome.
+
+Cause: added to the iOS Home Screen, the dashboard launches standalone, and `index.html` had
+no `apple-mobile-web-app-*` metas. iOS then gives the app the *default* opaque status bar —
+a band above the page that the page never paints, so it reads as black. Desktop browsers
+never reserve that band, which is why it looked fine on the Mac. `viewport-fit=cover` was
+already in the viewport meta but no rule used `env(safe-area-inset-*)`, so it did nothing.
+
+Fix: declare `apple-mobile-web-app-capable` + `apple-mobile-web-app-status-bar-style:
+black-translucent` (page runs under the status bar rather than below it), add `theme-color`
+for Android, and inset `body` by `env(safe-area-inset-*)`. Padding rather than margin —
+backgrounds paint across the padding box, so the band takes the skin's colour instead of
+showing bare black. Left/right insets are included because in landscape the notch is on a
+side. No skin overrides body padding, so all six inherit it.
+
+**iOS caches the launch config when the icon is added.** Changing these metas has no effect
+on an existing Home Screen icon — it must be deleted and re-added. Plain Safari tabs pick
+the change up on reload. Confirmed fixed on the kart the same day.
