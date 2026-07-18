@@ -10,12 +10,6 @@ from kb_dashboard.protocol import DashboardState
 from kb_dashboard.server import run_websocket_server
 
 
-def _find_free_port():
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind(("", 0))
-        return s.getsockname()[1]
-
-
 class FakeNode:
     """Minimal mock replacing DashboardNode for server tests."""
 
@@ -39,7 +33,7 @@ class AuthServerFixture:
     """Manages a server running in a background thread with optional password."""
 
     def __init__(self, password=""):
-        self.port = _find_free_port()
+        self.port = None          # set by the server once it has actually bound
         self.state = DashboardState()
         self.node = FakeNode()
         self.password = password
@@ -53,9 +47,19 @@ class AuthServerFixture:
         if not self._ready.wait(timeout=5):
             raise RuntimeError("Server did not start in time")
 
+    def _on_ready(self, bound_port):
+        # Binding port 0 and learning the port here removes the race that made these tests
+        # flaky: picking a "free" port first and binding it later let two fixtures choose the
+        # same one, so a test could end up talking to another test's server.
+        self.port = bound_port
+        self._ready.set()
+
     def stop(self):
+        # Cancelling the task only *asks* the server to stop, so join the thread: without it
+        # every finished test leaks a live server thread for the rest of the session.
         if self._task:
             self._loop.call_soon_threadsafe(self._task.cancel)
+        self._thread.join(timeout=5)
 
     def _run(self):
         asyncio.set_event_loop(self._loop)
@@ -64,8 +68,8 @@ class AuthServerFixture:
             await run_websocket_server(
                 self.state,
                 self.node,
-                self.port,
-                ready_callback=self._ready.set,
+                0,
+                ready_callback=self._on_ready,
                 password=self.password,
             )
 

@@ -23,12 +23,6 @@ from kb_dashboard.server import run_websocket_server
 # ── Helpers ───────────────────────────────────────────────────────────
 
 
-def _find_free_port():
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind(("", 0))
-        return s.getsockname()[1]
-
-
 class FakeNode:
     """Minimal mock replacing DashboardNode for server tests."""
 
@@ -62,7 +56,7 @@ class ServerFixture:
     """Manages a server running in a background thread."""
 
     def __init__(self):
-        self.port = _find_free_port()
+        self.port = None          # set by the server once it has actually bound
         self.state = DashboardState()
         self.node = FakeNode()
         self._loop = asyncio.new_event_loop()
@@ -75,16 +69,26 @@ class ServerFixture:
         if not self._ready.wait(timeout=5):
             raise RuntimeError("Server did not start in time")
 
+    def _on_ready(self, bound_port):
+        # Binding port 0 and learning the port here removes the race that made these tests
+        # flaky: picking a "free" port first and binding it later let two fixtures choose the
+        # same one, so a test could end up talking to another test's server.
+        self.port = bound_port
+        self._ready.set()
+
     def stop(self):
+        # Cancelling the task only *asks* the server to stop, so join the thread: without it
+        # every finished test leaks a live server thread for the rest of the session.
         if self._task:
             self._loop.call_soon_threadsafe(self._task.cancel)
+        self._thread.join(timeout=5)
 
     def _run(self):
         asyncio.set_event_loop(self._loop)
 
         async def _start():
             await run_websocket_server(
-                self.state, self.node, self.port, ready_callback=self._ready.set
+                self.state, self.node, 0, ready_callback=self._on_ready
             )
 
         self._task = self._loop.create_task(_start())
@@ -118,7 +122,17 @@ def _blocking_ws_connect(port):
         f"\r\n"
     )
     s.sendall(req.encode())
-    resp = s.recv(1024)
+    # Read EXACTLY the HTTP response headers and no further. recv(1024) would also swallow
+    # any WebSocket frames that shared the same TCP segment — and the server sends the
+    # welcome immediately after the handshake, so under load it often arrives coalesced with
+    # it. That discarded welcome was the flakiness: the test then waited for a message it had
+    # already thrown away.
+    resp = b""
+    while b"\r\n\r\n" not in resp:
+        chunk = s.recv(1)
+        if not chunk:
+            break
+        resp += chunk
     assert b"101 Switching Protocols" in resp, f"Bad handshake: {resp}"
     return s
 
@@ -153,17 +167,40 @@ def _ws_read_text(sock):
             return json.loads(payload)
 
 
-def _ws_read_welcome(sock):
-    """Read the welcome message containing your_id, skipping broadcast snapshots."""
-    # The welcome is sent immediately on connect, but a broadcast snapshot
-    # might arrive first if the broadcast loop fires between handshake and welcome read.
-    for _ in range(10):
-        msg = _ws_read_text(sock)
+def _ws_read_until(sock, predicate, timeout=5.0):
+    """Read text frames until one satisfies predicate, or the time budget runs out.
+
+    No test may assume the next frame is the one it wants. The server adds the client to
+    the broadcast set BEFORE sending the welcome (server.py: clients[writer] = ... then
+    ws_send(... your_id ...)), so a 10 Hz snapshot can arrive first, and snapshots keep
+    coming afterwards. Selecting by content instead of position is what makes these tests
+    deterministic; a fixed count of attempts is not enough, because how many snapshots
+    arrive first depends on machine load.
+    """
+    deadline = time.time() + timeout
+    while True:
+        remaining = deadline - time.time()
+        if remaining <= 0:
+            return None
+        sock.settimeout(remaining)
+        try:
+            msg = _ws_read_text(sock)
+        except (socket.timeout, OSError):
+            return None
         if msg is None:
             return None
-        if "your_id" in msg:
+        if predicate(msg):
             return msg
-    return None
+
+
+def _ws_read_welcome(sock):
+    """Read the welcome message containing your_id, skipping broadcast snapshots."""
+    return _ws_read_until(sock, lambda m: "your_id" in m)
+
+
+def _ws_read_snapshot(sock):
+    """Read a broadcast snapshot, skipping the welcome."""
+    return _ws_read_until(sock, lambda m: "your_id" not in m)
 
 
 def _ws_send_text(sock, text: str):
@@ -211,9 +248,8 @@ class TestControllerTokenAutoAcquire:
 
     def test_first_manual_control_auto_acquires(self, srv):
         s = _blocking_ws_connect(srv.port)
-        # Read the welcome message
-        welcome = _ws_read_text(s)
-        assert "your_id" in welcome
+        welcome = _ws_read_welcome(s)
+        assert welcome is not None and "your_id" in welcome
 
         _send_manual_control(s, steering=0.7, throttle=0.4)
         time.sleep(0.3)
@@ -389,10 +425,10 @@ class TestControllerInBroadcast:
     def test_broadcast_includes_controller_none(self, srv):
         """Before anyone takes control, controller is null."""
         s = _blocking_ws_connect(srv.port)
-        welcome = _ws_read_text(s)
+        _ws_read_welcome(s)
 
         # Wait for a broadcast snapshot (the broadcast loop runs at 10 Hz)
-        snap = _ws_read_text(s)
+        snap = _ws_read_snapshot(s)
         assert snap is not None
         assert "controller" in snap
         assert snap["controller"] is None
@@ -411,7 +447,7 @@ class TestControllerInBroadcast:
         time.sleep(0.2)
 
         # Read broadcast — controller should be A's ID
-        snap = _ws_read_text(a)
+        snap = _ws_read_until(a, lambda m: m.get("controller") is not None)
         assert snap is not None
         assert snap["controller"] == client_id_a
 

@@ -68,7 +68,9 @@ async def run_websocket_server(
     @param state Shared DashboardState for telemetry snapshots.
     @param node ROS node with publish_mission(), publish_state_cmd(), publish_manual_control().
     @param port TCP port to listen on.
-    @param ready_callback Optional callable invoked once the server is listening.
+    @param ready_callback Optional callable invoked once the server is listening, receiving
+           the port actually bound. Pass port=0 to let the OS choose one and learn it here —
+           that is race-free, unlike picking a free port beforehand and binding it later.
     @param password If non-empty, require this password to access the dashboard.
     """
     # Derive session token from password so cookies survive server restarts.
@@ -465,9 +467,10 @@ async def run_websocket_server(
     for s in server.sockets:
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     await server.start_serving()
-    node.get_logger().info(f"Web server listening on 0.0.0.0:{port}")
+    bound_port = server.sockets[0].getsockname()[1]
+    node.get_logger().info(f"Web server listening on 0.0.0.0:{bound_port}")
     if ready_callback:
-        ready_callback()
+        ready_callback(bound_port)
 
     try:
         await asyncio.gather(server.serve_forever(), broadcast_loop())
