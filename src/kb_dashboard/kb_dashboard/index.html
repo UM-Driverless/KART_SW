@@ -1403,22 +1403,31 @@ body{
   border-right:1px solid var(--rc-line); background:var(--rc-panel);
   touch-action:none; -webkit-user-select:none; user-select:none; cursor:grab; }
 .race-navrail:active{ cursor:grabbing; }
+/* The wheel is endless: past the last name you come back to the first. That only reads as a
+   wheel if you can never see one name twice at once, so the window is capped at 5 slots
+   while there are 6 pages — strictly fewer slots than items. The rail itself is ~334px, far
+   taller than the 6x36=216px list, so without this cap a wrapped list would show TELEMETRY
+   at the top and bottom simultaneously. The mask fades both ends so names appear to roll
+   over the edge of a drum rather than being cut off. */
+.rail-window{ position:absolute; left:0; right:0; top:50%; transform:translateY(-50%);
+  height:calc(var(--rail-item) * 5); overflow:hidden;
+  -webkit-mask-image:linear-gradient(transparent 0%, #000 22%, #000 78%, transparent 100%);
+  mask-image:linear-gradient(transparent 0%, #000 22%, #000 78%, transparent 100%); }
 /* the fixed centre slot: it marks where selection happens, and it does not move */
 .rail-slot{ position:absolute; left:0; right:0; top:50%; height:var(--rail-item);
   transform:translateY(-50%); background:var(--rc-raised);
   border-left:2px solid var(--rc-red); border-top:1px solid var(--rc-line);
-  border-bottom:1px solid var(--rc-line); pointer-events:none; }
-.race-tabs{ position:absolute; left:0; right:0; top:0; will-change:transform; }
-.race-tab{ height:var(--rail-item); background:none; border:none; color:var(--rc-label-dim);
+  border-bottom:1px solid var(--rc-line); pointer-events:none; z-index:0; }
+.race-tabs{ position:absolute; inset:0; }
+/* every name is absolutely positioned; JS wraps each one's Y with modulo arithmetic, so six
+   DOM nodes serve an infinite wheel with no cloning */
+.race-tab{ position:absolute; left:0; right:0; height:var(--rail-item);
+  background:none; border:none; color:var(--rc-label-dim);
   font-family:'Rajdhani',sans-serif; font-weight:700; letter-spacing:.1em; font-size:10px;
-  padding:0 4px; cursor:inherit; text-transform:uppercase; text-align:center; width:100%;
-  display:flex; align-items:center; justify-content:center;
-  transition:color .18s, opacity .18s, transform .18s; }
-/* fade with distance from the centre so the wheel reads as depth, like the camera dial */
-.race-tab[data-dist="1"]{ opacity:.62; transform:scale(.94); }
-.race-tab[data-dist="2"]{ opacity:.36; transform:scale(.88); }
-.race-tab[data-dist="3"]{ opacity:.2; transform:scale(.84); }
-.race-tab.on{ color:var(--rc-red); text-shadow:0 0 8px rgba(226,0,26,.5); opacity:1; transform:none; }
+  padding:0 4px; cursor:inherit; text-transform:uppercase; text-align:center;
+  display:flex; align-items:center; justify-content:center; will-change:transform;
+  transition:color .18s, opacity .18s; }
+.race-tab.on{ color:var(--rc-red); text-shadow:0 0 8px rgba(226,0,26,.5); }
 .race-tab.bad{ color:var(--rc-red); text-shadow:0 0 10px rgba(255,36,56,.8); animation:rcPulse 1.2s ease-in-out infinite; }
 .rc-fs{ background:var(--rc-raised); border:1px solid var(--rc-line-hard); width:28px; height:28px;
   display:flex; align-items:center; justify-content:center; color:var(--rc-label); cursor:pointer; flex:none;
@@ -1605,8 +1614,10 @@ body{
   </div>
   <div class="race-navrail" id="rcRail">
     <div class="rail-slot"></div>
+    <div class="rail-window" id="rcRailWin">
     <div class="race-tabs" id="rcRailList">
       <button class="race-tab on" data-page="telemetry">Telemetry</button><button class="race-tab" data-page="mission">Mission</button><button class="race-tab" data-page="vision">Vision</button><button class="race-tab" data-page="system">System</button><button class="race-tab" data-page="battery">Battery</button><button class="race-tab" data-page="ebs">EBS</button>
+    </div>
     </div>
   </div>
 </div>`; },
@@ -1652,68 +1663,92 @@ body{
     let page = 0;
     const track = $('rcTrack');
     const lastPage = document.querySelectorAll('.race-page').length - 1;  // derived, so adding a page can't strand it
-    // ── nav rail: an iPhone-camera-style wheel. The selected name sits in a fixed centre
-    // slot and the whole column is dragged past it, so selecting costs no aiming accuracy.
-    const rail = $('rcRail'), railList = $('rcRailList');
+    // ── nav rail: an endless wheel, like a camera's mode dial. The selected name sits in a
+    // fixed centre slot and the whole ring is dragged past it, so selecting costs no aiming
+    // accuracy — the point, for a gloved hand on a vibrating kart. Past the last name it
+    // comes back round to the first.
+    const rail = $('rcRail'), railWin = $('rcRailWin'), railList = $('rcRailList');
     const tabs = [...document.querySelectorAll('.race-tab')];
+    const N = tabs.length;
     const itemH = () => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--rail-item')) || 36;
-    // offset that puts item i's centre on the rail's centre
-    const offsetFor = i => rail.clientHeight / 2 - (i + 0.5) * itemH();
-    const indexAt = off => Math.round((rail.clientHeight / 2 - off) / itemH() - 0.5);
-    const clampOff = off => Math.min(offsetFor(0), Math.max(offsetFor(lastPage), off));
-    let railOff = 0;
-    // mark how far each name is from the centre so the CSS can fade it with distance
-    const paintRail = sel => tabs.forEach((t, j) => {
-      t.classList.toggle('on', j === sel);
-      t.dataset.dist = Math.min(3, Math.abs(j - sel));
-    });
-    const setRail = (i, animate) => {
-      railOff = offsetFor(i);
-      railList.style.transition = animate ? 'transform .22s cubic-bezier(.4,0,.2,1)' : 'none';
-      railList.style.transform = `translateY(${railOff}px)`;
-      paintRail(i);
+    const mod = (a, n) => ((a % n) + n) % n;   // JS % keeps the sign; a wheel must not
+    // railPos is a continuous position on the ring, in items: 0 = first name centred.
+    let railPos = 0, railAnim = null;
+
+    // Lay the ring out: each name is placed at its shortest signed distance from the centre,
+    // so the six nodes are reused endlessly instead of being cloned.
+    const paintRail = pos => {
+      const h = itemH(), mid = railWin.clientHeight / 2, sel = mod(Math.round(pos), N);
+      tabs.forEach((t, i) => {
+        let rel = mod(i - pos + N / 2, N) - N / 2;          // signed distance in items, wrapped
+        const dist = Math.abs(rel);
+        t.style.transform = `translateY(${mid + rel * h - h / 2}px) scale(${dist < 0.5 ? 1 : Math.max(0.84, 1 - dist * 0.06)})`;
+        t.style.opacity = dist < 0.5 ? 1 : Math.max(0.18, 1 - dist * 0.32);
+        t.classList.toggle('on', i === sel);
+      });
+      return sel;
+    };
+
+    // Animate the ring to a target position (in items), taking the short way round.
+    const railTo = (target, animate) => {
+      if (railAnim) { cancelAnimationFrame(railAnim); railAnim = null; }
+      if (!animate) { railPos = target; paintRail(railPos); return; }
+      const from = railPos, delta = mod(target - from + N / 2, N) - N / 2;   // shortest arc
+      const t0 = performance.now(), dur = 220;
+      const step = now => {
+        const k = Math.min(1, (now - t0) / dur);
+        const eased = 1 - Math.pow(1 - k, 3);
+        railPos = from + delta * eased;
+        paintRail(railPos);
+        if (k < 1) railAnim = requestAnimationFrame(step);
+        else { railPos = mod(target, N); paintRail(railPos); railAnim = null; }
+      };
+      railAnim = requestAnimationFrame(step);
     };
 
     const go = (i, animateRail = true) => {
-      page = Math.max(0, Math.min(lastPage, i));
-      track.style.transform = `translateY(${-page * 100}%)`;  // pages stack vertically beside the left rail
-      setRail(page, animateRail);
+      const next = mod(i, N);                       // wrapping the wheel wraps the pages too
+      // The page track does not wrap, so a wrap-around would slide through every page in
+      // between. Jump without animation in that case; animate only for adjacent moves.
+      const wrapped = Math.abs(next - page) > 1;
+      track.style.transition = wrapped ? 'none' : '';
+      page = next;
+      track.style.transform = `translateY(${-page * 100}%)`;
+      if (wrapped) requestAnimationFrame(() => { track.style.transition = ''; });
+      railTo(page, animateRail);
     };
 
-    let rDragging = false, rStartY = 0, rStartOff = 0, rMoved = 0;
+    let rDragging = false, rStartY = 0, rStartPos = 0, rMoved = 0;
     rail.addEventListener('pointerdown', e => {
-      rDragging = true; rStartY = e.clientY; rStartOff = railOff; rMoved = 0;
-      railList.style.transition = 'none';
+      if (railAnim) { cancelAnimationFrame(railAnim); railAnim = null; }
+      rDragging = true; rStartY = e.clientY; rStartPos = railPos; rMoved = 0;
       rail.setPointerCapture(e.pointerId);
     });
     rail.addEventListener('pointermove', e => {
       if (!rDragging) return;
       const dy = e.clientY - rStartY;
       rMoved = Math.max(rMoved, Math.abs(dy));
-      railOff = clampOff(rStartOff + dy);
-      railList.style.transform = `translateY(${railOff}px)`;
-      paintRail(Math.max(0, Math.min(lastPage, indexAt(railOff))));  // live feedback while dragging
+      railPos = rStartPos - dy / itemH();          // unbounded: the ring never hits an end
+      paintRail(railPos);                          // live feedback while dragging
     });
     const endRailDrag = e => {
       if (!rDragging) return;
       rDragging = false;
-      // Under ~6px of travel it was a tap, so honour the name that was tapped; otherwise snap
-      // to whichever name the drag left nearest the centre slot. The tapped name is derived
-      // from the pointer's position, NOT from e.target: setPointerCapture retargets every
-      // later pointer event to the rail, so e.target is never the button.
-      let idx = Math.max(0, Math.min(lastPage, indexAt(railOff)));
+      let idx = mod(Math.round(railPos), N);       // snap to the nearest detent
       if (rMoved < 6) {
-        const rb = rail.getBoundingClientRect();
-        const inside = e.clientY >= rb.top && e.clientY <= rb.bottom;   // names clipped off the
-        const hit = Math.floor((e.clientY - railList.getBoundingClientRect().top) / itemH());
-        if (inside && hit >= 0 && hit <= lastPage) idx = hit;           // rail's ends are drag-only
+        // A tap, so honour the name under the finger. Its index comes from the pointer
+        // position, NOT e.target: setPointerCapture retargets every later pointer event to
+        // the rail, so e.target is never the button.
+        const y = e.clientY;
+        const hit = tabs.findIndex(t => { const b = t.getBoundingClientRect(); return y >= b.top && y <= b.bottom; });
+        if (hit >= 0) idx = hit;
       }
       go(idx);
     };
     rail.addEventListener('pointerup', endRailDrag);
     rail.addEventListener('pointercancel', endRailDrag);
-    // the rail's centre moves when the viewport resizes, so re-seat the current selection
-    window.addEventListener('resize', () => setRail(page, false));
+    // the window's centre moves when the viewport resizes, so re-seat the ring
+    window.addEventListener('resize', () => paintRail(railPos));
     let sx = 0, sy = 0, swipeOk = false;
     const pages = $('rcPages');
     pages.addEventListener('touchstart', e => {
