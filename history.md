@@ -141,7 +141,7 @@ Context: a phone holder was mounted in the kart that holds the phone **horizonta
 - Speed hero ← `esp32_speed` (m/s → km/h). Steering gauge needle ← `esp32_steering_rad`; a second thin amber needle shows the commanded target (`orin_cmd_steering_rad`) so PID tracking error is visible at a glance.
 - Accel bar under the speed ← `esp32_accel_lon` (shown in g, green forward / red braking), caption also shows lateral g.
 - Pedal bars ← `esp32_throttle` / `esp32_braking`; warn strip dots ← MAG/I2C/HEAP health flags + ESP32 heartbeat (replacing the mockup's BMS/INVERSOR/TELEMETRÍA).
-- Steering sign follows the **existing dashboard visual convention** (positive rad renders to the right, same as every other skin's steer bar). If that is ever found to mismatch the physical left/right, fix it across all skins at once, not per-skin.
+- Steering sign: positive rad renders to the **left**, matching the data convention (REP 103 yaw, positive = left turn). Originally the gauge and the steer bars rendered positive to the right, contradicting the control pipeline; corrected 2026-07-18 — see the entry at the end of this file.
 
 **Panel layout (swipe left/right, or tap the tabs in the bottom bar)**:
 1. **TELE** — the mockup's main screen: steering gauge | speed hero | YOLO/ESP/heap stack.
@@ -318,3 +318,38 @@ Added a 5th tab to the race skin (Telemetry · Mission · Vision · System · **
 **Pack current (from `~/dv/kart/README.md`) — the dial is whole-PACK current, not per-cell:** pack is **13S4P Molicel P42A**. Sign per the JBD BMS: **positive = charge, negative = discharge** (the dial states this itself: "PACK AMPS" + a dynamic CHARGE/DISCHARGE/IDLE caption). Discharge: 2000 W motor / (13 × 3.2 V) ≈ **48 A pack** (12 A/cell) at full power, nickel strips sized right at that peak → gauge amber −40…−50, red beyond −50. Charge: **~8 A/cell max** (Ruben's internal figure — this P42A charges unusually well for a Li-ion cell, still less than discharge) × 4P ≈ **32 A pack** → gauge amber +24…+32 (6–8 A/cell), red beyond +32. Capacity 13S4P ≈ 16.8 Ah / 786 Wh. Charge-side numbers are still an internal estimate — pin to the BMS charge-current limit if it's ever specified.
 
 **Design direction — Ferrari-Luce hybrid gauge, now the standard for the race skin.** `rcDrawGauge`: tick scale + coloured zone arcs + short rim needle on the ring, big digital value in the CENTRE (only amber/red danger zones tint the number/needle — a green "ok" band is visual-only, else a healthy reading goes unreadable). `rcGaugeAngle` gives a longer 300° sweep (vs the old 270°). **Migrated all race round dials to it** (speed, YOLO, battery-mini, tank) and removed the now-dead `rcDrawDial` + `rcDialAngle` + the redundant separate speed digital readout (`rcSpeedVal`, the dial centre shows it now). SOC on the Battery tab stays a `rcDrawRing` donut (simple 0–100 %, reads like a fuel gauge). Tank keeps *dim* red/green bands, not bright — its below-min danger region is a big slice of the 0–10 scale and bright red looked alarming when healthy.
+
+---
+
+## 2026-07-18 — Dashboard steering sign corrected: positive rad now renders LEFT
+
+The dashboard rendered a positive steering angle as a **right** deflection, while every
+other part of the system treats positive as **left** (ROS REP 103 yaw; the joystick sender
+does `sendAxes(-a.x, a.y)  // negate x: our positive=left`, and
+`src/kb_dashboard/test/test_joystick_pipeline.py` asserts that a LEFT input produces a
+positive `steer_rad`). So the dial disagreed with the data by a sign.
+
+Affected widgets, all in `src/kb_dashboard/kb_dashboard/index.html`:
+- Race-skin steering gauge — needle + target ghost needle rotation, and the LEFT/RIGHT/CENTER
+  label and direction bar derived from it.
+- Legacy-skin and Artemis-skin `steerBarFill` bars.
+- The shared `updateSteerBar()` detail bar (actual fill + commanded tick).
+
+The XY control pad (`drawControlPad`) was already correct — it maps positive to the left
+(`CX - nAx*RX`) and labels the left edge "L" — which is what made the dial the outlier.
+
+Fix: one hoisted helper, `steerScreen(rad) { return -(rad || 0) }`, applied at each point
+where a steering value is converted to screen space. Rendering code downstream of it is
+unchanged, so a positive screen degree still means "to the right of the viewer" and the
+LEFT/RIGHT label logic needed no edit. Keeping the flip in a single function is the reason
+this can't drift back out of sync skin by skin.
+
+Verified in a browser (Playwright, page served from the package dir): feeding
+`esp32_steering_rad = 0.5` gives `rotate(-28.6 100 108)` on the needle, the label reads
+LEFT, and the direction bar fills from 34% to 50% — left of centre. Screenshot of the
+gauge confirmed the needle tips up-and-left.
+
+Possibly related: the open task "Pure pursuit arrow/steering mismatch" reports an arrow
+pointing right while the wheel moved left. That task is about the HUD arrow rather than
+this gauge, so this fix does not close it, but a viewer comparing the two would have seen
+the gauge contradict the wheel for the same reason.

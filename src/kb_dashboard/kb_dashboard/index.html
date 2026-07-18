@@ -687,7 +687,7 @@ body { font-family:'Inter',-apple-system,BlinkMacSystemFont,'SF Pro',system-ui,s
   update(d) {
     $('vSteer').innerHTML = `${deg(d.esp32_steering_rad)}<span style="font-size:.55em;vertical-align:super">°</span>` + (d.esp32_steering_raw != null ? ` <span class="tu" style="font-size:.5em;opacity:.6">raw ${d.esp32_steering_raw}</span>` : '');
     $('vSpeed').innerHTML = `${(d.esp32_speed*3.6).toFixed(1)} <span class="tu">km/h</span>`;
-    const sPct = Math.max(-1, Math.min(1, d.esp32_steering_rad / 0.5));
+    const sPct = Math.max(-1, Math.min(1, steerScreen(d.esp32_steering_rad) / 0.5));
     const sf = $('steerBarFill');
     if (sPct >= 0) { sf.style.left='50%'; sf.style.width=(sPct*50)+'%'; }
     else { sf.style.width=(-sPct*50)+'%'; sf.style.left=(50+sPct*50)+'%'; }
@@ -1769,7 +1769,7 @@ body { font-family:'JetBrains Mono',monospace; background:#04060b; color:#f1f5f9
   update(d) {
     $('vSteer').innerHTML = `${deg(d.esp32_steering_rad)}<span style="font-size:.5em;vertical-align:super;color:rgba(117,136,163,0.5)">°</span>` + (d.esp32_steering_raw != null ? ` <span class="a-tu" style="font-size:.4em;opacity:.5">raw ${d.esp32_steering_raw}</span>` : '');
     $('vSpeed').innerHTML = `${(d.esp32_speed*3.6).toFixed(1)} <span class="a-tu">km/h</span>`;
-    const sPct = Math.max(-1, Math.min(1, d.esp32_steering_rad / 0.5));
+    const sPct = Math.max(-1, Math.min(1, steerScreen(d.esp32_steering_rad) / 0.5));
     const sf = $('steerBarFill');
     if (sPct >= 0) { sf.style.left='50%'; sf.style.width=(sPct*50)+'%'; }
     else { sf.style.width=(-sPct*50)+'%'; sf.style.left=(50+sPct*50)+'%'; }
@@ -1810,13 +1810,17 @@ function missionClick(e) {
   }
 }
 
+// Data convention is positive = LEFT (REP 103 yaw). Screen X and SVG rotate()
+// both grow to the right, so flip the sign once here for every steering widget.
+function steerScreen(rad) { return -(rad || 0); }
+
 function updateSteerBar(d, fillId, cmdId) {
   const maxRad = 1.047;
-  const pct = Math.max(-1, Math.min(1, d.esp32_steering_rad / maxRad));
+  const pct = Math.max(-1, Math.min(1, steerScreen(d.esp32_steering_rad) / maxRad));
   const fill = $(fillId);
   if (pct >= 0) { fill.style.left='50%'; fill.style.width=(pct*50)+'%'; }
   else { fill.style.width=(-pct*50)+'%'; fill.style.left=(50+pct*50)+'%'; }
-  const cmdPct = Math.max(-1, Math.min(1, d.orin_cmd_steering_rad / maxRad));
+  const cmdPct = Math.max(-1, Math.min(1, steerScreen(d.orin_cmd_steering_rad) / maxRad));
   $(cmdId).style.left = (50+cmdPct*50-0.5)+'%';
 }
 
@@ -2988,9 +2992,9 @@ body{
   update(d) {
     if (!$('rcSpeedDial')) return;
     // steering gauge — actual (red) + commanded target (amber ghost).
-    // Positive rad renders right, same visual convention as every other skin.
-    const degAct = Math.max(-90, Math.min(90, d.esp32_steering_rad * 180 / Math.PI));
-    const degTgt = Math.max(-90, Math.min(90, (d.orin_cmd_steering_rad || 0) * 180 / Math.PI));
+    // degAct/degTgt are screen degrees (clockwise-positive), so positive rad tips left.
+    const degAct = Math.max(-90, Math.min(90, steerScreen(d.esp32_steering_rad) * 180 / Math.PI));
+    const degTgt = Math.max(-90, Math.min(90, steerScreen(d.orin_cmd_steering_rad) * 180 / Math.PI));
     $('rcNeedle').setAttribute('transform', `rotate(${degAct} 100 108)`);
     $('rcNeedleTgt').setAttribute('transform', `rotate(${degTgt} 100 108)`);
     $('rcAngleVal').textContent = Math.round(Math.abs(degAct));
