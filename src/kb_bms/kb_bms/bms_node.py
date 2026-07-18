@@ -133,18 +133,18 @@ class BmsNode(Node):
         while rclpy.ok():
             try:
                 address = self.mac
-                # If a plain MAC connect fails, fall back to scanning by name —
-                # BLE addresses can rotate, but the JBD model-name is stable.
+                # Connect straight by MAC. The pack advertises a *public* BLE
+                # address, so it does not rotate and this is the reliable path
+                # — provided BlueZ still holds the device in its object cache.
                 try:
                     client = BleakClient(address, timeout=20)
                     await client.connect()
                 except Exception:
-                    dev = await BleakScanner.find_device_by_name(self.name, timeout=15)
-                    if dev is None:
-                        raise RuntimeError("BMS not found by MAC or name")
-                    address = dev.address
-                    client = BleakClient(dev, timeout=20)
-                    await client.connect()
+                    # Cache miss. Retry with an unfiltered discovery held open
+                    # across the connect — see _connect_with_scan_active.
+                    client, address = await self._connect_with_scan_active(
+                        BleakClient
+                    )
 
                 try:
                     self._connected = True
@@ -207,6 +207,10 @@ class BmsNode(Node):
             f"BMS unreachable for {self._fail_count} tries — "
             f"clearing stale BlueZ state for {self.mac}"
         )
+        # NOTE: "remove" deletes the BlueZ cache entry for the pack, and the
+        # connect-by-MAC path in _ble_main depends on that entry existing. So
+        # every remove MUST be followed by a repopulating unfiltered scan —
+        # see the _bluez_scan_unfiltered call at the end of this method.
         for verb in ("disconnect", "remove"):
             try:
                 proc = await asyncio.create_subprocess_exec(
@@ -217,6 +221,163 @@ class BmsNode(Node):
                 await asyncio.wait_for(proc.wait(), timeout=10)
             except Exception as e:  # noqa: bluetoothctl absent / timeout
                 self.get_logger().warn(f"bluetoothctl {verb} failed: {e}")
+        # Undo the cache deletion the remove above just caused.
+        await self._bluez_scan_unfiltered()
+
+    async def _connect_with_scan_active(self, BleakClient):
+        """@brief Connect to the pack with an unfiltered discovery kept running.
+
+        Two separate BlueZ behaviours have to be worked around at once, and
+        both were confirmed on this Orin on 2026-07-18:
+
+        1. The bleak scanner cannot see the pack at all. Its BlueZ backend sets
+           a discovery filter, so bluetoothd issues
+           MGMT_OP_START_SERVICE_DISCOVERY rather than a plain discovery, and
+           on BlueZ 5.64 that path reports nothing when it has no UUIDs to
+           match. This pack advertises only flags and its name, no service
+           UUIDs, so BleakScanner returns an empty list while btmgmt find and
+           bluetoothctl scan on both see it at RSSI -67 in the same minute.
+           Hence bluetoothctl, not BleakScanner, drives discovery here.
+
+        2. BlueZ treats a discovered-but-unpaired device as *temporary* and
+           destroys the D-Bus object once discovery stops. A scan that exits
+           before the connect therefore leaves nothing to connect to, and
+           bleak reports "Device with address ... was not found" against a
+           cache that was populated moments earlier. Trusting the device is
+           not sufficient on its own to keep the object alive.
+
+        So the scan is started as a background process and left running for the
+        whole connect attempt, then terminated in the finally block. Returns
+        (client, address).
+        """
+        scan = None
+        try:
+            scan = await asyncio.create_subprocess_exec(
+                "bluetoothctl", "scan", "on",
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            # Give discovery time to pick the pack up before connecting.
+            await asyncio.sleep(8.0)
+
+            # Trust it while the object exists. This persists across reboots
+            # and lets later cold starts connect without reaching this path.
+            await self._bluez_cmd("trust", self.mac)
+
+            address = self.mac
+            found = await self._lookup_by_name()
+            if found:
+                address = found
+                if found != self.mac:
+                    await self._bluez_cmd("trust", found)
+
+            client = BleakClient(address, timeout=20)
+            await client.connect()
+            return client, address
+        finally:
+            if scan is not None:
+                try:
+                    scan.terminate()
+                    await asyncio.wait_for(scan.wait(), timeout=5)
+                except Exception:  # noqa: already dead / will not die
+                    pass
+
+    async def _lookup_by_name(self):
+        """@brief Return the address bluetoothctl lists for the target name.
+
+        Lets a replaced pack with a different address still be found without
+        anyone editing the mac parameter. Returns None if it is not listed.
+        """
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "bluetoothctl", "devices",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            out, _ = await asyncio.wait_for(proc.communicate(), timeout=10)
+            for line in out.decode("utf-8", "replace").splitlines():
+                parts = line.split(None, 2)
+                if len(parts) == 3 and parts[0] == "Device":
+                    if parts[2].strip() == self.name:
+                        return parts[1]
+        except Exception as e:  # noqa: bluetoothctl absent / timeout
+            self.get_logger().warn(f"device lookup failed: {e}")
+        return None
+
+    async def _bluez_cmd(self, *args):
+        """@brief Run a bluetoothctl subcommand, best-effort.
+
+        Failures are logged and swallowed: every caller sits inside the retry
+        loop, so a missing bluetoothctl or a timeout must not take the node
+        down — the next pass tries again.
+        """
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "bluetoothctl", *args,
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            await asyncio.wait_for(proc.wait(), timeout=10)
+        except Exception as e:  # noqa: bluetoothctl absent / timeout
+            self.get_logger().warn(f"bluetoothctl {' '.join(args)} failed: {e}")
+
+    async def _bluez_scan_unfiltered(self):
+        """@brief Repopulate the BlueZ device cache; return the pack address.
+
+        Why this exists instead of BleakScanner: the bleak BlueZ backend sets a
+        discovery filter, which makes bluetoothd issue
+        MGMT_OP_START_SERVICE_DISCOVERY rather than a plain discovery. On BlueZ
+        5.64 that filtered path reports *no* devices when it has no UUIDs to
+        match against, and this pack advertises only flags plus its name — no
+        service UUIDs. So BleakScanner returns an empty list while the pack is
+        advertising perfectly well. Confirmed on 2026-07-18: btmgmt find and
+        bluetoothctl scan on both saw it at RSSI -67 during the same minute
+        that BleakScanner reported zero devices, with and without filters.
+
+        bluetoothctl scan on sets no filter and does populate the cache, after
+        which a plain connect-by-MAC succeeds. Returns the address matching the
+        target name if one turns up, else None.
+        """
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "bluetoothctl", "--timeout", "12", "scan", "on",
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            await asyncio.wait_for(proc.wait(), timeout=25)
+        except Exception as e:  # noqa: bluetoothctl absent / timeout
+            self.get_logger().warn(f"unfiltered scan failed: {e}")
+            return None
+
+        # Mark the pack trusted. BlueZ garbage-collects devices that are
+        # neither paired nor trusted once discovery stops, which used to make
+        # the repopulation above a race: the scan added the device, then BlueZ
+        # dropped it again before the connect landed, and the node reported
+        # "Device with address ... was not found" on a cache it had just
+        # filled. Trusting makes the entry persist, including across reboots,
+        # so after the first success the scan is never needed again and a plain
+        # connect-by-MAC works from cold. Idempotent, so it is safe every time.
+        await self._bluez_cmd("trust", self.mac)
+
+        # Resolve by name as well, so a replaced pack with a different address
+        # is still found without anyone editing the mac parameter.
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "bluetoothctl", "devices",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            out, _ = await asyncio.wait_for(proc.communicate(), timeout=10)
+            for line in out.decode("utf-8", "replace").splitlines():
+                parts = line.split(None, 2)
+                if len(parts) == 3 and parts[0] == "Device":
+                    if parts[2].strip() == self.name:
+                        if parts[1] != self.mac:
+                            await self._bluez_cmd("trust", parts[1])
+                        return parts[1]
+        except Exception as e:  # noqa: bluetoothctl absent / timeout
+            self.get_logger().warn(f"device lookup failed: {e}")
+        return None
 
     # ── ROS side (spin thread) ──────────────────────────────────────────
     def _publish(self):

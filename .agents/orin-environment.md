@@ -54,7 +54,37 @@ The pack's **JBD/Xiaoxiang smart BMS** advertises over BLE as **`SP22S003BP21S10
 
 Protocol (JBD, via `bleak`): GATT service `ff00`, **notify** `ff01`, **write** `ff02`. Write `DD A5 03 00 FF FD 77` for pack summary (voltage, SOC@byte19, current, temps), `DD A5 04 00 FF FC 77` for per-cell mV. Frames `DD <reg> <status> <len> <payload> <chk> <chk> 77`, big-endian. Full parser in `src/kb_bms/kb_bms/bms_node.py`; see `history.md` 2026-07-08. `bleak` is a pip `--user` install for the `orin` user (the service runs as `orin`). A connected BLE device stops advertising, so only one client at a time — the node reconnects forever.
 
-**Stale-BlueZ failure mode (dashboard Battery tab blank / "NO CELL DATA"):** if a bleak client crashes or leaks, BlueZ can be left holding a stale `Connected: yes` for the BMS. While "connected" the pack stops advertising, so both connect-by-MAC and scan-by-name fail and the node loops forever on `BMS BLE error (BMS not found by MAC or name)`. Confirm with `bluetoothctl info A5:C2:37:39:58:5D | grep Connected`. Manual clear: `bluetoothctl disconnect A5:C2:37:39:58:5D && bluetoothctl remove A5:C2:37:39:58:5D` (add a `power off`/`power on` adapter cycle if it persists), then it re-advertises and reconnects. The node now **self-heals**: after every 3rd consecutive failure it runs `bluetoothctl disconnect`+`remove` itself (`_bluez_recover`), so it recovers without a human — expect a `clearing stale BlueZ state` log then `BMS connected` within ~30s. Restarting `kart-brain` while the node holds the link can itself trigger one round of this, which the self-heal then clears.
+**Battery tab blank / "NO CELL DATA" — two BlueZ behaviours, both handled in `kb_bms` since
+2026-07-18.** Diagnosed live on the Orin; do not re-derive from the older stale-BlueZ theory below.
+
+1. **`bleak` cannot see the pack at all.** Its BlueZ backend sets a discovery filter, so `bluetoothd`
+   issues `MGMT_OP_START_SERVICE_DISCOVERY` instead of a plain discovery. On BlueZ 5.64 that path
+   reports *nothing* when it has no UUIDs to match against, and this pack advertises only flags plus
+   its name — no service UUIDs. Confirmed: `btmgmt find` and `bluetoothctl scan on` both saw it at
+   RSSI -67 in the same minute `BleakScanner` returned zero devices, with and without filters, and
+   with the rest of the stack stopped so nothing was competing for the adapter. So the radio, the
+   pack and BlueZ are all fine — only the filtered D-Bus scan path is blind. `kb_bms` therefore
+   drives discovery with `bluetoothctl`, never `BleakScanner`.
+2. **BlueZ destroys the device object as soon as discovery stops.** A discovered-but-unpaired device
+   is *temporary*: when the scan exits, the D-Bus object goes with it, so a connect a moment later
+   fails with `Device with address ... was not found` against a cache that was just populated.
+   Trusting alone does not keep it alive. `kb_bms` keeps `bluetoothctl scan on` running as a
+   background process for the whole connect attempt and terminates it afterwards.
+
+The node also `trust`s the pack automatically once the object exists. Trust persists across reboots,
+so after the first success a cold start connects straight by MAC without needing the scan path.
+
+**Verified end-to-end on 2026-07-18:** with the pack fully wiped from BlueZ (`untrust`, `disconnect`,
+`remove`, until `bluetoothctl info` said "not available"), a plain `systemctl restart kart-brain`
+reconnected on its own in ~36 s and `/battery/state` published 52.28 V at 97%. No human step, and
+no `bluetooth` service restart — which matters, because the Wi-Fi and BT share one radio, so
+restarting `bluetooth` would drop the `kart` AP (see the warning above).
+
+**Do NOT "fix" this by restarting the `bluetooth` service, and treat the older advice below with
+care:** `kb_bms`'s recovery used to run `bluetoothctl disconnect` + `remove`, and `remove` deletes
+the very cache entry the connect-by-MAC path depends on. Combined with the blind `BleakScanner`
+fallback, that made the node unable to ever recover on its own — the remove guaranteed the lockout
+it was meant to clear. Any `remove` must now be followed by the repopulating scan described above.
 
 ## WiFi Networks (priority order)
 | Priority | Connection Name | SSID | Password | Notes |
