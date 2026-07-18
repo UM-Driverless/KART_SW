@@ -168,6 +168,16 @@ ssh orin-local 'echo "0" | sudo -S <command>'
 | PlatformIO | 6.1.19 (`/home/orin/.local/bin/pio`) |
 | AnyDesk | Installed |
 
+## JetPack / OS version — why we stay on JetPack 6 + Humble (checked 2026-07-15)
+We run **JetPack 6.2.2 (Ubuntu 22.04, L4T R36.5)**, and Ubuntu 22.04 is why ROS 2 is **Humble** (Jazzy needs 24.04). That gap could be closed now, but one blocker keeps us here:
+
+- **JetPack 7 exists and supports the AGX Orin.** JetPack 7 (Ubuntu 24.04, kernel 6.8, CUDA 13) originally shipped for Jetson Thor only. **JetPack 7.2 (announced 2026-06-01 at GTC Taipei, Jetson Linux 39.2, CUDA 13.2.1, TensorRT 10.16.2)** is the release that first brought the whole Orin family — AGX Orin / Orin NX / Orin Nano — into the JetPack 7 line. So our AGX Orin devkit *is* officially supported by 7.2. Moving to it would unlock ROS 2 Jazzy.
+- **BLOCKER — ZED SDK has no JetPack 7.2 / Orin build yet.** Our perception depends on the ZED 2 (USB) camera via the ZED SDK. As of **2026-06-03**, Stereolabs staff (Myzhar) said on their forum that JP7.2 (Jetson Linux 39.2) support for Orin is only "in our roadmap" — no release, no date, and they flagged the 22.04→24.04 jump as a possible delay. The current JetPack-7 ZED SDK (5.1) targets **Jetson Thor, not Orin**. Flashing JP7.2 today would leave the camera with no working SDK → perception dead. The camera model (ZED 2, USB) is fine; the SDK-vs-JP7.2 gap is the problem.
+- **Other components would survive the move.** YOLO `.engine` files are TensorRT-version-locked and would break, but we re-export those from the `.pt` anyway (routine). ESP32/AS5600/BMS-over-BLE/dashboard are pure Python + USB/serial/BLE, OS-version-agnostic.
+- **A JP6→JP7 move is a full reflash + Humble→Jazzy port**, not `apt upgrade` — not a mid-season task. Humble is supported until **May 2027**, so there's no forced deadline.
+
+**Decision: stay on JetPack 6.2.2 / Humble.** Re-check trigger: a released ZED SDK build for **JetPack 7.2 / Jetson Linux 39.2 on Orin** — watch the [Stereolabs thread](https://community.stereolabs.com/t/jetpack-7-2-orin-agx-support/11390) and the [ZED SDK releases page](https://github.com/stereolabs/zed-sdk/releases). When that lands, reconsider the migration.
+
 ## Environment Setup
 
 The following are already in `~/.bashrc` and sourced automatically on login/terminal:
