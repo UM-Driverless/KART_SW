@@ -30,22 +30,6 @@ body {
 }
 .container { max-width: 480px; margin: 0 auto; padding: 12px; }
 
-/* Skin selector (floats top-right, styled per skin via body class) */
-.skin-select { position: relative; display: inline-block; }
-.skin-btn {
-  border: none; cursor: pointer; font-size: 11px; padding: 4px 10px;
-  -webkit-user-select: none; user-select: none;
-}
-.skin-btn:active { transform: scale(0.95); }
-.skin-dropdown {
-  display: none; position: absolute; right: 0; top: 100%; margin-top: 4px;
-  min-width: 140px; z-index: 100; box-shadow: 0 8px 24px rgba(0,0,0,0.4);
-}
-.skin-dropdown.open { display: block; }
-.skin-option {
-  display: block; width: 100%; border: none; text-align: left;
-  padding: 10px 14px; cursor: pointer; font-size: 12px;
-}
 /* Persistent top bar */
 #topbar {
   max-width: 480px; margin: 0 auto; padding: 10px 12px 6px;
@@ -76,10 +60,6 @@ body {
 <div id="topbar">
   <div id="topbarTitle">UM Driverless</div>
   <div style="display:flex;align-items:center;gap:8px">
-    <div class="skin-select">
-      <button class="skin-btn" id="skinBtn" onclick="toggleSkinMenu()"></button>
-      <div class="skin-dropdown" id="skinDropdown"></div>
-    </div>
     <button id="netInfoBtn" onclick="toggleNetInfo()"
             title="Dashboard connection info (local IPs for offline access)"
             style="background:transparent;border:1px solid #2a2a3a;color:#888;border-radius:100px;width:22px;height:22px;font-size:11px;cursor:pointer;font-family:sans-serif;line-height:1;padding:0">ⓘ</button>
@@ -195,7 +175,6 @@ const $ = id => document.getElementById(id);
 const deg = r => (r * 180 / Math.PI).toFixed(1);
 const WS_URL = `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/`;
 let ws = null, reconnectTimer = null, lastData = null, skinCleanup = null;
-let currentSkin = localStorage.getItem('skin') || 'race';
 let manualSteerType = 'angle'; // 'angle' or 'pwm'
 let currentMission = 'manual'; // Track mission state locally to show/hide widget
 // Demo mode (?demo=1): no backend, so mission/state changes are simulated locally.
@@ -500,7 +479,7 @@ function connect() {
       // Reflect ESP32 heartbeat in the connection dot (green only when HB alive)
       const d = $('connDot');
       if (d) { if (lastData.esp32_heartbeat) d.classList.add('ok'); else d.classList.remove('ok'); }
-      try { SKINS[currentSkin].update(lastData); } catch {}
+      try { skinRace.update(lastData); } catch {}
       try { updateHealth(lastData); } catch {}
       try { updateControllerStatus(lastData); } catch {}
     } catch {}
@@ -549,1275 +528,6 @@ function wsSend(obj) {
   }
 }
 
-// Skin selector HTML (shared across all skins)
-function skinSelectHTML() {
-  return `<div class="skin-select">
-    <button class="skin-btn" id="skinBtn" onclick="toggleSkinMenu()"></button>
-    <div class="skin-dropdown" id="skinDropdown"></div>
-  </div>`;
-}
-
-function buildSkinMenu() {
-  const dd = $('skinDropdown'); if (!dd) return;
-  dd.innerHTML = Object.entries(SKINS).map(([id, s]) =>
-    `<button class="skin-option${id === currentSkin ? ' active' : ''}"
-      onclick="event.stopPropagation();applySkin('${id}')">${s.name}</button>`
-  ).join('');
-  const btn = $('skinBtn'); if (btn) btn.textContent = 'UI: ' + SKINS[currentSkin].name;
-}
-
-function toggleSkinMenu() { const dd = $('skinDropdown'); if (dd) dd.classList.toggle('open'); }
-document.addEventListener('click', e => { if (!e.target.closest('.skin-select')) { const dd = $('skinDropdown'); if (dd) dd.classList.remove('open'); }});
-
-// ═══════════════════════════════════════════════════════
-// SKIN: LEGACY — Clean modern dark (NOT the default; the default skin is 'race')
-// ═══════════════════════════════════════════════════════
-const skinLegacy = {
-  name: 'Legacy',
-  css: `
-body { font-family:'Inter',-apple-system,BlinkMacSystemFont,'SF Pro',system-ui,sans-serif; background:#0a0a0f; color:#e0e0e8; }
-#topbarTitle { color:#888; font-weight:500; font-size:11px; letter-spacing:4px; text-transform:uppercase; }
-.conn-dot { background:#e74c3c; }
-.conn-dot.ok { background:#2ecc71; box-shadow:0 0 8px #2ecc71; }
-.skin-btn { background:none; border:1px solid #2a2a3a; border-radius:100px; color:#6a6a7a; font-family:'Inter',sans-serif; font-weight:500; letter-spacing:1px; }
-.skin-dropdown { background:#14141f; border:1px solid #2a2a3a; border-radius:14px; overflow:hidden; }
-.skin-option { background:#14141f; color:#e0e0e8; font-family:'Inter',sans-serif; font-weight:500; }
-.skin-option:hover { background:#1e1e30; }
-.skin-option.active { color:#4a9eff; }
-
-.sbar { display:flex; gap:8px; margin-bottom:12px; }
-.spill { flex:1; text-align:center; padding:6px 4px; border-radius:100px; font-size:10px; font-weight:500; text-transform:uppercase; letter-spacing:1.5px; background:#14141f; border:1px solid #2a2a3a; }
-.spill.act { border-color:#4a9eff; color:#4a9eff; }
-.spill.hb-ok { border-color:#2ecc71; color:#2ecc71; }
-.spill.hb-bad { border-color:#e74c3c; color:#e74c3c; }
-
-.card { background:#14141f; border:1px solid #2a2a3a; border-radius:16px; padding:16px; margin-bottom:10px; position:relative; overflow:hidden; }
-.card-t { font-size:9px; font-weight:600; text-transform:uppercase; letter-spacing:2px; color:#6a6a7a; margin-bottom:12px; }
-.tg { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
-.ti { background:#0a0a0f; border-radius:12px; padding:14px 16px; position:relative; overflow:hidden; }
-.tl { font-size:10px; color:#6a6a7a; text-transform:uppercase; letter-spacing:1px; font-weight:500; margin-bottom:8px; }
-.tv { font-size:30px; font-weight:300; font-variant-numeric:tabular-nums; letter-spacing:-1px; line-height:1; }
-.tu { font-size:10px; color:#6a6a7a; font-weight:400; letter-spacing:1px; }
-.ta { font-size:13px; color:#4a9eff; font-weight:500; margin-left:4px; }
-.ti-bar { position:absolute; bottom:0; left:0; right:0; height:2px; background:#2a2a3a; }
-.ti-bar-fill { position:absolute; height:100%; transition:width 0.4s cubic-bezier(0.4,0,0.2,1), left 0.4s cubic-bezier(0.4,0,0.2,1); border-radius:1px; }
-
-.steer-bg { width:100%; height:20px; background:#0a0a0f; border-radius:10px; position:relative; overflow:hidden; margin-top:10px; }
-.steer-ctr { position:absolute; left:50%; top:0; bottom:0; width:2px; background:#6a6a7a; transform:translateX(-50%); }
-.steer-fill { position:absolute; top:2px; bottom:2px; background:#4a9eff; border-radius:8px; transition:left 0.1s, width 0.1s; }
-.steer-cmd { position:absolute; top:0; bottom:0; width:3px; background:#f39c12; border-radius:2px; transition:left 0.1s; }
-
-.gg-row { display:flex; gap:12px; align-items:center; margin-top:10px; }
-.gg-wrap { position:relative; width:140px; height:140px; flex-shrink:0; }
-.gg-canvas { width:100%; height:100%; border-radius:50%; background:#0a0a0f; border:1px solid #2a2a3a; }
-.gg-labels { flex:1; display:flex; flex-direction:column; gap:6px; }
-.gg-vl { font-size:9px; color:#6a6a7a; text-transform:uppercase; letter-spacing:2px; font-weight:500; }
-.gg-v { font-size:18px; font-weight:300; font-variant-numeric:tabular-nums; letter-spacing:-0.5px; }
-
-.ped-row { display:flex; gap:10px; margin-top:12px; }
-.ped-item { flex:1; }
-.ped-lbl { font-size:10px; color:#6a6a7a; text-transform:uppercase; letter-spacing:1px; font-weight:500; margin-bottom:6px; display:flex; justify-content:space-between; }
-.ped-lbl span { color:#e0e0e8; font-weight:300; font-size:18px; font-variant-numeric:tabular-nums; letter-spacing:-0.5px; }
-.ped-track { width:100%; height:6px; background:#0a0a0f; border-radius:3px; overflow:hidden; }
-.ped-fill { height:100%; border-radius:3px; transition:width 0.4s cubic-bezier(0.4,0,0.2,1); }
-.ped-fill.thr { background:#2ecc71; }
-.ped-fill.brk { background:#e74c3c; }
-
-.trg-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; }
-.trg-item { background:#0a0a0f; border-radius:12px; padding:14px 8px; text-align:center; position:relative; overflow:hidden; }
-.trg-lbl { font-size:9px; color:#6a6a7a; text-transform:uppercase; letter-spacing:1px; font-weight:500; margin-bottom:8px; }
-.trg-val { font-size:26px; font-weight:300; font-variant-numeric:tabular-nums; color:#f39c12; letter-spacing:-0.5px; line-height:1; }
-
-.ctrl-xy { display:grid; grid-template-columns:auto 1fr; gap:14px; align-items:center; }
-.ctrl-pad { background:#0a0a0f; border:1px solid #2a2a3a; border-radius:12px; width:220px; height:220px; flex-shrink:0; }
-.ctrl-nums { display:flex; flex-direction:column; gap:6px; font-variant-numeric:tabular-nums; min-width:0; }
-.cen-row { display:flex; justify-content:center; }
-.cen-pad { background:#0a0a0f; border:1px solid #2a2a3a; border-radius:12px; width:220px; height:220px; }
-.ctrl-nr { display:grid; grid-template-columns:1fr 1fr 0.9fr 1.15fr; gap:6px; align-items:baseline; }
-.ctrl-nr > span { text-align:left; }
-.ctrl-nr > span:nth-child(1) { color:#f39c12; font-size:14px; font-weight:400; }
-.ctrl-nr > span:nth-child(2) { color:#4a9eff; font-size:14px; font-weight:400; }
-.ctrl-nr > span:nth-child(3) { color:#6a6a7a; font-size:12px; }
-.ctrl-nr > span:nth-child(4) { color:#6a6a7a; font-size:10px; text-transform:uppercase; letter-spacing:1px; font-weight:500; padding-left:4px; }
-.ctrl-nr-hdr > span { color:#6a6a7a !important; font-size:9px !important; text-transform:uppercase; letter-spacing:1.5px; font-weight:500; text-align:left; }
-.ctrl-nr-hdr > span:nth-child(4) { padding-left:4px; }
-
-.mis-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:5px; }
-.mis-btn { padding:10px 4px; border-radius:12px; border:1px solid #2a2a3a; background:#0a0a0f; color:#6a6a7a; font-size:9px; font-weight:500; letter-spacing:1px; text-transform:uppercase; cursor:pointer; text-align:center; -webkit-user-select:none; user-select:none; font-family:'Inter',sans-serif; }
-.mis-btn:active { transform:scale(0.96); }
-.mis-btn.sel { border-color:#4a9eff; background:rgba(74,158,255,0.10); color:#4a9eff; }
-.ctrl-row { display:flex; gap:6px; margin-top:10px; }
-.ctrl-btn { flex:1; padding:14px 8px; border-radius:14px; border:1px solid; font-size:11px; font-weight:600; letter-spacing:1.5px; cursor:pointer; text-transform:uppercase; -webkit-user-select:none; user-select:none; font-family:'Inter',sans-serif; }
-.ctrl-btn:active { transform:scale(0.96); }
-.ctrl-btn.go { background:transparent; border-color:#2a2a3a; color:#2ecc71; }
-.ctrl-btn.go.on { background:#2ecc71; border-color:#2ecc71; color:#fff; }
-.ctrl-btn.stop { background:transparent; border-color:#2a2a3a; color:#888; }
-.ctrl-btn.stop.on { background:#e74c3c; border-color:#e74c3c; color:#fff; }
-.ctrl-btn.ebs { background:transparent; border-color:rgba(243,156,18,0.4); color:#f39c12; }
-.ctrl-btn.ebs.on { background:#f39c12; border-color:#f39c12; color:#fff; }
-.ctrl-btn.restart { background:transparent; border-color:rgba(155,89,182,0.4); color:#9b59b6; font-size:9px; }
-.ctrl-btn.restart:active { background:rgba(155,89,182,0.2); }
-`,
-  render() { return `<div class="container">
-  <div class="sbar"><div class="spill" id="pillState">IDLE</div><div class="spill" id="pillMission">MANUAL</div><div class="spill" id="pillHb">HB --</div></div>
-  <div class="card"><div class="card-t">Mission</div>
-    <div class="mis-grid" id="misGrid"><button class="mis-btn sel" data-m="manual">Manual</button><button class="mis-btn" data-m="remote_control">Remote</button><button class="mis-btn" data-m="inspection">Inspect</button><button class="mis-btn" data-m="autonomous">Auto</button><button class="mis-btn" data-m="acceleration">Accel</button><button class="mis-btn" data-m="skidpad">Skidpad</button><button class="mis-btn" data-m="autocross">Autocross</button><button class="mis-btn" data-m="trackdrive">Trackdrive</button></div>
-    <div class="algo-select svo-select" style="display:none"><div class="algo-label">Video Input</div><select class="algo-dropdown svo-dropdown" onchange="onSvoChange(this)"><option value="live">Live Camera</option></select></div>
-    <div class="algo-select"><div class="algo-label">Steering</div><select class="algo-dropdown" onchange="onAlgoChange(this)"><option value="geometric">Geometric</option><option value="pure_pursuit">Pure Pursuit</option><option value="stanley">Stanley</option><option value="neural_v2">Neural V2</option><option value="mpc">MPC</option></select></div>
-    <div class="algo-select"><div class="algo-label">Speed</div><select class="algo-dropdown speed-algo-dropdown" onchange="onSpeedAlgoChange(this)"><option value="curve_factor">Curve Factor</option><option value="constant">Constant</option><option value="constant_stop">Constant + Stop</option><option value="neural_v2">Neural V2</option><option value="zero">Zero</option></select></div>
-    <div class="ctrl-row"><button class="ctrl-btn go" data-st="running" onclick="wsSend({action:'set_state',state:'running'})">Start</button><button class="ctrl-btn stop" data-st="idle" onclick="wsSend({action:'set_state',state:'idle'})">Stop</button><button class="ctrl-btn ebs" data-st="ebs" onclick="wsSend({action:'set_state',state:'ebs'})">EBS</button><button class="ctrl-btn restart" onclick="if(confirm('Restart kart-brain service?'))wsSend({action:'restart'})">Restart</button></div>
-  </div>
-  <div class="card"><div class="card-t">Kart State</div>
-    <div class="tg"><div class="ti"><div class="tl">Steering</div><div class="tv" id="vSteer">0.0 <span class="tu">°</span></div><div class="ti-bar"><div class="ti-bar-fill" id="steerBarFill" style="width:0%;background:#4a9eff"></div></div></div>
-    <div class="ti"><div class="tl">Speed</div><div class="tv" id="vSpeed">0.0 <span class="tu">km/h</span></div><div class="ti-bar"><div class="ti-bar-fill" id="speedBarFill" style="width:0%;background:#2ecc71"></div></div></div>
-    </div>
-    <div class="gg-row"><div class="gg-wrap"><canvas class="gg-canvas" id="ggCanvas" width="140" height="140"></canvas></div>
-    <div class="gg-labels"><div><div class="gg-vl">Lateral</div><div class="gg-v" id="vALat">0.00 g</div></div><div><div class="gg-vl">Longitudinal</div><div class="gg-v" id="vALon">0.00 g</div></div><div><div class="gg-vl">Total</div><div class="gg-v" id="vATotal">0.00 g</div></div></div></div>
-    <div class="ped-row"><div class="ped-item"><div class="ped-lbl">Throttle <span id="vThr">0%</span></div><div class="ped-track"><div class="ped-fill thr" id="thrFill" style="width:0%"></div></div></div>
-    <div class="ped-item"><div class="ped-lbl">Brake <span id="vBrk">0%</span></div><div class="ped-track"><div class="ped-fill brk" id="brkFill" style="width:0%"></div></div></div></div>
-  </div>
-  <div class="card"><div class="card-t">Control — Target vs Actual</div>
-    <div class="ctrl-xy">
-      <canvas class="ctrl-pad" id="ctrlPad" width="220" height="220"></canvas>
-      <div class="ctrl-nums">
-        <div class="ctrl-nr ctrl-nr-hdr"><span>TGT</span><span>ACT</span><span>Δ</span><span></span></div>
-        <div class="ctrl-nr"><span id="cnTgtSt">0°</span><span id="cnActSt">0°</span><span id="cnDSt">0°</span><span>Steer</span></div>
-        <div class="ctrl-nr"><span id="cnTgtTh">0%</span><span id="cnActTh">0%</span><span id="cnDTh">0%</span><span>Throttle</span></div>
-        <div class="ctrl-nr"><span id="cnTgtBr">0%</span><span id="cnActBr">0%</span><span id="cnDBr">0%</span><span>Brake</span></div>
-        <div class="ctrl-nr"><span>—</span><span id="cnPwm">0%</span><span>—</span><span>Str PWM</span></div>
-      </div>
-    </div>
-  </div>
-  <div class="card"><div class="card-t">Perception — Top-down</div>
-    <div class="cen-row">
-      <canvas class="cen-pad" id="cenitalPad" width="220" height="220"></canvas>
-    </div>
-  </div>
-  </div>`; },
-
-  init() {
-    $('misGrid').addEventListener('click', missionClick);
-    drawGG(0, 0, '#2a2a3a', '#6a6a7a40', '#4a9eff', 8);
-    drawControlPad(0, 0, 0, 0, 0.5);
-    drawCenital($('cenitalPad'), []);
-    return () => {};
-  },
-
-  update(d) {
-    $('vSteer').innerHTML = `${deg(d.esp32_steering_rad)}<span style="font-size:.55em;vertical-align:super">°</span>` + (d.esp32_steering_raw != null ? ` <span class="tu" style="font-size:.5em;opacity:.6">raw ${d.esp32_steering_raw}</span>` : '');
-    $('vSpeed').innerHTML = `${(d.esp32_speed*3.6).toFixed(1)} <span class="tu">km/h</span>`;
-    const sPct = Math.max(-1, Math.min(1, steerScreen(d.esp32_steering_rad) / 0.5));
-    const sf = $('steerBarFill');
-    if (sPct >= 0) { sf.style.left='50%'; sf.style.width=(sPct*50)+'%'; }
-    else { sf.style.width=(-sPct*50)+'%'; sf.style.left=(50+sPct*50)+'%'; }
-    $('speedBarFill').style.width = Math.min(d.esp32_speed/30*100,100)+'%';
-    const latG = d.esp32_accel_lat/9.81, lonG = d.esp32_accel_lon/9.81;
-    drawGG(latG, lonG, '#2a2a3a', '#6a6a7a40', '#4a9eff', 8);
-    $('vALat').textContent = latG.toFixed(2)+' g';
-    $('vALon').textContent = lonG.toFixed(2)+' g';
-    $('vATotal').textContent = Math.sqrt(latG*latG+lonG*lonG).toFixed(2)+' g';
-    updatePedals(d); updatePills(d); updateMissions(d); updateStateButtons(d);
-    updateControlPanel(d);
-    updateCenitalPanel(d);
-  }
-};
-
-// ═══════════════════════════════════════════════════════
-// SKIN: KITT — Retro 80s Knight Rider
-// ═══════════════════════════════════════════════════════
-const skinKitt = {
-  name: 'KITT',
-  css: `
-:root {
-  --r: #ff2200;
-  --r2: #cc1500;
-  --r3: #881000;
-  --rg: rgba(255,34,0,0.35);
-  --rg2: rgba(255,34,0,0.08);
-  --amb: #ff7700;
-  --amg: rgba(255,119,0,0.4);
-  --grn: #33ff44;
-  --grg: rgba(51,255,68,0.35);
-  --bg: #030303;
-  --panel: #070707;
-  --border: rgba(255,34,0,0.25);
-  --dim: rgba(255,34,0,0.45);
-}
-body {
-  background: var(--bg);
-  background-image: radial-gradient(ellipse at center, #0a0000 0%, #030303 70%, #000 100%);
-  color: var(--r);
-  font-family: 'Share Tech Mono', monospace;
-  min-height: 100vh;
-}
-body::before {
-  content:''; position:fixed; inset:0;
-  background: repeating-linear-gradient(0deg, rgba(0,0,0,0.18) 0px, rgba(0,0,0,0.18) 1px, transparent 1px, transparent 3px);
-  pointer-events:none; z-index:999;
-}
-body::after {
-  content:''; position:fixed; inset:0;
-  background: linear-gradient(transparent 0%, rgba(255,30,0,0.012) 50%, transparent 100%);
-  animation: crtroll 9s linear infinite;
-  pointer-events:none; z-index:998;
-}
-@keyframes crtroll { 0%{transform:translateY(-100%)} 100%{transform:translateY(100vh)} }
-
-.k-wrap { width:100%; max-width:500px; display:flex; flex-direction:column; gap:10px; margin: 0 auto; padding: 16px; }
-
-/* MASTHEAD */
-.masthead {
-  border:1px solid var(--r2); background:var(--panel); overflow:hidden;
-}
-.masthead-top {
-  display:flex; align-items:center; justify-content:space-between;
-  padding:12px 16px 8px; border-bottom:1px solid rgba(255,34,0,0.15);
-}
-.kitt-logo {
-  font-family:'VT323',monospace; font-size:52px; line-height:1;
-  color:var(--r); letter-spacing:6px;
-  text-shadow:0 0 8px var(--r), 0 0 20px var(--rg), 0 0 40px rgba(255,34,0,0.15);
-}
-.status-pill {
-  font-family:'Orbitron',sans-serif;
-  font-size:10px; font-weight:700; letter-spacing:3px;
-  padding:5px 11px;
-  border:1px solid var(--amb); color:var(--amb);
-  box-shadow:0 0 10px var(--amg);
-  animation:pillpulse 2.5s ease-in-out infinite;
-}
-.status-pill.run { border-color:var(--grn); color:var(--grn); box-shadow:0 0 10px var(--grg); animation:none; }
-@keyframes pillpulse { 0%,100%{box-shadow:0 0 8px var(--amg)} 50%{box-shadow:0 0 20px var(--amg), 0 0 40px rgba(255,119,0,0.12)} }
-.masthead-sub { padding:6px 16px 10px; font-size:9px; letter-spacing:3px; color:var(--dim); }
-
-/* KNIGHT RIDER SCANNER */
-.kr-scanner {
-  border:1px solid var(--r2); background:#020202; padding:10px 14px;
-}
-.kr-lbl { font-size:8px; letter-spacing:3px; color:var(--dim); margin-bottom:8px; }
-.led-track {
-  background:#040000; border:1px solid rgba(255,34,0,0.1);
-  height:30px; position:relative; overflow:hidden;
-}
-.led-track canvas { display:block; width:100%; height:100%; }
-
-/* PANEL */
-.k-panel { border:1px solid var(--border); background:var(--panel); overflow:hidden; }
-.k-ph {
-  display:flex; align-items:center; justify-content:space-between;
-  padding:8px 14px; border-bottom:1px solid var(--border);
-  background:rgba(255,20,0,0.025);
-}
-.k-ph-title { font-family:'Orbitron',sans-serif; font-size:9px; letter-spacing:4px; color:var(--dim); }
-.k-ph-title::before { content:'// '; opacity:0.4; }
-.k-pb { padding:14px; }
-
-/* JOYSTICK */
-.joy-wrap { display:flex; flex-direction:column; align-items:center; gap:14px; }
-.joy-outer {
-  width:220px; height:170px; border-radius:12px;
-  background:radial-gradient(ellipse at 38% 32%, #1c0400 0%, #080000 60%, #020000 100%);
-  border:2px solid rgba(255,34,0,0.4);
-  box-shadow:0 0 0 4px rgba(255,34,0,0.05), 0 0 30px rgba(255,34,0,0.1), inset 0 0 50px rgba(0,0,0,0.9);
-  position:relative; cursor:crosshair; touch-action:none;
-}
-.joy-outer::before { content:''; position:absolute; inset:12px; border-radius:8px; border:1px solid rgba(255,34,0,0.12); }
-.joy-outer::after  { content:''; position:absolute; inset:34px;  border-radius:6px; border:1px dashed rgba(255,34,0,0.07); }
-.joy-cross-h,.joy-cross-v { position:absolute; background:rgba(255,34,0,0.09); pointer-events:none; }
-.joy-cross-h { top:50%; left:8%; right:8%; height:1px; transform:translateY(-50%); }
-.joy-cross-v { left:50%; top:8%; bottom:8%; width:1px;  transform:translateX(-50%); }
-.joy-ticks {
-  position:absolute; inset:0; border-radius:12px;
-  background:none;
-}
-.joy-thumb {
-  width:58px; height:58px; border-radius:50%;
-  background:radial-gradient(circle at 35% 30%, #3a0e00, #1a0500 60%, #0d0200);
-  border:2px solid var(--r);
-  box-shadow:0 0 16px var(--rg), 0 0 30px rgba(255,34,0,0.12);
-  position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
-}
-.joy-thumb::after {
-  content:''; position:absolute; inset:6px; border-radius:50%;
-  background:radial-gradient(circle at 40% 35%, rgba(255,60,0,0.28), transparent);
-}
-.joy-readings { display:grid; grid-template-columns:1fr 1fr; gap:10px; width:100%; }
-.rbox { background:rgba(255,20,0,0.04); border:1px solid var(--border); padding:9px 12px; }
-.rbox-lbl { font-size:8px; letter-spacing:2px; color:var(--dim); margin-bottom:5px; }
-.rbox-val { font-family:'VT323',monospace; font-size:28px; color:var(--r); text-shadow:0 0 8px var(--rg); line-height:1; }
-
-/* GAMEPAD */
-.gp-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
-.gp-conn { display:flex; align-items:center; gap:6px; font-size:9px; letter-spacing:2px; color:#333; }
-.gp-conn.on { color:var(--grn); }
-.gp-led { width:7px; height:7px; border-radius:50%; background:#1a1a1a; }
-.gp-led.on { background:var(--grn); box-shadow:0 0 8px var(--grg); animation:gpled 1.8s ease-in-out infinite; }
-@keyframes gpled { 50%{opacity:0.4} }
-.tog-wrap { display:flex; border:1px solid var(--border); overflow:hidden; }
-.tog { background:transparent; border:none; color:var(--dim); font-family:'Share Tech Mono',monospace; font-size:9px; letter-spacing:2px; padding:5px 12px; cursor:pointer; transition:all 0.15s; }
-.tog.on { background:var(--r2); color:#ff9977; }
-.ax-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
-.ax-lbl { font-size:8px; letter-spacing:2px; color:var(--dim); margin-bottom:6px; }
-.seg-bar { display:flex; gap:2px; height:8px; margin-bottom:5px; }
-.seg { flex:1; height:100%; background:rgba(255,34,0,0.07); border:1px solid rgba(255,34,0,0.1); transition:background 0.05s; }
-.seg.on { background:var(--r2); box-shadow:0 0 4px var(--rg); }
-.seg.on.pk { background:var(--r); box-shadow:0 0 6px var(--rg); }
-.ax-val { font-family:'VT323',monospace; font-size:18px; color:var(--r); }
-
-/* TABS */
-.k-tabs { display:flex; border-bottom:1px solid var(--border); }
-.k-tab {
-  flex:1; background:transparent; border:none;
-  color:var(--dim); font-family:'Share Tech Mono',monospace;
-  font-size:9px; letter-spacing:3px; padding:10px 6px; cursor:pointer;
-  border-right:1px solid var(--border); position:relative; transition:all 0.2s;
-}
-.k-tab:last-child { border-right:none; }
-.k-tab.on { color:var(--r); background:rgba(255,30,0,0.04); }
-.k-tab.on::after { content:''; position:absolute; bottom:-1px; left:0; right:0; height:2px; background:var(--r); box-shadow:0 0 8px var(--rg); }
-.k-tc { display:none; padding:14px; }
-.k-tc.on { display:block; }
-
-/* SENSORS */
-.s-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px; }
-.sc {
-  border:1px solid var(--border); background:rgba(255,20,0,0.02); padding:10px 12px;
-  position:relative;
-}
-.sc::before { content:''; position:absolute; top:0; left:0; right:0; height:1px; background:linear-gradient(90deg,transparent,rgba(255,34,0,0.28),transparent); }
-.sc-lbl { font-size:8px; letter-spacing:2px; color:var(--dim); margin-bottom:6px; }
-.sc-val { font-family:'VT323',monospace; font-size:32px; line-height:1; color:var(--r); text-shadow:0 0 10px var(--rg); }
-.sc-unit { font-size:8px; letter-spacing:2px; color:var(--dim); margin-top:2px; }
-.sc-segs { display:flex; gap:1px; margin-top:7px; height:3px; }
-.sc-segs span { flex:1; background:rgba(255,34,0,0.06); border-radius:1px; }
-.sc-segs span.on { background:var(--r3); box-shadow:0 0 3px rgba(255,34,0,0.35); }
-
-/* online strip */
-.online-strip {
-  display:flex; align-items:center; gap:10px;
-  border:1px solid rgba(51,255,68,0.18); background:rgba(51,255,68,0.015);
-  padding:7px 12px; margin-bottom:10px;
-}
-.ol-dot { width:6px; height:6px; border-radius:50%; background:var(--grn); box-shadow:0 0 8px var(--grg); animation:oldot 1.2s ease-in-out infinite; }
-@keyframes oldot { 50%{opacity:0.3} }
-.ol-lbl { font-size:9px; letter-spacing:3px; color:var(--grn); flex:1; }
-.ol-hex { font-size:8px; color:rgba(51,255,68,0.4); letter-spacing:1px; }
-
-/* IMU */
-.imu-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; }
-.imu-c { border:1px solid var(--border); background:rgba(255,20,0,0.02); padding:9px 10px; text-align:center; }
-.imu-lbl { font-size:8px; letter-spacing:2px; color:var(--dim); margin-bottom:5px; }
-.imu-val { font-family:'VT323',monospace; font-size:24px; color:var(--r); text-shadow:0 0 8px var(--rg); }
-.imu-val.hdg { color:var(--amb); text-shadow:0 0 8px var(--amg); }
-
-/* MOTION BUTTONS */
-.mode-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-bottom:10px; }
-.mbtn {
-  background:rgba(255,20,0,0.03); border:1px solid rgba(255,34,0,0.18);
-  color:rgba(255,34,0,0.3); font-family:'Share Tech Mono',monospace;
-  font-size:9px; letter-spacing:2px; padding:10px 4px; cursor:pointer;
-  transition:all 0.12s; text-align:center;
-}
-.mbtn:hover { border-color:rgba(255,34,0,0.45); color:rgba(255,34,0,0.65); }
-.mbtn.on { border-color:var(--r); color:var(--r); background:rgba(255,34,0,0.07); box-shadow:0 0 8px rgba(255,34,0,0.1); }
-
-/* ALGORITHM SELECTOR */
-.algo-label { color:var(--dim); }
-.algo-dropdown { border-color:var(--border); background:var(--bg); color:var(--grn); font-family:'Share Tech Mono',monospace; }
-.algo-dropdown:focus { border-color:var(--grn); box-shadow:0 0 6px rgba(51,255,68,0.15); }
-.algo-dropdown option { background:var(--panel,#14141f); }
-
-/* ACTION BUTTONS */
-.act-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; }
-.abtn {
-  border:none; cursor:pointer;
-  font-family:'VT323',monospace; font-size:24px; letter-spacing:3px;
-  padding:13px 6px; transition:all 0.1s; position:relative; overflow:hidden;
-}
-.abtn::before { content:''; position:absolute; top:0; left:0; right:0; height:1px; background:rgba(255,255,255,0.06); }
-.abtn-start { background:rgba(0,0,0,0); border:2px solid rgba(51,255,68,0.55); color:var(--grn); box-shadow:0 0 10px rgba(51,255,68,0.12); }
-.abtn-start:active { background:rgba(51,255,68,0.08); box-shadow:0 0 22px rgba(51,255,68,0.35); }
-.abtn-start.on { background:rgba(51,255,68,0.15); box-shadow:0 0 22px rgba(51,255,68,0.4); }
-.abtn-stop  { background:rgba(0,0,0,0); border:2px solid rgba(255,119,0,0.55); color:var(--amb); box-shadow:0 0 10px rgba(255,119,0,0.1); }
-.abtn-stop:active  { background:rgba(255,119,0,0.07); box-shadow:0 0 22px rgba(255,119,0,0.32); }
-.abtn-stop.on  { background:rgba(255,119,0,0.12); box-shadow:0 0 22px rgba(255,119,0,0.35); }
-.abtn-ebs   { background:rgba(0,0,0,0); border:2px solid rgba(255,34,0,0.65); color:#ff2200; box-shadow:0 0 12px rgba(255,34,0,0.18); animation:ebsp 2.5s ease-in-out infinite; }
-.abtn-ebs:active   { background:rgba(255,34,0,0.12); box-shadow:0 0 28px rgba(255,34,0,0.5); }
-.abtn-ebs.on   { background:rgba(255,34,0,0.18); box-shadow:0 0 28px rgba(255,34,0,0.5); }
-.abtn-restart { background:rgba(0,0,0,0); border:2px solid rgba(155,89,182,0.5); color:#9b59b6; box-shadow:0 0 8px rgba(155,89,182,0.15); font-size:11px; }
-.abtn-restart:active { background:rgba(155,89,182,0.12); }
-@keyframes ebsp { 0%,100%{box-shadow:0 0 10px rgba(255,34,0,0.15)} 50%{box-shadow:0 0 20px rgba(255,34,0,0.35), 0 0 40px rgba(255,34,0,0.1)} }
-
-/* LOG */
-.log-bar {
-  border:1px solid rgba(255,34,0,0.18); background:rgba(0,0,0,0.5);
-  padding:9px 14px; font-size:11px; letter-spacing:2px; color:var(--grn);
-  display:flex; align-items:center; gap:10px;
-}
-.log-cur { display:inline-block; width:8px; height:14px; background:var(--grn); box-shadow:0 0 6px var(--grg); animation:cur 1s step-end infinite; flex-shrink:0; }
-@keyframes cur { 50%{opacity:0} }
-
-.k-top-btns { display: flex; justify-content: space-between; align-items: center; }
-`,
-  render() {
-    return `<div class="k-wrap">
-  <!-- MASTHEAD -->
-  <div class="masthead">
-    <div class="masthead-top">
-      <div class="kitt-logo">K·I·T·T</div>
-      <div style="text-align:right">
-        <div style="font-size:8px;letter-spacing:3px;color:var(--dim);margin-bottom:6px">SYSTEM STATUS</div>
-        <div class="status-pill" id="mainStatus">STANDBY</div>
-      </div>
-    </div>
-    <div class="masthead-sub">KNIGHT INDUSTRIES TWO THOUSAND &nbsp;/&nbsp; AI SUBSYSTEM v3.2</div>
-  </div>
-
-  <!-- KNIGHT RIDER SCANNER -->
-  <div class="kr-scanner">
-    <div class="kr-lbl">VOICE SYNTHESIZER &nbsp;//&nbsp; AUDIO PROCESSOR</div>
-    <div class="led-track"><canvas id="ledCanvas" height="30"></canvas></div>
-  </div>
-
-  <!-- TOUCH JOYSTICK -->
-  <div class="k-panel">
-    <div class="k-ph">
-      <div class="k-ph-title">Touch Joystick</div>
-      <div style="font-size:8px;letter-spacing:2px;color:var(--dim)">HAPTIC ON</div>
-    </div>
-    <div class="k-pb">
-      <div class="joy-wrap">
-        <div class="joy-outer" id="joyPad">
-          <div class="joy-ticks"></div>
-          <div class="joy-cross-h"></div>
-          <div class="joy-cross-v"></div>
-          <div class="joy-thumb" id="joyThumb"></div>
-        </div>
-        <div class="joy-readings">
-          <div class="rbox"><div class="rbox-lbl">STEERING</div><div class="rbox-val" id="steerVal">0.00</div></div>
-          <div class="rbox"><div class="rbox-lbl">THROTTLE / BRAKE</div><div class="rbox-val" id="throttleVal">0.00</div></div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- GAMEPAD -->
-  <div class="k-panel">
-    <div class="k-ph">
-      <div class="k-ph-title">Gamepad Control</div>
-      <div class="gp-conn" id="gpConn"><div class="gp-led" id="gpLed"></div><span id="gpTxt">DISCONNECTED</span></div>
-    </div>
-    <div class="k-pb">
-      <div class="gp-top">
-        <div style="font-size:9px;letter-spacing:2px;color:var(--dim)">STEER TARGET</div>
-        <div class="tog-wrap">
-          <button class="tog on" id="togAngle" onclick="setKittSteer('angle')">ANGLE</button>
-          <button class="tog" id="togPwm" onclick="setKittSteer('pwm')">PWM</button>
-        </div>
-      </div>
-      <div class="ax-grid">
-        <div>
-          <div class="ax-lbl">STEERING AXIS (L-STICK)</div>
-          <div class="seg-bar" id="steerSegs"></div>
-          <div class="ax-val" id="axSteerVal">0.00</div>
-        </div>
-        <div>
-          <div class="ax-lbl">ACCEL (R-TRIO) / BRAKE (L-TRIO)</div>
-          <div class="seg-bar" id="driveSegs"></div>
-          <div class="ax-val" id="axDriveVal">0% &nbsp; 0%</div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- TELEMETRY -->
-  <div class="k-panel">
-    <div class="k-tabs">
-      <button class="k-tab on" id="tab-tele-btn" onclick="switchKittTab(this,'tele')">TELE</button>
-      <button class="k-tab" id="tab-radar-btn" onclick="switchKittTab(this,'radar')">RADAR</button>
-      <button class="k-tab" id="tab-net-btn" onclick="switchKittTab(this,'net')">NETWORK</button>
-    </div>
-    <div class="k-tc on" id="tc-tele">
-      <div class="s-grid">
-        <!-- Speed/RPM: no sensor yet
-        <div class="sc"><div class="sc-lbl">SPEED</div><div class="sc-val" id="speedVal">0.0</div><div class="sc-unit">M / S</div><div class="sc-segs" id="speedSegs"></div></div>
-        <div class="sc"><div class="sc-lbl">MOTOR RPM</div><div class="sc-val" id="rpmVal">0.0</div><div class="sc-unit">KRPM</div><div class="sc-segs" id="rpmSegs"></div></div>
-        -->
-        <div class="sc"><div class="sc-lbl">THROTTLE OUT</div><div class="sc-val" id="thoVal">000</div><div class="sc-unit">%</div><div class="sc-segs" id="thoSegs"></div></div>
-        <div class="sc"><div class="sc-lbl">STEERING OUT</div><div class="sc-val" id="stoVal">0.0°</div><div class="sc-unit">DEG</div><div class="sc-segs" id="stoSegs"></div></div>
-      </div>
-      <div class="online-strip">
-        <div class="ol-dot"></div>
-        <div class="ol-lbl">TELEMETRY LINK // ONLINE</div>
-        <div class="ol-hex" id="hexStream">A3 F2 08 1C...</div>
-      </div>
-      <div style="font-size:8px;letter-spacing:3px;color:var(--dim);margin-bottom:8px">IMU // INERTIAL NAVIGATION</div>
-      <div class="imu-grid">
-        <div class="imu-c"><div class="imu-lbl">ROLL</div><div class="imu-val" id="rollVal">000</div></div>
-        <div class="imu-c"><div class="imu-lbl">PITCH</div><div class="imu-val" id="pitchVal">000</div></div>
-        <div class="imu-c"><div class="imu-lbl">HEADING</div><div class="imu-val hdg" id="hdgVal">0.0°</div></div>
-      </div>
-    </div>
-    <div class="k-tc" id="tc-radar">
-      <div style="text-align:center;padding:28px 0;font-size:9px;letter-spacing:3px;color:var(--dim)">RADAR SUBSYSTEM<br><br><span style="font-family:'VT323',monospace;font-size:30px;color:var(--r)">-- OFFLINE --</span></div>
-    </div>
-    <div class="k-tc" id="tc-net">
-      <div style="text-align:center;padding:28px 0;font-size:9px;letter-spacing:3px;color:var(--dim)">NETWORK INTERFACE<br><br><span style="font-family:'VT323',monospace;font-size:30px;color:var(--amb)">-- STANDBY --</span></div>
-    </div>
-  </div>
-
-  <!-- MOTION MODE -->
-  <div class="k-panel">
-    <div class="k-ph"><div class="k-ph-title">Mission Select</div></div>
-    <div class="k-pb">
-      <div class="mode-grid">
-        <button class="mbtn" data-m="manual" onclick="wsSend({action:'set_mission',mission:'manual'})">MANUAL</button>
-        <button class="mbtn" data-m="remote_control" onclick="wsSend({action:'set_mission',mission:'remote_control'})">REMOTE</button>
-        <button class="mbtn" data-m="acceleration" onclick="wsSend({action:'set_mission',mission:'acceleration'})">ACCEL</button>
-        <button class="mbtn" data-m="skidpad" onclick="wsSend({action:'set_mission',mission:'skidpad'})">SKIDPAD</button>
-        <button class="mbtn" data-m="autocross" onclick="wsSend({action:'set_mission',mission:'autocross'})">AUTOCROSS</button>
-        <button class="mbtn" data-m="trackdrive" onclick="wsSend({action:'set_mission',mission:'trackdrive'})">TRACKDRIVE</button>
-      </div>
-      <div class="algo-select">
-        <div class="algo-label">Steering</div>
-        <select class="algo-dropdown" onchange="onAlgoChange(this)"><option value="geometric">Geometric</option><option value="pure_pursuit">Pure Pursuit</option><option value="stanley">Stanley</option><option value="neural_v2">Neural V2</option><option value="mpc">MPC</option></select>
-      </div>
-      <div class="algo-select">
-        <div class="algo-label">Speed</div>
-        <select class="algo-dropdown speed-algo-dropdown" onchange="onSpeedAlgoChange(this)"><option value="curve_factor">Curve Factor</option><option value="constant">Constant</option><option value="constant_stop">Constant + Stop</option><option value="neural_v2">Neural V2</option><option value="zero">Zero</option></select>
-      </div>
-      <div class="act-grid">
-        <button class="abtn abtn-start" data-st="running" onclick="wsSend({action:'set_state',state:'running'})">START</button>
-        <button class="abtn abtn-stop"  data-st="idle" onclick="wsSend({action:'set_state',state:'idle'})">STOP</button>
-        <button class="abtn abtn-ebs"   data-st="ebs" onclick="wsSend({action:'set_state',state:'ebs'})">EBS</button>
-        <button class="abtn abtn-restart" onclick="if(confirm('Restart kart-brain service?'))wsSend({action:'restart'})">RESTART</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- LOG -->
-  <div class="log-bar"><div class="log-cur"></div><span id="logTxt">FULL STOP. STANDING BY.</span></div>
-</div>`;
-  },
-  init() {
-    // LED SCANNER
-    const canvas = $('ledCanvas');
-    const ctx = canvas.getContext('2d');
-    let ledW = canvas.offsetWidth; canvas.width = ledW; canvas.height = 30;
-    const DOT_W = 5, DOT_H = 5, DOT_GAP = 3, ROWS = 3;
-    let scanPos = 0, scanDir = 1, scanSpd = 0.55;
-
-    let animId;
-    const drawLed = () => {
-      ctx.clearRect(0, 0, ledW, 30);
-      const cols = Math.floor(ledW / (DOT_W + DOT_GAP));
-      if (cols < 2) { animId = requestAnimationFrame(drawLed); return; }
-      scanPos += scanDir * scanSpd;
-      if (scanPos >= cols - 1) { scanPos = cols - 1; scanDir = -1; }
-      if (scanPos <= 0)         { scanPos = 0;        scanDir = 1; }
-      for (let r = 0; r < ROWS; r++) {
-        const y = 2 + r * (DOT_H + 4);
-        for (let c = 0; c < cols; c++) {
-          const x = c * (DOT_W + DOT_GAP);
-          const dist = Math.abs(c - scanPos);
-          const fall = Math.max(0, 1 - dist / 6.5);
-          ctx.fillStyle = 'rgba(60,5,0,0.55)';
-          ctx.fillRect(x, y, DOT_W, DOT_H);
-          if (fall > 0.01) {
-            const ri = Math.round(255 * Math.min(1, fall * 1.15)), gi = Math.round(18 * fall);
-            ctx.fillStyle = `rgba(${ri},${gi},0,${fall})`;
-            ctx.fillRect(x, y, DOT_W, DOT_H);
-            if (dist < 1.2) { ctx.fillStyle = `rgba(255,70,0,${fall * 0.85})`; ctx.fillRect(x+1, y+1, DOT_W-2, DOT_H-2); }
-          }
-        }
-      }
-      animId = requestAnimationFrame(drawLed);
-    };
-    animId = requestAnimationFrame(drawLed);
-
-    // SEGMENTED BARS
-    const mkSegs = (id, n) => {
-      const el = $(id); if (!el) return; el.innerHTML = '';
-      for (let i = 0; i < n; i++) el.appendChild(document.createElement('span'));
-    };
-    ['steerSegs','driveSegs'].forEach(id => mkSegs(id, 20));
-    ['thoSegs','stoSegs'].forEach(id => mkSegs(id, 16)); // Speed/RPM segs removed (no sensor)
-
-    // HELPERS
-    window.litSegs = (id, norm, centered) => {
-      const el = $(id); if (!el) return; const s = el.children, n = s.length;
-      for (let i = 0; i < n; i++) {
-        let lit = false;
-        if (centered) { const mid = n / 2, span = Math.abs(norm) * mid; lit = norm >= 0 ? (i >= mid && i < mid + span) : (i < mid && i >= mid + span); }
-        else { lit = i < norm * n; }
-        s[i].className = lit ? (i > n * 0.8 ? 'on pk' : 'on') : '';
-      }
-    };
-    window.litSmall = (id, frac) => {
-      const el = $(id); if (!el) return; const s = el.children, n = s.length;
-      for (let i = 0; i < n; i++) s[i].className = i < frac * n ? 'on' : '';
-    };
-    window.setKittSteer = m => {
-      manualSteerType = m;
-      $('togAngle').classList.toggle('on', m==='angle');
-      $('togPwm').classList.toggle('on', m==='pwm');
-      wsSend({ action: 'set_steer_mode', mode: m === 'pwm' ? 'pwm' : 'pid' });
-    };
-    window.switchKittTab = (btn, id) => {
-      document.querySelectorAll('.k-tab').forEach(t=>t.classList.remove('on'));
-      document.querySelectorAll('.k-tc').forEach(t=>t.classList.remove('on'));
-      btn.classList.add('on'); $( 'tc-' + id).classList.add('on');
-    };
-    window.kLog = t => { const el = $('logTxt'); if (el) el.textContent = t; };
-
-    // JOYSTICK
-    const joyPad = $('joyPad'), joyThumb = $('joyThumb');
-    let jDrag = false, jOx = 0, jOy = 0, jDx = 0, jDy = 0;
-    const JR = 55;
-    const applyJoy = (dx, dy) => {
-      jDx = dx; jDy = dy;
-      joyThumb.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
-      const sv = (dx/JR).toFixed(2), tv = (-dy/JR).toFixed(2);
-      $('steerVal').textContent = sv; $('throttleVal').textContent = tv;
-      litSegs('steerSegs', parseFloat(sv), true);
-      wsSend({ action: 'manual_control', steering: parseFloat(sv), steer_type: manualSteerType, throttle: tv > 0 ? tv : 0, brake: tv < 0 ? Math.abs(tv) : 0 });
-    };
-    const jDown = e => { jDrag = true; const r = joyPad.getBoundingClientRect(); jOx = r.left + r.width/2; jOy = r.top + r.height/2; joyPad.setPointerCapture(e.pointerId); e.preventDefault(); };
-    const jMove = e => { if (!jDrag) return; let dx = e.clientX-jOx, dy = e.clientY-jOy; const d = Math.sqrt(dx*dx+dy*dy); if(d>JR){dx=dx/d*JR;dy=dy/d*JR;} applyJoy(dx, dy); };
-    const jUp = () => { jDrag = false; const sp = setInterval(() => { jDx*=0.72; jDy*=0.72; if(Math.abs(jDx)<0.4&&Math.abs(jDy)<0.4){jDx=0;jDy=0;clearInterval(sp); wsSend({ action: 'manual_control', steering: 0, steer_type: manualSteerType, throttle: 0, brake: 0 }); } applyJoy(jDx, jDy); }, 16); };
-    joyPad.addEventListener('pointerdown', jDown);
-    joyPad.addEventListener('pointermove', jMove);
-    joyPad.addEventListener('pointerup', jUp);
-
-    // HEX STREAM
-    const hexId = setInterval(() => {
-      const b = Array.from({length:4}, ()=>Math.floor(Math.random()*256).toString(16).padStart(2,'0').toUpperCase());
-      const el = $('hexStream'); if (el) el.textContent = b.join(' ')+'...';
-    }, 160);
-
-    // GAMEPAD POLLING (Sync with index.html global logic but target our IDs)
-    const gpId = setInterval(() => {
-      const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
-      let gp = null; for (let i = 0; i < gamepads.length; i++) { if (gamepads[i]) { gp = gamepads[i]; break; } }
-      const led = $('gpLed'), txt = $('gpTxt'), conn = $('gpConn');
-      if (!gp) { if(led)led.classList.remove('on'); if(conn)conn.classList.remove('on'); if(txt)txt.textContent = 'DISCONNECTED'; return; }
-      if(led)led.classList.add('on'); if(conn)conn.classList.add('on'); if(txt)txt.textContent = 'CONNECTED: ' + gp.id.substring(0,12);
-      let sa = gp.axes[0] || 0, ac = gp.buttons[7] ? gp.buttons[7].value : 0, br = gp.buttons[6] ? gp.buttons[6].value : 0;
-      if (Math.abs(sa) < 0.1) sa = 0;
-      $('axSteerVal').textContent = sa.toFixed(2);
-      $('axDriveVal').textContent = Math.round(ac*100)+'% ' + Math.round(br*100)+'%';
-      litSegs('steerSegs', sa, true);
-      litSegs('driveSegs', ac, false);
-    }, 100);
-
-    return () => {
-      cancelAnimationFrame(animId);
-      clearInterval(hexId);
-      clearInterval(gpId);
-      joyPad.removeEventListener('pointerdown', jDown);
-      joyPad.removeEventListener('pointermove', jMove);
-      joyPad.removeEventListener('pointerup', jUp);
-      delete window.litSegs; delete window.litSmall; delete window.setKittSteer; delete window.switchKittTab; delete window.kLog;
-    };
-  },
-  update(d) {
-    const s = $('mainStatus'); if (s) {
-      if (d.state === 'running') { s.textContent = 'ACTIVE'; s.className = 'status-pill run'; }
-      else { s.textContent = d.state.toUpperCase(); s.className = 'status-pill'; }
-    }
-    
-    // Speed/RPM: no sensor yet
-    // $('speedVal').textContent = d.esp32_speed.toFixed(1);
-    // litSmall('speedSegs', Math.min(1, Math.abs(d.esp32_speed)/10));
-    // const rpm = d.esp32_rpm !== undefined ? d.esp32_rpm : (Math.abs(d.esp32_speed) * 0.5);
-    // $('rpmVal').textContent = rpm.toFixed(1);
-    // litSmall('rpmSegs', Math.min(1, rpm/5));
-    
-    $('thoVal').textContent = Math.round(d.esp32_throttle * 100);
-    litSmall('thoSegs', d.esp32_throttle);
-    
-    $('stoVal').textContent = deg(d.esp32_steering_rad) + '°';
-    litSmall('stoSegs', Math.min(1, Math.abs(d.esp32_steering_rad)/0.5));
-
-    const voices = { running:'TURBO BOOST ENGAGED. ALL SYSTEMS NOMINAL.', idle:'FULL STOP. STANDING BY.', ebs:'EMERGENCY BRAKE SYSTEM ACTIVATED.' };
-    if (this._lastState !== d.state) { kLog(voices[d.state] || (d.state.toUpperCase() + '. STANDING BY.')); this._lastState = d.state; }
-
-    document.querySelectorAll('.mbtn').forEach(b => b.classList.toggle('on', b.dataset.m === d.mission));
-    updateStateButtons(d);
-  }
-};
-
-// ═══════════════════════════════════════════════════════
-// SKIN: TESLA — Ultra-minimal
-// ═══════════════════════════════════════════════════════
-const skinTesla = {
-  name: 'Tesla',
-  css: `
-body { font-family:'Inter',sans-serif; background:#0a0a0a; color:#f5f5f5; }
-#topbarTitle { font-family:'Inter',sans-serif; font-weight:500; color:#888; font-size:11px; letter-spacing:4px; text-transform:uppercase; }
-.conn-dot { background:#333; }
-.conn-dot.ok { background:#43a047; box-shadow:0 0 8px #43a047; }
-.skin-btn { background:#111; border:1px solid #222; border-radius:100px; color:#444; font-family:'Inter',sans-serif; font-weight:500; letter-spacing:1px; }
-.skin-dropdown { background:#111; border:1px solid #222; border-radius:14px; overflow:hidden; }
-.skin-option { background:#111; color:#888; font-family:'Inter',sans-serif; font-weight:500; }
-.skin-option:hover { background:#1c1c1c; }
-.skin-option.active { color:#f5f5f5; }
-.t-shell { width:100%; max-width:400px; margin:0 auto; display:flex; flex-direction:column; gap:6px; }
-.t-shell > * { animation:tfade 0.5s ease both; }
-.t-shell > *:nth-child(1){animation-delay:0s} .t-shell > *:nth-child(2){animation-delay:.05s} .t-shell > *:nth-child(3){animation-delay:.08s}
-.t-shell > *:nth-child(4){animation-delay:.11s} .t-shell > *:nth-child(5){animation-delay:.14s} .t-shell > *:nth-child(6){animation-delay:.17s}
-.t-shell > *:nth-child(7){animation-delay:.20s} .t-shell > *:nth-child(8){animation-delay:.23s} .t-shell > *:nth-child(9){animation-delay:.26s}
-@keyframes tfade { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
-
-.t-topbar { display:flex; align-items:center; justify-content:flex-end; padding:0 2px; margin-bottom:10px; }
-.t-sys-pill { display:flex; align-items:center; gap:7px; padding:5px 12px; border-radius:100px; border:1px solid #2a2a2a; background:#111; }
-.t-sys-dot { width:6px; height:6px; border-radius:50%; background:#444; transition:all 0.4s; }
-.t-sys-label { font-size:10px; font-weight:500; letter-spacing:1.5px; color:#444; text-transform:uppercase; transition:color 0.4s; }
-
-.t-car { background:#111; border:1px solid #222; border-radius:20px; padding:28px 24px 20px; position:relative; overflow:hidden; }
-.t-car-glow { position:absolute; bottom:0; left:50%; transform:translateX(-50%); width:200px; height:40px; pointer-events:none; transition:opacity 0.6s; opacity:0; }
-.t-car-svg { display:flex; justify-content:center; margin-bottom:20px; }
-.t-car-svg svg { width:260px; opacity:0.9; }
-.t-car-stats { display:flex; justify-content:space-around; padding-top:14px; border-top:1px solid #222; }
-.t-car-stat { text-align:center; }
-.t-big-val { font-size:22px; font-weight:300; color:#f5f5f5; letter-spacing:-0.5px; line-height:1; }
-.t-big-unit { font-size:10px; color:#444; margin-top:3px; letter-spacing:1px; text-transform:uppercase; }
-
-.t-sec-label { font-size:9px; font-weight:600; letter-spacing:2px; color:#444; text-transform:uppercase; padding:0 2px; margin-bottom:2px; margin-top:4px; }
-.t-grid2 { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
-.t-grid3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; }
-.t-card { background:#111; border:1px solid #222; border-radius:16px; padding:16px 16px 14px; position:relative; overflow:hidden; }
-.t-card-label { font-size:10px; font-weight:500; letter-spacing:1px; color:#444; text-transform:uppercase; margin-bottom:10px; }
-.t-card-val { font-size:30px; font-weight:300; color:#f5f5f5; letter-spacing:-1px; line-height:1; }
-.t-card-unit { font-size:10px; color:#444; margin-top:4px; letter-spacing:1px; text-transform:uppercase; }
-.t-card-bar { position:absolute; bottom:0; left:0; right:0; height:2px; background:#222; }
-.t-card-bar-fill { height:100%; transition:width 0.4s cubic-bezier(0.4,0,0.2,1); background:#444; }
-
-.t-cmd-card { background:#111; border:1px solid #222; border-radius:14px; padding:14px 12px; text-align:center; }
-.t-cmd-label { font-size:9px; font-weight:500; letter-spacing:1px; color:#444; text-transform:uppercase; margin-bottom:8px; }
-.t-cmd-val { font-size:26px; font-weight:300; color:#f5f5f5; letter-spacing:-0.5px; line-height:1; }
-
-.t-mis-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:5px; }
-.t-mis-btn { padding:10px 4px; background:#111; border:1px solid #222; border-radius:12px; color:#444; font-family:'Inter',sans-serif; font-size:9px; font-weight:500; letter-spacing:1px; text-transform:uppercase; cursor:pointer; }
-.t-mis-btn.sel { background:#1c1c1c; border-color:#333; color:#f5f5f5; }
-.t-ctrl-row { display:flex; gap:6px; }
-.t-ctrl { flex:1; padding:14px; border-radius:14px; font-family:'Inter',sans-serif; font-size:11px; font-weight:600; letter-spacing:1.5px; text-transform:uppercase; cursor:pointer; border:1px solid; }
-.t-ctrl:active { transform:scale(0.96); }
-.t-ctrl.go { background:transparent; border-color:#333; color:#43a047; }
-.t-ctrl.go.on { background:#43a047; border-color:#43a047; color:#fff; }
-.t-ctrl.stop { background:transparent; border-color:#333; color:#888; }
-.t-ctrl.stop.on { background:#e53935; border-color:#e53935; color:#fff; }
-.t-ctrl.ebs { background:transparent; border-color:#fb8c0040; color:#fb8c00; }
-.t-ctrl.ebs.on { background:#fb8c00; border-color:#fb8c00; color:#000; }
-@keyframes breathe { 0%,100%{opacity:0.1} 50%{opacity:0.22} }
-
-.t-tabs { display:flex; background:#111; border:1px solid #222; border-radius:14px; padding:4px; gap:2px; }
-.t-tab { flex:1; padding:8px; background:transparent; border:none; border-radius:10px; color:#444; font-family:'Inter',sans-serif; font-size:10px; font-weight:500; letter-spacing:1px; text-transform:uppercase; cursor:pointer; transition:all 0.2s; }
-.t-tab.active { background:#1c1c1c; color:#f5f5f5; border:1px solid #333; }
-.t-tab:hover:not(.active) { color:#888; }
-`,
-  render() { return `<div class="t-shell">
-  <div class="t-topbar">
-    <div class="t-sys-pill" id="tSysPill"><div class="t-sys-dot" id="tSysDot"></div><span class="t-sys-label" id="tSysLabel">Standby</span></div>
-  </div>
-  <div class="t-tabs" id="tTabs"><button class="t-tab active" data-st="idle">Idle</button><button class="t-tab" data-st="manual">Manual</button><button class="t-tab" data-st="auto">Auto</button></div>
-  <div class="t-car" id="tCarSection">
-    <div class="t-car-glow" id="tCarGlow"></div>
-    <div class="t-car-svg">
-      <svg viewBox="0 0 320 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M30 72 L28 58 Q30 46 50 38 Q70 30 100 26 Q130 22 160 22 Q190 22 210 26 Q238 32 255 46 Q268 56 272 66 L275 72Z" fill="#1e1e1e" stroke="#333" stroke-width="1"/>
-        <path d="M95 38 Q105 24 140 22 Q180 20 210 26 Q230 30 248 44 L95 44Z" fill="#0d1a2a" stroke="#1e88e5" stroke-width="0.5" stroke-opacity="0.4"/>
-        <rect x="30" y="72" width="245" height="6" rx="2" fill="#161616" stroke="#2a2a2a" stroke-width="0.5"/>
-        <circle cx="85" cy="80" r="18" fill="#111" stroke="#333" stroke-width="1"/><circle cx="85" cy="80" r="12" fill="#0a0a0a" stroke="#444" stroke-width="0.8"/><circle cx="85" cy="80" r="4" fill="#222"/>
-        <circle cx="225" cy="80" r="18" fill="#111" stroke="#333" stroke-width="1"/><circle cx="225" cy="80" r="12" fill="#0a0a0a" stroke="#444" stroke-width="0.8"/><circle cx="225" cy="80" r="4" fill="#222"/>
-        <path d="M260 55 Q270 60 272 66 L258 66Z" fill="#1e88e5" opacity="0.7"/>
-        <rect x="28" y="56" width="4" height="10" rx="1" fill="#e53935" opacity="0.8"/>
-        <line x1="155" y1="28" x2="158" y2="72" stroke="#2a2a2a" stroke-width="0.8"/>
-      </svg>
-    </div>
-    <div class="t-car-stats">
-      <!-- Speed: no sensor yet -->
-      <div class="t-car-stat"><div class="t-big-val" id="tBigSpeed">--</div><div class="t-big-unit">km/h</div></div>
-      <div class="t-car-stat"><div class="t-big-val" id="tBigSteer">0.0</div><div class="t-big-unit">°</div></div>
-      <div class="t-car-stat"><div class="t-big-val" id="tBigAccel">0.0</div><div class="t-big-unit">m/s²</div></div>
-    </div>
-  </div>
-  <div class="t-sec-label">Mission</div>
-  <div class="t-mis-grid" id="misGrid">
-    <button class="t-mis-btn sel" data-m="manual">Manual</button><button class="t-mis-btn" data-m="remote_control">Remote</button><button class="t-mis-btn" data-m="inspection">Inspect</button><button class="t-mis-btn" data-m="autonomous">Auto</button>
-    <button class="t-mis-btn" data-m="acceleration">Accel</button><button class="t-mis-btn" data-m="skidpad">Skidpad</button><button class="t-mis-btn" data-m="autocross">Autocross</button><button class="t-mis-btn" data-m="trackdrive">Trackdrive</button>
-  </div>
-  <div class="algo-select"><div class="algo-label">Algorithm</div><select class="algo-dropdown" onchange="onAlgoChange(this)"><option value="geometric">Geometric</option><option value="pure_pursuit">Pure Pursuit</option><option value="stanley">Stanley</option><option value="neural_v2">Neural V2</option><option value="mpc">MPC</option></select></div>
-  <div class="algo-select svo-select" style="display:none"><div class="algo-label">Video Input</div><select class="algo-dropdown svo-dropdown" onchange="onSvoChange(this)"><option value="live">Live Camera</option></select></div>
-  <div class="t-ctrl-row">
-    <button class="t-ctrl go" data-st="running" onclick="wsSend({action:'set_state',state:'running'})">Start</button>
-    <button class="t-ctrl stop" data-st="idle" onclick="wsSend({action:'set_state',state:'idle'})">Stop</button>
-    <button class="t-ctrl ebs" data-st="ebs" onclick="wsSend({action:'set_state',state:'ebs'})">EBS</button>
-    <button class="t-ctrl restart" onclick="if(confirm('Restart kart-brain service?'))wsSend({action:'restart'})" style="color:#9b59b6;border-color:rgba(155,89,182,0.4)">Restart</button>
-  </div>
-  <div class="t-sec-label">Sensors</div>
-  <div class="t-grid2">
-    <div class="t-card"><div class="t-card-label">Steering</div><div class="t-card-val" id="tsSteer">0.0</div><div class="t-card-unit">°</div><div class="t-card-bar"><div class="t-card-bar-fill" id="tbSteer" style="background:#1e88e5"></div></div></div>
-    <!-- Speed: no sensor yet
-    <div class="t-card"><div class="t-card-label">Speed</div><div class="t-card-val" id="tsSpeed">0.0</div><div class="t-card-unit">km/h</div><div class="t-card-bar"><div class="t-card-bar-fill" id="tbSpeed" style="background:#43a047"></div></div></div>
-    -->
-    <div class="t-card"><div class="t-card-label">Throttle</div><div class="t-card-val" id="tsThr">0</div><div class="t-card-unit">%</div><div class="t-card-bar"><div class="t-card-bar-fill" id="tbThr" style="background:#fb8c00"></div></div></div>
-    <div class="t-card"><div class="t-card-label">Braking</div><div class="t-card-val" id="tsBrk">0</div><div class="t-card-unit">%</div><div class="t-card-bar"><div class="t-card-bar-fill" id="tbBrk" style="background:#e53935"></div></div></div>
-  </div>
-  <div class="t-sec-label">Commands</div>
-  <div class="t-grid3">
-    <div class="t-cmd-card"><div class="t-cmd-label">Throttle</div><div class="t-cmd-val" id="tcThr">0%</div></div>
-    <div class="t-cmd-card"><div class="t-cmd-label">Brake</div><div class="t-cmd-val" id="tcBrk">0%</div></div>
-    <div class="t-cmd-card"><div class="t-cmd-label">Steer</div><div class="t-cmd-val" id="tcStr">0.00°</div></div>
-  </div>
-</div>`; },
-
-  init() {
-    $('misGrid').addEventListener('click', missionClick);
-    return () => {};
-  },
-
-  update(d) {
-    // Speed: no sensor yet
-    // const spd = d.esp32_speed*3.6;
-    const accelTotal = Math.sqrt(d.esp32_accel_lat**2 + d.esp32_accel_lon**2);
-    // $('tBigSpeed').textContent = spd.toFixed(1);
-    $('tBigSteer').textContent = deg(d.esp32_steering_rad);
-    $('tBigAccel').textContent = accelTotal.toFixed(1);
-
-    $('tsSteer').textContent = deg(d.esp32_steering_rad);
-    // $('tsSpeed').textContent = (d.esp32_speed*3.6).toFixed(1);
-    $('tsThr').textContent = Math.round(d.esp32_throttle*100);
-    $('tsBrk').textContent = Math.round(d.esp32_braking*100);
-    $('tbSteer').style.width = Math.min(Math.abs(d.esp32_steering_rad)/1*100,100)+'%';
-    // $('tbSpeed').style.width = Math.min(d.esp32_speed/30*100,100)+'%';
-    $('tbThr').style.width = (d.esp32_throttle*100)+'%';
-    $('tbBrk').style.width = (d.esp32_braking*100)+'%';
-
-    $('tcThr').textContent = Math.round(d.orin_cmd_throttle*100)+'%';
-    $('tcBrk').textContent = Math.round(d.orin_cmd_brake*100)+'%';
-    $('tcStr').textContent = deg(d.orin_cmd_steering_rad)+'°';
-
-    // Status pill
-    const dot = $('tSysDot'), lbl = $('tSysLabel'), glow = $('tCarGlow');
-    if (d.state === 'ebs') {
-      dot.style.background='#fb8c00'; dot.style.boxShadow='0 0 6px #fb8c00'; lbl.style.color='#fb8c00'; lbl.textContent='EBS Active'; glow.style.opacity='0';
-    } else if (d.state === 'running') {
-      dot.style.background='#43a047'; dot.style.boxShadow='0 0 8px #43a047'; lbl.style.color='#43a047'; lbl.textContent='Running';
-      glow.style.background='radial-gradient(ellipse,rgba(67,160,71,0.14),transparent 70%)'; glow.style.opacity='1'; glow.style.animation='breathe 2s infinite';
-    } else {
-      dot.style.background='#444'; dot.style.boxShadow='none'; lbl.style.color='#444'; lbl.textContent='Standby'; glow.style.opacity='0'; glow.style.animation='none';
-    }
-
-    document.querySelectorAll('.t-mis-btn').forEach(b => b.classList.toggle('sel', b.dataset.m === d.mission));
-    const stMap = {idle:'idle',running:'auto',ebs:'idle'};
-    document.querySelectorAll('.t-tab').forEach(b => b.classList.toggle('active', b.dataset.st === (stMap[d.state]||'idle')));
-    updateStateButtons(d);
-  }
-};
-
-// ═══════════════════════════════════════════════════════
-// SKIN: HUD — Sci-fi neon racing
-// ═══════════════════════════════════════════════════════
-const skinHud = {
-  name: 'HUD',
-  css: `
-body { font-family:'Rajdhani',sans-serif; background:#050508; color:#fff; }
-body::before { content:''; position:fixed; inset:0; pointer-events:none; background:radial-gradient(ellipse at 30% 20%,rgba(0,180,255,0.05) 0%,transparent 50%),radial-gradient(ellipse at 70% 80%,rgba(255,60,0,0.04) 0%,transparent 50%); }
-#topbarTitle { font-family:'Orbitron',sans-serif; font-weight:900; color:#fff; font-size:20px; letter-spacing:3px; text-shadow:0 0 30px rgba(0,180,255,0.5); }
-.conn-dot { background:#ffaa00; border:1px solid #ffaa00; }
-.conn-dot.ok { background:#39ff14; border-color:#39ff14; box-shadow:0 0 10px #39ff14; animation:hpulse 1s infinite; }
-.skin-btn { background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.07); border-radius:8px; color:rgba(255,255,255,0.3); font-family:'Orbitron',sans-serif; font-weight:700; letter-spacing:1px; font-size:9px; }
-.skin-dropdown { background:rgba(10,10,20,0.95); border:1px solid rgba(255,255,255,0.1); border-radius:10px; overflow:hidden; backdrop-filter:blur(10px); }
-.skin-option { background:transparent; color:rgba(255,255,255,0.5); font-family:'Orbitron',sans-serif; font-size:9px; letter-spacing:1px; font-weight:700; }
-.skin-option:hover { background:rgba(255,255,255,0.05); }
-.skin-option.active { color:#00b4ff; text-shadow:0 0 10px #00b4ff; }
-
-.h-wrap { width:100%; max-width:420px; margin:0 auto; padding:0 12px 20px; position:relative; }
-.h-wrap > * { animation:hfade 0.4s ease both; }
-.h-wrap > *:nth-child(1){animation-delay:0s} .h-wrap > *:nth-child(2){animation-delay:.05s} .h-wrap > *:nth-child(3){animation-delay:.1s}
-.h-wrap > *:nth-child(4){animation-delay:.15s} .h-wrap > *:nth-child(5){animation-delay:.2s} .h-wrap > *:nth-child(6){animation-delay:.25s} .h-wrap > *:nth-child(7){animation-delay:.3s}
-@keyframes hfade { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
-
-.h-status-pill { display:flex; align-items:center; gap:8px; border-radius:20px; padding:6px 14px; transition:all 0.3s; }
-.h-status-dot { width:7px; height:7px; border-radius:50%; }
-.h-status-dot.pulse { animation:hpulse 1s infinite; }
-@keyframes hpulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.3;transform:scale(0.75)} }
-.h-status-text { font-family:'Orbitron',sans-serif; font-size:9px; letter-spacing:2px; font-weight:700; }
-
-.h-hb-bar { display:flex; align-items:center; gap:10px; background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.06); border-radius:10px; padding:8px 16px; margin-bottom:16px; }
-.h-hb-label { font-family:'Orbitron',sans-serif; font-size:9px; letter-spacing:2px; color:rgba(255,255,255,0.25); white-space:nowrap; }
-.h-hb-beats { flex:1; display:flex; gap:3px; align-items:center; }
-.h-hb-beat { flex:1; border-radius:2px; transition:all 0.08s; background:rgba(255,255,255,0.06); }
-.h-hb-status { font-family:'Orbitron',sans-serif; font-size:9px; letter-spacing:1px; color:rgba(255,255,255,0.2); }
-
-.h-section { background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.07); border-radius:16px; padding:16px; margin-bottom:12px; }
-.h-sec-title { font-family:'Orbitron',sans-serif; font-size:9px; letter-spacing:3px; color:rgba(255,255,255,0.2); margin-bottom:14px; display:flex; align-items:center; gap:8px; }
-.h-sec-dot { width:5px; height:5px; border-radius:50%; flex-shrink:0; }
-.h-sg { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
-.h-metric { background:linear-gradient(135deg,rgba(255,255,255,0.04),rgba(255,255,255,0.01)); border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:14px 16px; position:relative; overflow:hidden; }
-.h-metric-line { position:absolute; top:0; left:0; right:0; height:2px; opacity:0.8; }
-.h-metric-label { font-size:9px; font-weight:600; letter-spacing:2px; color:rgba(255,255,255,0.35); margin-bottom:8px; text-transform:uppercase; }
-.h-metric-row { display:flex; align-items:baseline; gap:6px; }
-.h-metric-val { font-family:'Orbitron',sans-serif; font-size:26px; font-weight:700; color:#fff; line-height:1; letter-spacing:-1px; }
-.h-metric-unit { font-size:11px; font-weight:600; letter-spacing:1px; }
-.h-metric-bar { height:3px; background:rgba(255,255,255,0.06); border-radius:2px; overflow:hidden; margin-top:10px; }
-.h-metric-bar-fill { height:100%; border-radius:2px; transition:width 0.4s cubic-bezier(0.4,0,0.2,1); }
-
-.h-gg-row { display:flex; gap:12px; align-items:center; margin-top:10px; }
-.h-gg-wrap { width:130px; height:130px; flex-shrink:0; }
-.h-gg-canvas { width:100%; height:100%; border-radius:12px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.07); }
-.h-gg-labels { flex:1; display:flex; flex-direction:column; gap:6px; }
-.h-gg-vl { font-size:9px; font-weight:600; letter-spacing:2px; color:rgba(255,255,255,0.25); }
-.h-gg-v { font-family:'Orbitron',sans-serif; font-size:15px; font-weight:700; color:#fff; }
-
-.h-cmd-row { display:flex; gap:8px; }
-.h-cmd-pill { flex:1; background:rgba(0,0,0,0.4); border-radius:10px; padding:12px 10px; text-align:center; position:relative; overflow:hidden; }
-.h-cmd-glow { position:absolute; inset:0; }
-.h-cmd-label { font-size:8px; font-weight:600; letter-spacing:2px; color:rgba(255,255,255,0.3); margin-bottom:6px; text-transform:uppercase; position:relative; }
-.h-cmd-val { font-family:'Orbitron',sans-serif; font-size:22px; font-weight:800; line-height:1; position:relative; }
-
-.h-mis-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:14px; }
-.h-mis-btn { padding:10px 6px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.07); border-radius:10px; color:rgba(255,255,255,0.45); font-family:'Orbitron',sans-serif; font-size:8px; letter-spacing:1px; font-weight:700; cursor:pointer; }
-.h-mis-btn.sel { background:rgba(255,149,0,0.12); border-color:rgba(255,149,0,0.5); color:#ff9500; text-shadow:0 0 10px #ff9500; }
-.h-ctrl-row { display:flex; gap:8px; }
-.h-ctrl { flex:1; padding:14px; border-radius:12px; font-family:'Orbitron',sans-serif; font-size:11px; font-weight:900; letter-spacing:3px; cursor:pointer; border:2px solid; }
-.h-ctrl:active { transform:scale(0.96); }
-.h-ctrl.go { background:transparent; border-color:rgba(57,255,20,0.3); color:rgba(57,255,20,0.5); text-shadow:none; }
-.h-ctrl.go.on { background:rgba(57,255,20,0.15); border-color:rgba(57,255,20,0.6); color:#39ff14; text-shadow:0 0 15px #39ff14; box-shadow:0 0 20px rgba(57,255,20,0.15); }
-.h-ctrl.stop { background:transparent; border-color:rgba(255,48,96,0.2); color:rgba(255,48,96,0.4); text-shadow:none; }
-.h-ctrl.stop.on { background:rgba(255,48,96,0.1); border-color:rgba(255,48,96,0.4); color:#ff3060; text-shadow:0 0 15px #ff3060; }
-.h-ctrl.ebs { background:transparent; border-color:rgba(255,170,0,0.2); color:rgba(255,170,0,0.4); text-shadow:none; }
-.h-ctrl.ebs.on { background:rgba(255,170,0,0.1); border-color:rgba(255,170,0,0.4); color:#ffaa00; text-shadow:0 0 15px #ffaa00; }
-.h-footer { text-align:center; font-family:'Orbitron',sans-serif; font-size:8px; letter-spacing:3px; color:rgba(255,255,255,0.1); margin-top:4px; }
-
-.h-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; }
-.h-subtitle { font-family:'Orbitron',sans-serif; font-size:10px; letter-spacing:5px; color:rgba(255,255,255,0.25); margin-bottom:4px; }
-.h-title { font-family:'Orbitron',sans-serif; font-size:22px; font-weight:900; letter-spacing:3px; color:#fff; text-shadow:0 0 30px rgba(0,180,255,0.5); line-height:1; }
-.h-tabs { display:flex; gap:6px; margin-bottom:16px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.07); border-radius:12px; padding:6px; }
-.h-tab { flex:1; padding:8px 4px; background:transparent; border:1px solid transparent; border-radius:8px; color:rgba(255,255,255,0.3); font-family:'Orbitron',sans-serif; font-size:9px; letter-spacing:1.5px; font-weight:700; cursor:pointer; transition:all 0.2s; }
-.h-tab.active { background:rgba(0,180,255,0.15); border-color:rgba(0,180,255,0.4); color:#00b4ff; text-shadow:0 0 15px #00b4ff; }
-`,
-  render() {
-    const hbHeights = [4,4,4,4,8,14,14,8,4,4,4,4];
-    const hbSegs = hbHeights.map((h,i) => `<div class="h-hb-beat" id="hhb${i}" style="height:${h}px"></div>`).join('');
-    return `<div class="h-wrap">
-  <div class="h-header">
-    <div><div class="h-subtitle">FORMULA STUDENT</div><div class="h-title">UM DRIVERLESS</div></div>
-    <div class="h-status-pill" id="hStatusPill"><div class="h-status-dot" id="hStatusDot"></div><span class="h-status-text" id="hStatusText">STANDBY</span></div>
-  </div>
-
-  <div class="h-tabs" id="hTabs"><button class="h-tab active" data-st="idle">IDLE</button><button class="h-tab" data-st="manual">MANUAL</button><button class="h-tab" data-st="auto">AUTONOMOUS</button></div>
-
-  <div class="h-hb-bar"><div class="h-hb-label">HEARTBEAT</div><div class="h-hb-beats">${hbSegs}</div><div class="h-hb-status" id="hHbStatus">--</div></div>
-
-  <div class="h-section">
-    <div class="h-sec-title"><div class="h-sec-dot" style="background:#00b4ff;box-shadow:0 0 6px #00b4ff"></div>ESP32 SENSORS</div>
-    <div class="h-sg">
-      <div class="h-metric"><div class="h-metric-line" style="background:linear-gradient(90deg,transparent,#00b4ff,transparent)"></div><div class="h-metric-label">STEERING</div><div class="h-metric-row"><span class="h-metric-val" id="hsSteer">0.0</span><span class="h-metric-unit" style="color:#00b4ff">°</span></div><div class="h-metric-bar"><div class="h-metric-bar-fill" id="hbSteer" style="background:linear-gradient(90deg,#00b4ff88,#00b4ff);box-shadow:0 0 8px #00b4ff;width:0%"></div></div></div>
-      <!-- Speed: no sensor yet
-      <div class="h-metric"><div class="h-metric-line" style="background:linear-gradient(90deg,transparent,#39ff14,transparent)"></div><div class="h-metric-label">SPEED</div><div class="h-metric-row"><span class="h-metric-val" id="hsSpeed">0.0</span><span class="h-metric-unit" style="color:#39ff14">km/h</span></div><div class="h-metric-bar"><div class="h-metric-bar-fill" id="hbSpeed" style="background:linear-gradient(90deg,#39ff1488,#39ff14);box-shadow:0 0 8px #39ff14;width:0%"></div></div></div>
-      -->
-      <div class="h-metric"><div class="h-metric-line" style="background:linear-gradient(90deg,transparent,#ff9500,transparent)"></div><div class="h-metric-label">THROTTLE</div><div class="h-metric-row"><span class="h-metric-val" id="hsThr">0</span><span class="h-metric-unit" style="color:#ff9500">%</span></div><div class="h-metric-bar"><div class="h-metric-bar-fill" id="hbThr" style="background:linear-gradient(90deg,#ff950088,#ff9500);box-shadow:0 0 8px #ff9500;width:0%"></div></div></div>
-      <div class="h-metric"><div class="h-metric-line" style="background:linear-gradient(90deg,transparent,#ff3060,transparent)"></div><div class="h-metric-label">BRAKING</div><div class="h-metric-row"><span class="h-metric-val" id="hsBrk">0</span><span class="h-metric-unit" style="color:#ff3060">%</span></div><div class="h-metric-bar"><div class="h-metric-bar-fill" id="hbBrk" style="background:linear-gradient(90deg,#ff306088,#ff3060);box-shadow:0 0 8px #ff3060;width:0%"></div></div></div>
-    </div>
-    <div class="h-gg-row">
-      <div class="h-gg-wrap"><canvas class="h-gg-canvas" id="ggCanvas" width="130" height="130"></canvas></div>
-      <div class="h-gg-labels"><div><div class="h-gg-vl">LATERAL</div><div class="h-gg-v" id="hALat">0.00 g</div></div><div><div class="h-gg-vl">LONGITUDINAL</div><div class="h-gg-v" id="hALon">0.00 g</div></div><div><div class="h-gg-vl">TOTAL</div><div class="h-gg-v" id="hATotal">0.00 g</div></div></div>
-    </div>
-  </div>
-
-  <div class="h-section">
-    <div class="h-sec-title"><div class="h-sec-dot" style="background:#b44fff;box-shadow:0 0 6px #b44fff"></div>ORIN COMMANDS</div>
-    <div class="h-cmd-row">
-      <div class="h-cmd-pill" style="border:1px solid #39ff1422"><div class="h-cmd-glow" style="background:radial-gradient(ellipse at 50% 0%,#39ff1410,transparent 70%)"></div><div class="h-cmd-label">Throttle</div><div class="h-cmd-val" style="color:#39ff14;text-shadow:0 0 20px #39ff14" id="hcThr">0</div></div>
-      <div class="h-cmd-pill" style="border:1px solid #ff306022"><div class="h-cmd-glow" style="background:radial-gradient(ellipse at 50% 0%,#ff306010,transparent 70%)"></div><div class="h-cmd-label">Brake</div><div class="h-cmd-val" style="color:#ff3060;text-shadow:0 0 20px #ff3060" id="hcBrk">0</div></div>
-      <div class="h-cmd-pill" style="border:1px solid #00b4ff22"><div class="h-cmd-glow" style="background:radial-gradient(ellipse at 50% 0%,#00b4ff10,transparent 70%)"></div><div class="h-cmd-label">Steering</div><div class="h-cmd-val" style="color:#00b4ff;text-shadow:0 0 20px #00b4ff" id="hcStr">0.0°</div></div>
-    </div>
-  </div>
-
-  <div class="h-section">
-    <div class="h-sec-title"><div class="h-sec-dot" style="background:#ff9500;box-shadow:0 0 6px #ff9500"></div>MISSION SELECT</div>
-    <div class="h-mis-grid" id="misGrid">
-      <button class="h-mis-btn sel" data-m="manual">MANUAL</button><button class="h-mis-btn" data-m="remote_control">REMOTE</button><button class="h-mis-btn" data-m="inspection">INSPECT</button>
-      <button class="h-mis-btn" data-m="autonomous">AUTO</button><button class="h-mis-btn" data-m="acceleration">ACCEL</button><button class="h-mis-btn" data-m="skidpad">SKIDPAD</button><button class="h-mis-btn" data-m="autocross">AUTOCROSS</button><button class="h-mis-btn" data-m="trackdrive">TRACKDRIVE</button>
-    </div>
-    <div class="algo-select"><div class="algo-label">Steering</div><select class="algo-dropdown" onchange="onAlgoChange(this)"><option value="geometric">Geometric</option><option value="pure_pursuit">Pure Pursuit</option><option value="stanley">Stanley</option><option value="neural_v2">Neural V2</option><option value="mpc">MPC</option></select></div>
-    <div class="algo-select"><div class="algo-label">Speed</div><select class="algo-dropdown speed-algo-dropdown" onchange="onSpeedAlgoChange(this)"><option value="curve_factor">Curve Factor</option><option value="constant">Constant</option><option value="constant_stop">Constant + Stop</option><option value="neural_v2">Neural V2</option><option value="zero">Zero</option></select></div>
-    <div class="algo-select svo-select" style="display:none"><div class="algo-label">Video Input</div><select class="algo-dropdown svo-dropdown" onchange="onSvoChange(this)"><option value="live">Live Camera</option></select></div>
-    <div class="h-ctrl-row">
-      <button class="h-ctrl go" data-st="running" onclick="wsSend({action:'set_state',state:'running'})">START</button>
-      <button class="h-ctrl stop" data-st="idle" onclick="wsSend({action:'set_state',state:'idle'})">STOP</button>
-      <button class="h-ctrl ebs" data-st="ebs" onclick="wsSend({action:'set_state',state:'ebs'})">EBS</button>
-      <button class="h-ctrl restart" onclick="if(confirm('Restart kart-brain service?'))wsSend({action:'restart'})" style="color:#9b59b6;border-color:rgba(155,89,182,0.4)">RESTART</button>
-    </div>
-  </div>
-  <div class="h-footer">UNIVERSIDAD DE MALAGA · FSAE AUTONOMOUS · v2.4.1</div>
-</div>`; },
-
-  init() {
-    // Heartbeat animation
-    let hbTick = false;
-    const hbId = setInterval(() => {
-      hbTick = !hbTick;
-      const hbS = $('hHbStatus');
-      const alive = lastData && lastData.esp32_heartbeat;
-      if (alive) {
-        hbS.style.color = '#ff3060'; hbS.textContent = 'OK';
-        for (let i=0;i<12;i++) {
-          const el = $('hhb'+i);
-          if ((i===5||i===6)&&hbTick) { el.style.background='#ff3060'; el.style.boxShadow='0 0 6px #ff3060'; }
-          else { el.style.background='rgba(255,48,96,0.3)'; el.style.boxShadow='none'; }
-        }
-      } else {
-        hbS.style.color='rgba(255,255,255,0.2)'; hbS.textContent='--';
-        for (let i=0;i<12;i++) { $('hhb'+i).style.background='rgba(255,255,255,0.06)'; $('hhb'+i).style.boxShadow='none'; }
-      }
-    }, 90);
-
-    $('misGrid').addEventListener('click', missionClick);
-    drawGGhud(0, 0);
-    return () => clearInterval(hbId);
-  },
-
-  update(d) {
-    $('hsSteer').textContent = deg(d.esp32_steering_rad);
-    // $('hsSpeed').textContent = (d.esp32_speed*3.6).toFixed(1); // no sensor yet
-    $('hsThr').textContent = Math.round(d.esp32_throttle*100);
-    $('hsBrk').textContent = Math.round(d.esp32_braking*100);
-    $('hbSteer').style.width = Math.min(Math.abs(d.esp32_steering_rad)/1*100,100)+'%';
-    // $('hbSpeed').style.width = Math.min(d.esp32_speed/30*100,100)+'%'; // no sensor yet
-    $('hbThr').style.width = (d.esp32_throttle*100)+'%';
-    $('hbBrk').style.width = (d.esp32_braking*100)+'%';
-
-    const latG = d.esp32_accel_lat/9.81, lonG = d.esp32_accel_lon/9.81;
-    drawGGhud(latG, lonG);
-    $('hALat').textContent = latG.toFixed(2)+' g';
-    $('hALon').textContent = lonG.toFixed(2)+' g';
-    $('hATotal').textContent = Math.sqrt(latG*latG+lonG*lonG).toFixed(2)+' g';
-
-    $('hcThr').textContent = Math.round(d.orin_cmd_throttle*100)+'%';
-    $('hcBrk').textContent = Math.round(d.orin_cmd_brake*100)+'%';
-    $('hcStr').textContent = deg(d.orin_cmd_steering_rad)+'°';
-
-    // Status pill
-    const dot = $('hStatusDot'), txt = $('hStatusText'), pill = $('hStatusPill');
-    if (d.state === 'ebs') {
-      pill.style.background='rgba(255,48,96,0.15)'; pill.style.border='1px solid rgba(255,48,96,0.4)';
-      dot.style.background='#ff3060'; dot.style.boxShadow='0 0 10px #ff3060'; dot.classList.remove('pulse');
-      txt.style.color='#ff3060'; txt.textContent='EBS ACTIVE';
-    } else if (d.state === 'running') {
-      pill.style.background='rgba(57,255,20,0.12)'; pill.style.border='1px solid rgba(57,255,20,0.4)';
-      dot.style.background='#39ff14'; dot.style.boxShadow='0 0 10px #39ff14'; dot.classList.add('pulse');
-      txt.style.color='#39ff14'; txt.textContent='RUNNING';
-    } else {
-      pill.style.background='rgba(255,170,0,0.12)'; pill.style.border='1px solid rgba(255,170,0,0.35)';
-      dot.style.background='#ffaa00'; dot.style.boxShadow='0 0 10px #ffaa00'; dot.classList.remove('pulse');
-      txt.style.color='#ffaa00'; txt.textContent='STANDBY';
-    }
-
-    document.querySelectorAll('.h-mis-btn').forEach(b => b.classList.toggle('sel', b.dataset.m === d.mission));
-    const stMap = {idle:'idle',running:'auto',ebs:'idle'};
-    document.querySelectorAll('.h-tab').forEach(b => b.classList.toggle('active', b.dataset.st === (stMap[d.state]||'idle')));
-    updateStateButtons(d);
-  }
-};
-
-// ═══════════════════════════════════════════════════════
-// SKIN: ARTEMIS — NASA Mission Control futuristic
-// ═══════════════════════════════════════════════════════
-const skinArtemis = {
-  name: 'Artemis',
-  css: `
-body { font-family:'JetBrains Mono',monospace; background:#04060b; color:#f1f5f9; background-image:radial-gradient(ellipse at 50% 0%,rgba(0,208,255,0.04) 0%,transparent 60%), linear-gradient(rgba(0,167,204,0.018) 1px,transparent 1px), linear-gradient(90deg,rgba(0,167,204,0.018) 1px,transparent 1px); background-size:100% 100%, 40px 40px, 40px 40px; }
-#topbar { border-bottom:1px solid rgba(0,167,204,0.15); padding-bottom:8px; }
-#healthBar { color:rgba(117,136,163,0.6) !important; font-family:'JetBrains Mono',monospace !important; }
-#dbgToggle { background:rgba(8,14,24,0.95) !important; border-color:rgba(0,167,204,0.15) !important; color:rgba(117,136,163,0.5) !important; border-radius:8px !important; font-family:'JetBrains Mono',monospace !important; }
-#dbgBody { background:rgba(4,6,11,0.95) !important; border-color:rgba(0,167,204,0.15) !important; color:#00d0ff !important; font-family:'JetBrains Mono',monospace !important; border-radius:0 0 8px 8px !important; }
-#topbarTitle { color:#00d0ff; font-family:'Orbitron',monospace; font-weight:900; font-size:14px; letter-spacing:3px; text-transform:uppercase; text-shadow:0 0 20px rgba(0,208,255,0.3); position:relative; padding-bottom:6px; }
-#topbarTitle::after { content:''; position:absolute; bottom:0; left:0; width:60px; height:1px; background:linear-gradient(90deg,#00d0ff,transparent); }
-.conn-dot { background:#ff4444; box-shadow:0 0 8px rgba(255,68,68,0.5); animation:a-blink 2s ease-in-out infinite; }
-.conn-dot.ok { background:#00ff88; box-shadow:0 0 8px rgba(0,255,136,0.5); animation:a-blink 2s ease-in-out infinite; }
-@keyframes a-blink { 0%,100% { opacity:1; } 50% { opacity:0.5; } }
-.skin-btn { background:rgba(0,208,255,0.06); border:1px solid rgba(0,167,204,0.25); border-radius:6px; color:rgba(0,208,255,0.6); font-family:'JetBrains Mono',monospace; font-weight:500; letter-spacing:1px; transition:all 0.2s; }
-.skin-btn:hover { background:rgba(0,208,255,0.12); border-color:rgba(0,167,204,0.4); }
-.skin-dropdown { background:rgba(8,14,24,0.98); border:1px solid rgba(0,167,204,0.25); border-radius:8px; overflow:hidden; backdrop-filter:blur(10px); }
-.skin-option { background:transparent; color:rgba(117,136,163,0.7); font-family:'JetBrains Mono',monospace; font-weight:400; font-size:11px; transition:all 0.15s; }
-.skin-option:hover { background:rgba(0,208,255,0.08); color:#00d0ff; }
-.skin-option.active { color:#00d0ff; }
-#hudStream { border-radius:10px !important; border:1px solid rgba(0,167,204,0.15) !important; }
-
-/* Status strip */
-.a-strip { display:grid; grid-template-columns:repeat(3,1fr); gap:0; border:1px solid rgba(0,167,204,0.25); border-radius:12px; overflow:hidden; margin-bottom:12px; box-shadow:0 0 15px rgba(0,208,255,0.04); }
-.a-cell { background:linear-gradient(180deg,rgba(8,14,24,0.95),rgba(4,8,16,0.95)); padding:12px 6px; text-align:center; border-right:1px solid rgba(0,167,204,0.1); }
-.a-cell:last-child { border-right:none; }
-.a-cell-lbl { font-size:8px; color:rgba(117,136,163,0.5); text-transform:uppercase; letter-spacing:2px; margin-bottom:4px; }
-.a-cell-val { font-size:15px; font-weight:700; color:#00d0ff; text-shadow:0 0 10px rgba(0,208,255,0.3); }
-.a-cell-val.green { color:#00ff88; text-shadow:0 0 8px rgba(0,255,136,0.3); }
-.a-cell-val.red { color:#ff4444; text-shadow:0 0 8px rgba(255,68,68,0.3); }
-.a-cell-val.amber { color:#ffb800; text-shadow:0 0 8px rgba(255,184,0,0.3); }
-
-/* Cards */
-.a-card { background:linear-gradient(180deg,rgba(8,14,24,0.95),rgba(4,8,16,0.95)); border:1px solid rgba(0,167,204,0.25); border-radius:14px; padding:18px; margin-bottom:12px; position:relative; overflow:hidden; box-shadow:0 0 20px rgba(0,208,255,0.04), inset 0 1px 0 rgba(0,208,255,0.08); transition:border-color 0.3s, box-shadow 0.3s; }
-.a-card:hover { border-color:rgba(0,167,204,0.35); box-shadow:0 0 25px rgba(0,208,255,0.07), inset 0 1px 0 rgba(0,208,255,0.1); }
-.a-card::before { content:''; position:absolute; top:0; left:20px; right:20px; height:1px; background:linear-gradient(90deg,transparent,rgba(0,208,255,0.5),transparent); }
-.a-card::after { content:''; position:absolute; top:6px; left:6px; width:12px; height:12px; border-top:1px solid rgba(0,208,255,0.25); border-left:1px solid rgba(0,208,255,0.25); border-radius:2px 0 0 0; pointer-events:none; }
-.a-card-t::after { content:''; position:absolute; bottom:6px; right:6px; width:12px; height:12px; border-bottom:1px solid rgba(0,208,255,0.25); border-right:1px solid rgba(0,208,255,0.25); border-radius:0 0 2px 0; pointer-events:none; }
-.a-card-t { font-family:'Orbitron',monospace; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:3px; color:#00d0ff; margin-bottom:14px; display:flex; align-items:center; gap:8px; text-shadow:0 0 10px rgba(0,208,255,0.3); position:static; }
-.a-card-t::before { content:'//'; color:rgba(0,208,255,0.3); font-family:'JetBrains Mono',monospace; font-weight:400; }
-.a-card-t::after { content:''; position:absolute; bottom:6px; right:6px; width:12px; height:12px; border-bottom:1px solid rgba(0,208,255,0.25); border-right:1px solid rgba(0,208,255,0.25); border-radius:0 0 2px 0; pointer-events:none; }
-
-/* Telemetry grid */
-.a-tg { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
-.a-ti { background:linear-gradient(180deg,rgba(0,208,255,0.04),rgba(0,208,255,0.01)); border:1px solid rgba(0,167,204,0.12); border-radius:10px; padding:14px; position:relative; overflow:hidden; box-shadow:inset 0 1px 0 rgba(0,208,255,0.06); }
-.a-tl { font-size:8px; color:rgba(117,136,163,0.5); text-transform:uppercase; letter-spacing:2px; font-weight:400; margin-bottom:8px; }
-.a-tv { font-size:32px; font-weight:300; font-variant-numeric:tabular-nums; letter-spacing:-1px; line-height:1; color:#00d0ff; text-shadow:0 0 15px rgba(0,208,255,0.3); }
-.a-tu { font-size:9px; color:rgba(117,136,163,0.4); font-weight:400; letter-spacing:1px; margin-left:2px; }
-.a-ti-bar { position:absolute; bottom:0; left:0; right:0; height:2px; background:rgba(0,167,204,0.1); }
-.a-ti-bar-fill { position:absolute; height:100%; transition:width 0.4s cubic-bezier(0.4,0,0.2,1), left 0.4s cubic-bezier(0.4,0,0.2,1); border-radius:1px; }
-
-/* Section divider */
-.a-divider { height:1px; background:linear-gradient(90deg,transparent,rgba(0,167,204,0.15),transparent); margin:14px 0; }
-
-/* G-G diagram */
-.a-gg-row { display:flex; gap:14px; align-items:center; margin-top:0; }
-.a-gg-wrap { position:relative; width:140px; height:140px; flex-shrink:0; }
-.a-gg-canvas { width:100%; height:100%; border-radius:50%; background:radial-gradient(circle,rgba(0,208,255,0.04),rgba(0,208,255,0.01)); border:1px solid rgba(0,167,204,0.15); box-shadow:0 0 20px rgba(0,208,255,0.05); }
-.a-gg-labels { flex:1; display:flex; flex-direction:column; gap:6px; }
-.a-gg-vl { font-size:8px; color:rgba(117,136,163,0.5); text-transform:uppercase; letter-spacing:2px; font-weight:400; }
-.a-gg-v { font-size:18px; font-weight:300; font-variant-numeric:tabular-nums; letter-spacing:-0.5px; color:#00d0ff; text-shadow:0 0 8px rgba(0,208,255,0.2); }
-
-/* Pedals */
-.a-ped-row { display:flex; gap:10px; margin-top:12px; }
-.a-ped-item { flex:1; }
-.a-ped-lbl { font-size:8px; color:rgba(117,136,163,0.5); text-transform:uppercase; letter-spacing:2px; font-weight:400; margin-bottom:6px; display:flex; justify-content:space-between; align-items:baseline; }
-.a-ped-item:first-child .a-ped-lbl { color:rgba(0,255,136,0.4); }
-.a-ped-item:last-child .a-ped-lbl { color:rgba(255,68,68,0.4); }
-.a-ped-lbl span { color:#00d0ff; font-weight:400; font-size:18px; font-variant-numeric:tabular-nums; letter-spacing:-0.5px; text-shadow:0 0 8px rgba(0,208,255,0.2); }
-.a-ped-track { width:100%; height:6px; background:rgba(0,167,204,0.06); border-radius:3px; overflow:hidden; border:1px solid rgba(0,167,204,0.08); }
-.a-ped-fill { height:100%; border-radius:3px; transition:width 0.4s cubic-bezier(0.4,0,0.2,1); }
-.a-ped-fill.thr { background:linear-gradient(90deg,#00cc6a,#00ff88); box-shadow:0 0 8px rgba(0,255,136,0.3); }
-.a-ped-fill.brk { background:linear-gradient(90deg,#cc3333,#ff4444); box-shadow:0 0 8px rgba(255,68,68,0.3); }
-
-/* Targets */
-.a-trg-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; }
-.a-trg-item { background:linear-gradient(180deg,rgba(0,208,255,0.04),rgba(0,208,255,0.01)); border:1px solid rgba(0,167,204,0.12); border-radius:10px; padding:14px 8px; text-align:center; box-shadow:inset 0 1px 0 rgba(0,208,255,0.06); }
-.a-trg-lbl { font-size:8px; color:rgba(117,136,163,0.5); text-transform:uppercase; letter-spacing:2px; font-weight:400; margin-bottom:8px; }
-.a-trg-val { font-size:26px; font-weight:300; font-variant-numeric:tabular-nums; color:#ffb800; letter-spacing:-0.5px; line-height:1; text-shadow:0 0 12px rgba(255,184,0,0.25); }
-
-/* Mission buttons */
-.a-mis-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:5px; }
-.a-mis-btn { padding:11px 4px; border-radius:8px; border:1px solid rgba(0,167,204,0.12); background:rgba(0,208,255,0.02); color:rgba(117,136,163,0.5); font-size:9px; font-weight:500; letter-spacing:1px; text-transform:uppercase; cursor:pointer; text-align:center; -webkit-user-select:none; user-select:none; font-family:'JetBrains Mono',monospace; transition:all 0.2s; }
-.a-mis-btn:active { transform:scale(0.96); }
-.a-mis-btn:hover { border-color:rgba(0,167,204,0.35); color:rgba(0,208,255,0.6); background:rgba(0,208,255,0.04); }
-.a-mis-btn.sel { border-color:#00d0ff; background:rgba(0,208,255,0.1); color:#00d0ff; box-shadow:0 0 16px rgba(0,208,255,0.15), inset 0 0 12px rgba(0,208,255,0.05); }
-
-/* Control buttons */
-.a-ctrl-row { display:flex; gap:5px; margin-top:10px; }
-.a-ctrl-btn { flex:1; padding:12px 6px; border-radius:10px; border:1px solid; font-size:10px; font-weight:600; letter-spacing:2px; cursor:pointer; text-transform:uppercase; -webkit-user-select:none; user-select:none; font-family:'JetBrains Mono',monospace; transition:all 0.15s; }
-.a-ctrl-btn:active { transform:scale(0.96); }
-.a-ctrl-btn.go { background:transparent; border-color:rgba(0,255,136,0.2); color:rgba(0,255,136,0.6); }
-.a-ctrl-btn.go:hover { border-color:rgba(0,255,136,0.5); }
-.a-ctrl-btn.go.on { background:rgba(0,255,136,0.15); border-color:#00ff88; color:#00ff88; box-shadow:0 0 15px rgba(0,255,136,0.2); }
-.a-ctrl-btn.stop { background:transparent; border-color:rgba(117,136,163,0.2); color:rgba(117,136,163,0.5); }
-.a-ctrl-btn.stop.on { background:rgba(255,68,68,0.15); border-color:#ff4444; color:#ff4444; box-shadow:0 0 15px rgba(255,68,68,0.2); }
-.a-ctrl-btn.ebs { background:transparent; border-color:rgba(255,184,0,0.2); color:rgba(255,184,0,0.6); }
-.a-ctrl-btn.ebs.on { background:rgba(255,184,0,0.15); border-color:#ffb800; color:#ffb800; box-shadow:0 0 15px rgba(255,184,0,0.2); }
-.a-ctrl-btn.restart { background:transparent; border-color:rgba(155,89,182,0.2); color:rgba(155,89,182,0.5); font-size:8px; }
-.a-ctrl-btn.restart:active { background:rgba(155,89,182,0.1); }
-
-/* Steering bar */
-.a-steer-bg { width:100%; height:18px; background:rgba(0,167,204,0.04); border:1px solid rgba(0,167,204,0.12); border-radius:9px; position:relative; overflow:hidden; margin-top:12px; }
-.a-steer-ctr { position:absolute; left:50%; top:0; bottom:0; width:1px; background:rgba(0,167,204,0.3); transform:translateX(-50%); }
-.a-steer-fill { position:absolute; top:2px; bottom:2px; background:#00d0ff; border-radius:6px; transition:left 0.1s, width 0.1s; box-shadow:0 0 8px rgba(0,208,255,0.4); }
-.a-steer-cmd { position:absolute; top:0; bottom:0; width:2px; background:#ffb800; transition:left 0.1s; box-shadow:0 0 6px rgba(255,184,0,0.5); }
-
-/* Algo selects */
-.algo-select { margin:8px 0; }
-.algo-dropdown { background:#060a12; border:1px solid rgba(0,167,204,0.2); border-radius:8px; color:#00d0ff; font-family:'JetBrains Mono',monospace; }
-.algo-dropdown:focus { border-color:#00d0ff; box-shadow:0 0 0 2px rgba(0,208,255,0.15); }
-.algo-dropdown option { background:#060a12; color:#f1f5f9; }
-.algo-label { color:rgba(117,136,163,0.5); font-family:'JetBrains Mono',monospace; }
-
-/* Ambient glow animation */
-@keyframes a-pulse { 0%,100% { opacity:0.15; } 50% { opacity:0.3; } }
-.a-card:first-child { box-shadow:0 0 20px rgba(0,208,255,0.03), inset 0 1px 0 rgba(0,208,255,0.08), 0 0 40px rgba(0,208,255,0.02); }
-`,
-  render() { return `<div class="container">
-  <div class="a-strip">
-    <div class="a-cell"><div class="a-cell-lbl">State</div><div class="a-cell-val" id="pillState">IDLE</div></div>
-    <div class="a-cell"><div class="a-cell-lbl">Mission</div><div class="a-cell-val" id="pillMission">MANUAL</div></div>
-    <div class="a-cell"><div class="a-cell-lbl">Heartbeat</div><div class="a-cell-val" id="pillHb">--</div></div>
-  </div>
-  <div class="a-card"><div class="a-card-t">Mission Control</div>
-    <div class="a-mis-grid" id="misGrid"><button class="a-mis-btn mis-btn sel" data-m="manual">Manual</button><button class="a-mis-btn mis-btn" data-m="remote_control">Remote</button><button class="a-mis-btn mis-btn" data-m="inspection">Inspect</button><button class="a-mis-btn mis-btn" data-m="autonomous">Auto</button><button class="a-mis-btn mis-btn" data-m="acceleration">Accel</button><button class="a-mis-btn mis-btn" data-m="skidpad">Skidpad</button><button class="a-mis-btn mis-btn" data-m="autocross">Autocross</button><button class="a-mis-btn mis-btn" data-m="trackdrive">Trackdrive</button></div>
-    <div class="algo-select svo-select" style="display:none"><div class="algo-label">Video Input</div><select class="algo-dropdown svo-dropdown" onchange="onSvoChange(this)"><option value="live">Live Camera</option></select></div>
-    <div class="algo-select"><div class="algo-label">Steering</div><select class="algo-dropdown" onchange="onAlgoChange(this)"><option value="geometric">Geometric</option><option value="pure_pursuit">Pure Pursuit</option><option value="stanley">Stanley</option><option value="neural_v2">Neural V2</option><option value="mpc">MPC</option></select></div>
-    <div class="algo-select"><div class="algo-label">Speed</div><select class="algo-dropdown speed-algo-dropdown" onchange="onSpeedAlgoChange(this)"><option value="curve_factor">Curve Factor</option><option value="constant">Constant</option><option value="constant_stop">Constant + Stop</option><option value="neural_v2">Neural V2</option><option value="zero">Zero</option></select></div>
-    <div class="a-ctrl-row ctrl-row"><button class="a-ctrl-btn ctrl-btn go" data-st="running" onclick="wsSend({action:'set_state',state:'running'})">Start</button><button class="a-ctrl-btn ctrl-btn stop" data-st="idle" onclick="wsSend({action:'set_state',state:'idle'})">Stop</button><button class="a-ctrl-btn ctrl-btn ebs" data-st="ebs" onclick="wsSend({action:'set_state',state:'ebs'})">EBS</button><button class="a-ctrl-btn ctrl-btn restart" onclick="if(confirm('Restart kart-brain service?'))wsSend({action:'restart'})">Restart</button></div>
-  </div>
-  <div class="a-card"><div class="a-card-t">Telemetry</div>
-    <div class="a-tg">
-      <div class="a-ti"><div class="a-tl">Steering</div><div class="a-tv" id="vSteer">0.0<span class="a-tu">°</span></div><div class="a-ti-bar"><div class="a-ti-bar-fill" id="steerBarFill" style="width:0%;background:#00d0ff;box-shadow:0 0 6px rgba(0,208,255,0.4)"></div></div></div>
-      <div class="a-ti"><div class="a-tl">Speed</div><div class="a-tv" id="vSpeed">0.0<span class="a-tu">km/h</span></div><div class="a-ti-bar"><div class="a-ti-bar-fill" id="speedBarFill" style="width:0%;background:#00ff88;box-shadow:0 0 6px rgba(0,255,136,0.4)"></div></div></div>
-    </div>
-    <div class="a-steer-bg"><div class="a-steer-ctr"></div><div class="a-steer-fill" id="steerFill"></div><div class="a-steer-cmd" id="steerCmd" style="left:50%"></div></div>
-    <div class="a-divider"></div>
-    <div class="a-gg-row"><div class="a-gg-wrap"><canvas class="a-gg-canvas gg-canvas" id="ggCanvas" width="140" height="140"></canvas></div>
-    <div class="a-gg-labels"><div><div class="a-gg-vl">Lateral</div><div class="a-gg-v" id="vALat">0.00 g</div></div><div><div class="a-gg-vl">Longitudinal</div><div class="a-gg-v" id="vALon">0.00 g</div></div><div><div class="a-gg-vl">Total</div><div class="a-gg-v" id="vATotal">0.00 g</div></div></div></div>
-    <div class="a-divider"></div>
-    <div class="a-ped-row"><div class="a-ped-item"><div class="a-ped-lbl">Throttle <span id="vThr">0%</span></div><div class="a-ped-track"><div class="a-ped-fill thr" id="thrFill" style="width:0%"></div></div></div>
-    <div class="a-ped-item"><div class="a-ped-lbl">Brake <span id="vBrk">0%</span></div><div class="a-ped-track"><div class="a-ped-fill brk" id="brkFill" style="width:0%"></div></div></div></div>
-  </div>
-  <div class="a-card"><div class="a-card-t">Actuations</div><div class="a-trg-grid">
-    <div class="a-trg-item"><div class="a-trg-lbl">Steer PWM</div><div class="a-trg-val" id="aPwm">0%</div></div>
-    <div class="a-trg-item"><div class="a-trg-lbl">Throttle</div><div class="a-trg-val" id="aThr">0%</div></div>
-    <div class="a-trg-item"><div class="a-trg-lbl">Brake</div><div class="a-trg-val" id="aBrk">0%</div></div></div></div>
-  <div class="a-card"><div class="a-card-t">Targets</div><div class="a-trg-grid">
-    <div class="a-trg-item"><div class="a-trg-lbl">Steering</div><div class="a-trg-val" id="cSteer">0.0°</div></div>
-    <div class="a-trg-item"><div class="a-trg-lbl">Throttle</div><div class="a-trg-val" id="cThr">0%</div></div>
-    <div class="a-trg-item"><div class="a-trg-lbl">Brake</div><div class="a-trg-val" id="cBrk">0%</div></div></div></div>
-  </div>`; },
-
-  init() {
-    $('misGrid').addEventListener('click', missionClick);
-    drawGG(0, 0, 'rgba(0,167,204,0.2)', 'rgba(0,208,255,0.06)', '#00d0ff', 12);
-    return () => {};
-  },
-
-  update(d) {
-    $('vSteer').innerHTML = `${deg(d.esp32_steering_rad)}<span style="font-size:.5em;vertical-align:super;color:rgba(117,136,163,0.5)">°</span>` + (d.esp32_steering_raw != null ? ` <span class="a-tu" style="font-size:.4em;opacity:.5">raw ${d.esp32_steering_raw}</span>` : '');
-    $('vSpeed').innerHTML = `${(d.esp32_speed*3.6).toFixed(1)} <span class="a-tu">km/h</span>`;
-    const sPct = Math.max(-1, Math.min(1, steerScreen(d.esp32_steering_rad) / 0.5));
-    const sf = $('steerBarFill');
-    if (sPct >= 0) { sf.style.left='50%'; sf.style.width=(sPct*50)+'%'; }
-    else { sf.style.width=(-sPct*50)+'%'; sf.style.left=(50+sPct*50)+'%'; }
-    $('speedBarFill').style.width = Math.min(d.esp32_speed/30*100,100)+'%';
-    // Steering detail bar
-    updateSteerBar(d, 'steerFill', 'steerCmd');
-    const latG = d.esp32_accel_lat/9.81, lonG = d.esp32_accel_lon/9.81;
-    drawGG(latG, lonG, 'rgba(0,167,204,0.2)', 'rgba(0,208,255,0.06)', '#00d0ff', 12);
-    $('vALat').textContent = latG.toFixed(2)+' g';
-    $('vALon').textContent = lonG.toFixed(2)+' g';
-    $('vATotal').textContent = Math.sqrt(latG*latG+lonG*lonG).toFixed(2)+' g';
-    updatePedals(d); updateTargets(d); updateArtemisStatus(d); updateMissions(d); updateStateButtons(d);
-    $('aPwm').textContent = (Math.abs(d.esp32_steering_pwm || 0) * 100).toFixed(0) + '%';
-    $('aThr').textContent = ((d.esp32_throttle || 0) * 100).toFixed(0) + '%';
-    $('aBrk').textContent = ((d.esp32_braking || 0) * 100).toFixed(0) + '%';
-  }
-};
-
-function updateArtemisStatus(d) {
-  const ps = $('pillState');
-  ps.textContent = d.state.toUpperCase();
-  ps.className = 'a-cell-val' + (d.state === 'running' ? ' green' : '');
-  $('pillMission').textContent = d.mission.toUpperCase();
-  $('pillMission').className = 'a-cell-val green';
-  const ph = $('pillHb');
-  if (d.esp32_heartbeat_age < 0) { ph.textContent='--'; ph.className='a-cell-val'; }
-  else { ph.textContent = d.esp32_heartbeat ? d.esp32_heartbeat_age+'s' : 'LOST '+d.esp32_heartbeat_age+'s'; ph.className='a-cell-val '+(d.esp32_heartbeat?'green':'red'); }
-}
-
 // ═══════════════════════════════════════════════════════
 // SHARED HELPERS
 // ═══════════════════════════════════════════════════════
@@ -1833,27 +543,8 @@ function missionClick(e) {
 // both grow to the right, so flip the sign once here for every steering widget.
 function steerScreen(rad) { return -(rad || 0); }
 
-function updateSteerBar(d, fillId, cmdId) {
-  const maxRad = 1.047;
-  const pct = Math.max(-1, Math.min(1, steerScreen(d.esp32_steering_rad) / maxRad));
-  const fill = $(fillId);
-  if (pct >= 0) { fill.style.left='50%'; fill.style.width=(pct*50)+'%'; }
-  else { fill.style.width=(-pct*50)+'%'; fill.style.left=(50+pct*50)+'%'; }
-  const cmdPct = Math.max(-1, Math.min(1, steerScreen(d.orin_cmd_steering_rad) / maxRad));
-  $(cmdId).style.left = (50+cmdPct*50-0.5)+'%';
-}
 
-function updatePedals(d) {
-  const t=Math.round(d.esp32_throttle*100), b=Math.round(d.esp32_braking*100);
-  $('vThr').textContent=t+'%'; $('vBrk').textContent=b+'%';
-  $('thrFill').style.width=t+'%'; $('brkFill').style.width=b+'%';
-}
 
-function updateTargets(d) {
-  $('cSteer').textContent = deg(d.orin_cmd_steering_rad)+'°';
-  $('cThr').textContent = Math.round(d.orin_cmd_throttle*100)+'%';
-  $('cBrk').textContent = Math.round(d.orin_cmd_brake*100)+'%';
-}
 
 function updatePills(d) {
   const ps = $('pillState');
@@ -1949,80 +640,7 @@ function updateHealth(d) {
 }
 
 // Control XY pad (Default skin) — steering vs accel, target (orange) vs actual (blue)
-function updateControlPanel(d) {
-  const maxSteer = 0.5;  // rad, matches the steering-bar scale
-  const actSt = d.esp32_steering_rad || 0;
-  const tgtSt = d.orin_cmd_steering_rad || 0;
-  const actTh = d.esp32_throttle || 0;
-  const actBr = d.esp32_braking || 0;
-  const tgtTh = d.orin_cmd_throttle || 0;
-  const tgtBr = d.orin_cmd_brake || 0;
-  const actAx = actTh - actBr;   // signed accel: +throttle / -brake
-  const tgtAx = tgtTh - tgtBr;
-  drawControlPad(actSt, actAx, tgtSt, tgtAx, maxSteer);
-  const pct = v => Math.round(v*100)+'%';
-  $('cnTgtSt').textContent = deg(tgtSt)+'°';
-  $('cnActSt').textContent = deg(actSt)+'°';
-  $('cnDSt').textContent  = (tgtSt-actSt>=0?'+':'') + deg(tgtSt-actSt)+'°';
-  $('cnTgtTh').textContent = pct(tgtTh);
-  $('cnActTh').textContent = pct(actTh);
-  $('cnDTh').textContent  = (tgtTh-actTh>=0?'+':'') + pct(tgtTh-actTh);
-  $('cnTgtBr').textContent = pct(tgtBr);
-  $('cnActBr').textContent = pct(actBr);
-  $('cnDBr').textContent  = (tgtBr-actBr>=0?'+':'') + pct(tgtBr-actBr);
-  $('cnPwm').textContent  = Math.round(Math.abs(d.esp32_steering_pwm || 0)*100)+'%';
-}
 
-function drawControlPad(actSt, actAx, tgtSt, tgtAx, maxSteer) {
-  const canvas = $('ctrlPad'); if (!canvas) return;
-  const ctx = canvas.getContext('2d');
-  const W = canvas.width, H = canvas.height;
-  const PAD = 14;
-  const CX = W/2, CY = H/2;
-  const RX = (W-2*PAD)/2, RY = (H-2*PAD)/2;
-  ctx.clearRect(0,0,W,H);
-  // Frame + crosshairs
-  ctx.strokeStyle = '#2a2a3a'; ctx.lineWidth = 1;
-  ctx.strokeRect(PAD+0.5, PAD+0.5, W-2*PAD-1, H-2*PAD-1);
-  ctx.beginPath(); ctx.moveTo(PAD, CY); ctx.lineTo(W-PAD, CY); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(CX, PAD); ctx.lineTo(CX, H-PAD); ctx.stroke();
-  // 50% magnitude ring
-  ctx.strokeStyle = 'rgba(106,106,122,0.3)';
-  ctx.beginPath(); ctx.arc(CX, CY, Math.min(RX,RY)*0.5, 0, Math.PI*2); ctx.stroke();
-  // Axis labels
-  ctx.fillStyle = '#5a5a6a'; ctx.font = '9px Inter,sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText('THR', CX, PAD+10);
-  ctx.fillText('BRK', CX, H-PAD-2);
-  ctx.textAlign = 'left';   ctx.fillText('R', W-PAD+3, CY+3);
-  ctx.textAlign = 'right';  ctx.fillText('L', PAD-3, CY+3);
-  // Map to canvas coords (X: +steer_rad is a LEFT turn per REP 103 -> left of pad; Y: +accel -> up)
-  const clip = v => Math.max(-1, Math.min(1, v));
-  const nAx = clip(actSt/maxSteer), nAy = clip(actAx);
-  const nTx = clip(tgtSt/maxSteer), nTy = clip(tgtAx);
-  const xA = CX - nAx*RX, yA = CY - nAy*RY;
-  const xT = CX - nTx*RX, yT = CY - nTy*RY;
-  // Error line
-  ctx.strokeStyle = 'rgba(243,156,18,0.45)'; ctx.lineWidth = 1;
-  ctx.setLineDash([3,3]);
-  ctx.beginPath(); ctx.moveTo(xA, yA); ctx.lineTo(xT, yT); ctx.stroke();
-  ctx.setLineDash([]);
-  // Target marker (orange crosshair + dot)
-  ctx.strokeStyle = '#f39c12'; ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(xT-7, yT); ctx.lineTo(xT+7, yT);
-  ctx.moveTo(xT, yT-7); ctx.lineTo(xT, yT+7);
-  ctx.stroke();
-  ctx.fillStyle = '#f39c12';
-  ctx.beginPath(); ctx.arc(xT, yT, 2.5, 0, Math.PI*2); ctx.fill();
-  // Actual marker (blue filled dot with glow ring)
-  ctx.fillStyle = '#4a9eff';
-  ctx.shadowColor = '#4a9eff'; ctx.shadowBlur = 10;
-  ctx.beginPath(); ctx.arc(xA, yA, 6, 0, Math.PI*2); ctx.fill();
-  ctx.shadowBlur = 0;
-  ctx.strokeStyle = 'rgba(74,158,255,0.35)'; ctx.lineWidth = 1.5;
-  ctx.beginPath(); ctx.arc(xA, yA, 10, 0, Math.PI*2); ctx.stroke();
-}
 
 // Cenital (top-down) cone view (Default skin) — driven by /perception/cones_3d_ground.
 // Constants are workshop-tunable: if the workshop test shows cones mirrored or
@@ -2042,10 +660,6 @@ const CENITAL_CONE_COLORS = {
   large_orange_cone: '#ff4500',
 };
 
-function updateCenitalPanel(d) {
-  const canvas = $('cenitalPad'); if (!canvas) return;
-  drawCenital(canvas, d.cones_3d_ground || []);
-}
 
 function drawCenital(canvas, cones) {
   if (!canvas) return;
@@ -2479,6 +1093,7 @@ const skinRace = {
   name: 'Race',
   css: `
 :root{
+  --rail-item:36px;   /* height of one nav-rail slot; the drag maths reads this */
   --rc-void:#08080a; --rc-panel:#141416; --rc-raised:#1c1c1f;
   --rc-line:#2c2c2f; --rc-line-hard:#3a3a3d;
   --rc-red:#e2001a; --rc-red-glow:#ff2438; --rc-red-dark:#5c0009;
@@ -2501,7 +1116,10 @@ body{
 #manualWidget + div{ display:none !important; } /* empty home of the relocated #hudStream */
 
 /* topbar restyled as the mockup's, hazard stripe below */
-#topbar{ max-width:none; width:100%; margin:0; flex:none; padding:8px 16px 7px;
+/* Fixed height, so the bar is NOT driven by its tallest child. Without this a 48px power
+   button pushes the bar to 64px and every page loses 10px of dial height — and the dials
+   here are height-limited, so that comes straight off them. */
+#topbar{ max-width:none; width:100%; margin:0; flex:none; height:54px; padding:0 16px;
   background:var(--rc-panel); border-bottom:1px solid var(--rc-line); position:relative; z-index:10; }
 #topbar::after{ content:''; position:absolute; left:0; right:0; top:100%; height:5px;
   background:repeating-linear-gradient(-45deg, var(--rc-red) 0 8px, #0d0d0e 8px 16px); opacity:.9; }
@@ -2526,15 +1144,6 @@ body{
   33%      { box-shadow:0 0 26px 3px rgba(255,48,66,.98), inset 0 0 22px rgba(226,0,26,.5); border-color:#ff5566; }
   55%,100% { box-shadow:0 0 3px rgba(226,0,26,.2),  inset 0 0 3px rgba(226,0,26,.06); border-color:var(--rc-red-dark); }
 }
-.skin-btn{ background:var(--rc-raised); border:1px solid var(--rc-line-hard); color:var(--rc-white);
-  font-family:'Rajdhani',sans-serif; font-weight:700; letter-spacing:1.5px; text-transform:uppercase;
-  height:38px; padding:0 16px; font-size:12px;
-  clip-path:polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px)); }
-.skin-btn:active{ background:var(--rc-red-dark); }
-.skin-dropdown{ background:var(--rc-panel); border:1px solid var(--rc-line-hard); }
-.skin-option{ background:var(--rc-panel); color:var(--rc-white); font-family:'Rajdhani',sans-serif; font-weight:600; }
-.skin-option:hover{ background:var(--rc-raised); }
-.skin-option.active{ color:var(--rc-red); }
 
 #app{ flex:1; min-height:0; display:flex; flex-direction:column; margin-top:5px; }
 .race-rotate{ display:none; flex:1; align-items:center; justify-content:center; flex-direction:column; gap:12px;
@@ -2542,10 +1151,14 @@ body{
   text-transform:uppercase; font-weight:700; }
 @media (orientation: portrait){ .race-rotate{ display:flex; } .race-stage{ display:none !important; } }
 
-.race-stage{ flex:1; min-height:0; display:grid; grid-template-rows:1fr 40px; }
-.race-pages{ overflow:hidden; position:relative; min-height:0; }
-.race-track{ display:flex; height:100%; transition:transform .28s cubic-bezier(.4,0,.2,1); }
-.race-page{ flex:0 0 100%; min-width:0; padding:8px 10px; overflow:hidden; }
+/* Nav sits on the LEFT, and pages slide vertically. A phone in landscape is 844x390: width
+   is the plentiful axis, height the scarce one. A bottom bar spends 40px of height on every
+   page; an 88px rail spends width instead, and the dials here are height-limited, so the
+   reclaimed 40px goes straight into dial size. */
+.race-stage{ flex:1; min-height:0; display:flex; flex-direction:row; }
+.race-pages{ flex:1; overflow:hidden; position:relative; min-height:0; min-width:0; }
+.race-track{ display:flex; flex-direction:column; height:100%; transition:transform .28s cubic-bezier(.4,0,.2,1); }
+.race-page{ flex:0 0 100%; min-width:0; min-height:0; padding:8px 10px; overflow:hidden; }
 
 /* chamfered panel with rivets, straight from the mockup */
 .rc-panel{ background:var(--rc-panel); border:1px solid var(--rc-line); position:relative;
@@ -2778,13 +1391,34 @@ body{
 .ebs-note{ margin-top:auto; font-size:8.5px; font-weight:600; letter-spacing:.07em; text-transform:uppercase;
   color:var(--rc-label-dim); font-family:'Rajdhani',sans-serif; line-height:1.6; }
 
-/* ---- bottom bar (persistent) ---- */
-.race-bottombar{ display:flex; align-items:center; gap:12px; padding:0 12px;
-  border-top:1px solid var(--rc-line); background:var(--rc-panel); }
-.race-tabs{ display:flex; gap:2px; margin:0 auto; height:100%; }
-.race-tab{ background:none; border:none; color:var(--rc-label-dim); font-family:'Rajdhani',sans-serif; font-weight:700;
-  letter-spacing:.14em; font-size:10px; padding:0 10px; cursor:pointer; text-transform:uppercase; }
-.race-tab.on{ color:var(--rc-red); text-shadow:0 0 8px rgba(226,0,26,.5); border-top:2px solid var(--rc-red); }
+/* ---- nav rail (persistent, left edge) ---- */
+/* order:-1 puts the rail on the left while it stays last in the DOM, so screen readers and
+   tab order still reach the content before the navigation */
+/* Selection works like the iPhone camera's mode wheel: the selected item is ALWAYS at the
+   vertical centre, and you drag the whole column of names past a fixed centre slot rather
+   than aiming at one. Dragging needs no pointing accuracy, which is the point — picking a
+   page on a vibrating kart with gloves should not require hitting a 34px target.
+   touch-action:none so the drag never turns into a page scroll or an iOS system gesture. */
+.race-navrail{ order:-1; flex:none; width:88px; position:relative; overflow:hidden;
+  border-right:1px solid var(--rc-line); background:var(--rc-panel);
+  touch-action:none; -webkit-user-select:none; user-select:none; cursor:grab; }
+.race-navrail:active{ cursor:grabbing; }
+/* the fixed centre slot: it marks where selection happens, and it does not move */
+.rail-slot{ position:absolute; left:0; right:0; top:50%; height:var(--rail-item);
+  transform:translateY(-50%); background:var(--rc-raised);
+  border-left:2px solid var(--rc-red); border-top:1px solid var(--rc-line);
+  border-bottom:1px solid var(--rc-line); pointer-events:none; }
+.race-tabs{ position:absolute; left:0; right:0; top:0; will-change:transform; }
+.race-tab{ height:var(--rail-item); background:none; border:none; color:var(--rc-label-dim);
+  font-family:'Rajdhani',sans-serif; font-weight:700; letter-spacing:.1em; font-size:10px;
+  padding:0 4px; cursor:inherit; text-transform:uppercase; text-align:center; width:100%;
+  display:flex; align-items:center; justify-content:center;
+  transition:color .18s, opacity .18s, transform .18s; }
+/* fade with distance from the centre so the wheel reads as depth, like the camera dial */
+.race-tab[data-dist="1"]{ opacity:.62; transform:scale(.94); }
+.race-tab[data-dist="2"]{ opacity:.36; transform:scale(.88); }
+.race-tab[data-dist="3"]{ opacity:.2; transform:scale(.84); }
+.race-tab.on{ color:var(--rc-red); text-shadow:0 0 8px rgba(226,0,26,.5); opacity:1; transform:none; }
 .race-tab.bad{ color:var(--rc-red); text-shadow:0 0 10px rgba(255,36,56,.8); animation:rcPulse 1.2s ease-in-out infinite; }
 .rc-fs{ background:var(--rc-raised); border:1px solid var(--rc-line-hard); width:28px; height:28px;
   display:flex; align-items:center; justify-content:center; color:var(--rc-label); cursor:pointer; flex:none;
@@ -2792,12 +1426,15 @@ body{
 .rc-fs:active{ background:var(--rc-red-dark); color:var(--rc-white); }
 .rc-fs.rc-fs-top{ width:38px; height:38px; margin-right:4px; }
 .rc-fs.rc-fs-top svg{ width:19px; height:19px; }
-/* 48px, not the 38px the other icon buttons use: this is the one control people reach for
-   with gloves on, at arm's length, on a moving kart. 48 is the Material minimum touch
-   target and clears Apple's 44pt. Its neighbours stay 38 — see .rc-fs-top / #netInfoBtn. */
+/* 62x48: the one control people reach for with gloves on, at arm's length, beside a moving
+   kart. 48 tall clears Material's 48dp and Apple's 44pt; the extra width is free because
+   width is the abundant axis on an 844x390 landscape phone, and for a right-edge button
+   horizontal extent is real target size under Fitts's law at zero cost to dial height.
+   The 16px gap (neighbours use 10) keeps a destructive control separated from the benign
+   ones rather than letting a near-miss land on it. */
 #powerOffBtn{ background:var(--rc-raised) !important; border:1px solid var(--rc-red-dark) !important;
   color:var(--rc-red) !important; border-radius:0 !important; padding:0 !important;
-  width:48px; height:48px; display:flex; align-items:center; justify-content:center; margin-left:10px;
+  width:62px; height:48px; display:flex; align-items:center; justify-content:center; margin-left:16px;
   clip-path:polygon(0 0, calc(100% - 7px) 0, 100% 7px, 100% 100%, 7px 100%, 0 calc(100% - 7px)); }
 #powerOffBtn:active{ background:var(--rc-red-dark) !important; color:#fff !important; }
 #netInfoBtn{ background:var(--rc-raised) !important; border:1px solid var(--rc-line-hard) !important;
@@ -2805,7 +1442,7 @@ body{
   font-size:16px !important; line-height:1 !important;
   clip-path:polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px)); }
 #netInfoBtn:active{ background:var(--rc-red-dark) !important; }
-#powerOffBtn svg{ width:23px; height:23px; filter:drop-shadow(0 0 4px rgba(226,0,26,.5)); }
+#powerOffBtn svg{ width:18px; height:18px; filter:drop-shadow(0 0 4px rgba(226,0,26,.5)); }
 `,
   render() { return `
 <div class="race-rotate">
@@ -2964,8 +1601,9 @@ body{
 
     </div>
   </div>
-  <div class="race-bottombar">
-    <div class="race-tabs">
+  <div class="race-navrail" id="rcRail">
+    <div class="rail-slot"></div>
+    <div class="race-tabs" id="rcRailList">
       <button class="race-tab on" data-page="telemetry">Telemetry</button><button class="race-tab" data-page="mission">Mission</button><button class="race-tab" data-page="vision">Vision</button><button class="race-tab" data-page="system">System</button><button class="race-tab" data-page="battery">Battery</button><button class="race-tab" data-page="ebs">EBS</button>
     </div>
   </div>
@@ -3012,12 +1650,68 @@ body{
     let page = 0;
     const track = $('rcTrack');
     const lastPage = document.querySelectorAll('.race-page').length - 1;  // derived, so adding a page can't strand it
-    const go = i => {
-      page = Math.max(0, Math.min(lastPage, i));
-      track.style.transform = `translateX(${-page * 100}%)`;
-      document.querySelectorAll('.race-tab').forEach((t, j) => t.classList.toggle('on', j === page));
+    // ── nav rail: an iPhone-camera-style wheel. The selected name sits in a fixed centre
+    // slot and the whole column is dragged past it, so selecting costs no aiming accuracy.
+    const rail = $('rcRail'), railList = $('rcRailList');
+    const tabs = [...document.querySelectorAll('.race-tab')];
+    const itemH = () => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--rail-item')) || 36;
+    // offset that puts item i's centre on the rail's centre
+    const offsetFor = i => rail.clientHeight / 2 - (i + 0.5) * itemH();
+    const indexAt = off => Math.round((rail.clientHeight / 2 - off) / itemH() - 0.5);
+    const clampOff = off => Math.min(offsetFor(0), Math.max(offsetFor(lastPage), off));
+    let railOff = 0;
+    // mark how far each name is from the centre so the CSS can fade it with distance
+    const paintRail = sel => tabs.forEach((t, j) => {
+      t.classList.toggle('on', j === sel);
+      t.dataset.dist = Math.min(3, Math.abs(j - sel));
+    });
+    const setRail = (i, animate) => {
+      railOff = offsetFor(i);
+      railList.style.transition = animate ? 'transform .22s cubic-bezier(.4,0,.2,1)' : 'none';
+      railList.style.transform = `translateY(${railOff}px)`;
+      paintRail(i);
     };
-    document.querySelectorAll('.race-tab').forEach((t, i) => t.addEventListener('click', () => go(i)));
+
+    const go = (i, animateRail = true) => {
+      page = Math.max(0, Math.min(lastPage, i));
+      track.style.transform = `translateY(${-page * 100}%)`;  // pages stack vertically beside the left rail
+      setRail(page, animateRail);
+    };
+
+    let rDragging = false, rStartY = 0, rStartOff = 0, rMoved = 0;
+    rail.addEventListener('pointerdown', e => {
+      rDragging = true; rStartY = e.clientY; rStartOff = railOff; rMoved = 0;
+      railList.style.transition = 'none';
+      rail.setPointerCapture(e.pointerId);
+    });
+    rail.addEventListener('pointermove', e => {
+      if (!rDragging) return;
+      const dy = e.clientY - rStartY;
+      rMoved = Math.max(rMoved, Math.abs(dy));
+      railOff = clampOff(rStartOff + dy);
+      railList.style.transform = `translateY(${railOff}px)`;
+      paintRail(Math.max(0, Math.min(lastPage, indexAt(railOff))));  // live feedback while dragging
+    });
+    const endRailDrag = e => {
+      if (!rDragging) return;
+      rDragging = false;
+      // Under ~6px of travel it was a tap, so honour the name that was tapped; otherwise snap
+      // to whichever name the drag left nearest the centre slot. The tapped name is derived
+      // from the pointer's position, NOT from e.target: setPointerCapture retargets every
+      // later pointer event to the rail, so e.target is never the button.
+      let idx = Math.max(0, Math.min(lastPage, indexAt(railOff)));
+      if (rMoved < 6) {
+        const rb = rail.getBoundingClientRect();
+        const inside = e.clientY >= rb.top && e.clientY <= rb.bottom;   // names clipped off the
+        const hit = Math.floor((e.clientY - railList.getBoundingClientRect().top) / itemH());
+        if (inside && hit >= 0 && hit <= lastPage) idx = hit;           // rail's ends are drag-only
+      }
+      go(idx);
+    };
+    rail.addEventListener('pointerup', endRailDrag);
+    rail.addEventListener('pointercancel', endRailDrag);
+    // the rail's centre moves when the viewport resizes, so re-seat the current selection
+    window.addEventListener('resize', () => setRail(page, false));
     let sx = 0, sy = 0, swipeOk = false;
     const pages = $('rcPages');
     pages.addEventListener('touchstart', e => {
@@ -3027,7 +1721,9 @@ body{
     pages.addEventListener('touchend', e => {
       if (!swipeOk) return;
       const dx = e.changedTouches[0].clientX - sx, dy = e.changedTouches[0].clientY - sy;
-      if (Math.abs(dx) > 60 && Math.abs(dx) > 1.5 * Math.abs(dy)) go(page + (dx < 0 ? 1 : -1));
+      // vertical swipe now, to match the vertical page stack. Threshold is 45 rather than 60
+      // because there is less height to travel than there was width.
+      if (Math.abs(dy) > 45 && Math.abs(dy) > 1.5 * Math.abs(dx)) go(page + (dy < 0 ? 1 : -1));
     }, { passive: true });
     go(0);
     // fullscreen + landscape lock
@@ -3261,24 +1957,18 @@ function rcUpdateBattery(d) {
   return bad;
 }
 
-const SKINS = { race: skinRace, legacy: skinLegacy, kitt: skinKitt, tesla: skinTesla, hud: skinHud, artemis: skinArtemis };
-if (currentSkin === 'default') currentSkin = 'legacy';   // migrate the old stored id for anyone who chose Legacy
-if (!SKINS[currentSkin]) currentSkin = 'race';           // unknown/removed skin → fall back to the real default
-
-function applySkin(id) {
+// Race is the only skin. The Legacy, KITT, Tesla, HUD and Artemis skins were removed on
+// 2026-07-18 along with the selector that switched between them. This stays a single apply
+// step rather than inline setup because it injects the CSS, renders the markup, and returns
+// the cleanup function that tears down the skin's listeners.
+function applySkin() {
   if (skinCleanup) { skinCleanup(); skinCleanup = null; }
-  currentSkin = id;
-  localStorage.setItem('skin', id);
-  const skin = SKINS[id];
-  $('skinCss').textContent = skin.css;
-  $('app').innerHTML = skin.render();
-  // Set title per skin
-  const titles = { default:'UM Driverless', kitt:'K·I·T·T', tesla:'UM Driverless', hud:'', artemis:'UM DRIVERLESS', race:'Ü MOTORSPORT' };
-  $('topbarTitle').textContent = titles[id] ?? 'UM Driverless';
-  buildSkinMenu();
-  skinCleanup = skin.init();
+  $('skinCss').textContent = skinRace.css;
+  $('app').innerHTML = skinRace.render();
+  $('topbarTitle').textContent = 'Ü MOTORSPORT';
+  skinCleanup = skinRace.init();
   updateMissionUI();
-  if (lastData) skin.update(lastData);
+  if (lastData) skinRace.update(lastData);
 }
 
 // Debug console (collapsible, in-flow)
@@ -3299,7 +1989,7 @@ function dbgErr(s) {
   dbgLog(s);
 }
 window.onerror = (m,s,l,c,e) => dbgErr('ERR: '+m+' @'+l+':'+c);
-try { applySkin(currentSkin); dbgLog('applySkin OK'); } catch(e) { dbgErr('applySkin FAIL: '+e.message); }
+try { applySkin(); dbgLog('applySkin OK'); } catch(e) { dbgErr('applySkin FAIL: '+e.message); }
 try { connect(); dbgLog('connect() called, WS_URL='+WS_URL); } catch(e) { dbgErr('connect FAIL: '+e.message); }
 
 // ── Demo mode: open index.html?demo=1 to feed simulated telemetry.
@@ -3357,7 +2047,7 @@ if (new URLSearchParams(location.search).has('demo')) {
     };
     // mirror the WebSocket handler: on a mission change, re-run the show/hide UI
     if (d.mission !== currentMission) { currentMission = d.mission; updateJoystickWidget(); updateMissionUI(); }
-    try { SKINS[currentSkin].update(d); } catch (e) {}
+    try { skinRace.update(d); } catch (e) {}
   }, 100);
   dbgLog('DEMO MODE — simulated telemetry');
 }
