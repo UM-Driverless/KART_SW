@@ -2792,17 +2792,20 @@ body{
 .rc-fs:active{ background:var(--rc-red-dark); color:var(--rc-white); }
 .rc-fs.rc-fs-top{ width:38px; height:38px; margin-right:4px; }
 .rc-fs.rc-fs-top svg{ width:19px; height:19px; }
+/* 48px, not the 38px the other icon buttons use: this is the one control people reach for
+   with gloves on, at arm's length, on a moving kart. 48 is the Material minimum touch
+   target and clears Apple's 44pt. Its neighbours stay 38 — see .rc-fs-top / #netInfoBtn. */
 #powerOffBtn{ background:var(--rc-raised) !important; border:1px solid var(--rc-red-dark) !important;
   color:var(--rc-red) !important; border-radius:0 !important; padding:0 !important;
-  width:38px; height:38px; display:flex; align-items:center; justify-content:center; margin-left:10px;
-  clip-path:polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px)); }
+  width:48px; height:48px; display:flex; align-items:center; justify-content:center; margin-left:10px;
+  clip-path:polygon(0 0, calc(100% - 7px) 0, 100% 7px, 100% 100%, 7px 100%, 0 calc(100% - 7px)); }
 #powerOffBtn:active{ background:var(--rc-red-dark) !important; color:#fff !important; }
 #netInfoBtn{ background:var(--rc-raised) !important; border:1px solid var(--rc-line-hard) !important;
   color:var(--rc-white) !important; border-radius:0 !important; width:38px !important; height:38px !important;
   font-size:16px !important; line-height:1 !important;
   clip-path:polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px)); }
 #netInfoBtn:active{ background:var(--rc-red-dark) !important; }
-#powerOffBtn svg{ width:18px; height:18px; filter:drop-shadow(0 0 4px rgba(226,0,26,.5)); }
+#powerOffBtn svg{ width:23px; height:23px; filter:drop-shadow(0 0 4px rgba(226,0,26,.5)); }
 `,
   render() { return `
 <div class="race-rotate">
