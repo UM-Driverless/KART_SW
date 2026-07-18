@@ -353,3 +353,82 @@ Possibly related: the open task "Pure pursuit arrow/steering mismatch" reports a
 pointing right while the wheel moved left. That task is about the HUD arrow rather than
 this gauge, so this fix does not close it, but a viewer comparing the two would have seen
 the gauge contradict the wheel for the same reason.
+
+## 2026-07-18 — Battery gauge blank: two BlueZ behaviours, and a self-heal that caused the lockout
+
+The dashboard's battery data had been dead, and the only known cure was a human restarting things.
+Root-caused and fixed properly; `kb_bms` now recovers unattended. Fix in commit `52dc3b9`; the
+operational summary lives in `.agents/orin-environment.md`.
+
+### What was actually wrong
+
+Two independent BlueZ behaviours stacked on each other. Neither is a fault in the pack, the radio or
+the config — all three were fine the whole time.
+
+**1. `bleak` could not see the pack at all.** Its BlueZ backend sets a discovery filter, which makes
+`bluetoothd` issue `MGMT_OP_START_SERVICE_DISCOVERY` instead of a plain discovery. On BlueZ 5.64
+that path reports *nothing* when it has no UUIDs to match against, and this pack advertises only AD
+flags plus its name — no service UUIDs. The decisive comparison: `btmgmt find` and
+`bluetoothctl scan on` both saw `SP22S003BP21S100A` at `A5:C2:37:39:58:5D`, RSSI -67, in the same
+minute that `BleakScanner` returned **zero devices** — with the rest of the stack stopped, so nothing
+was competing for the adapter. Filters made no difference: an explicit `RSSI: -100` and an explicit
+`service_uuids=[ff00]` both still returned zero (the `ff00` filter cannot match, because `ff00` is a
+GATT service exposed after connecting, not something in the advertisement).
+
+**2. BlueZ destroys the device object as soon as discovery stops.** A discovered-but-unpaired device
+is *temporary*, so when the scan exits the D-Bus object goes with it. A connect attempted a moment
+after a scan therefore fails with `Device with address ... was not found` against a cache that was
+populated seconds earlier — which reads like a caching bug and is actually documented behaviour.
+Trusting the device does not, on its own, keep the object alive.
+
+### The self-heal was the reason it never recovered
+
+`kb_bms`'s recovery ran `bluetoothctl disconnect` + `remove` every third consecutive failure. But
+`remove` deletes the BlueZ cache entry, and connect-by-MAC — the node's primary path — depends on
+that entry existing. Its only fallback was `BleakScanner.find_device_by_name`, i.e. the blind path
+from (1). So the recovery step *created* a state it could not get out of: the remove guaranteed the
+lockout it was written to clear. Before this, every failure needed a human.
+
+Worth keeping as a general lesson: the recovery routine had been reasoned about but never tested
+against the failure it claimed to fix. It ran, it logged "clearing stale BlueZ state", and it made
+things strictly worse — a self-heal that is never exercised is a plausible-looking guess.
+
+The older "stale BlueZ holds `Connected: yes`" theory in `.agents/orin-environment.md` was also not
+what was happening here. `busctl introspect` on the device path came back **empty** — BlueZ had no
+record of the device at all, stale or otherwise, which is why the self-heal's disconnect/remove had
+nothing to act on and changed nothing across nine attempts.
+
+### The fix
+
+- Discovery is driven by `bluetoothctl`, never `BleakScanner`.
+- The scan runs as a **background process held open across the whole connect attempt**, then is
+  terminated in a `finally`. This is what defeats behaviour (2).
+- The pack is `trust`ed automatically once its object exists. Trust persists across reboots, so
+  after the first success a cold start connects straight by MAC without needing the scan path.
+- Any `remove` is now followed by the repopulating scan.
+
+Deliberately **not** used: restarting the `bluetooth` service. It does clear the state, but Wi-Fi and
+BT share one radio on this Orin, so it drops the `kart` AP with it — and a fix that needs a human to
+run it was the thing being removed.
+
+### Verification
+
+Wiped every trace of the pack from BlueZ (`untrust`, `disconnect`, `remove`, confirmed until
+`bluetoothctl info` reported "not available"), then a plain `systemctl restart kart-brain` and no
+further intervention. It reconnected on its own in **~36 s** (node start 12:55:17 → `BMS connected`
+12:55:53) and `/battery/state` published 52.28 V at 97%, `present: true`. Re-checked afterwards:
+`Trusted: yes`, `Connected: yes`, 52.26 V.
+
+An earlier iteration of the fix — repopulate the cache, then connect after the scan had exited —
+still failed, and that failure is what exposed behaviour (2). Keeping the scan alive across the
+connect is the part that matters; repopulating alone is a race.
+
+### Environment notes worth reusing
+
+- `bluetoothctl` non-interactively over SSH worked fine here, including `--timeout N scan on`,
+  despite the warning in `.agents/orin-environment.md` that it tends to hang. `busctl` was still the
+  better tool for asking whether a device object exists.
+- `btmgmt find` needs the adapter free: it returns `status 0x0a (Busy)` while `kb_bms` is running its
+  own retry scans, so stop `kart-brain` before using it to diagnose.
+- The pack's address is **LE Public**, so it does not rotate. Connect-by-MAC is the reliable path and
+  the name lookup is only a safety net for a replaced pack.
