@@ -121,18 +121,18 @@ Used everywhere — YOLO class names, Detection messages, visualization:
 - **`TODO.md`** — Human-curated roadmap. High-level goals and priorities. Agents read this for context but do **NOT edit it** unless explicitly asked.
 - **`tasks.md`** (repo root) — The task board. Concrete, actionable work items derived from TODO.md. There is intentionally NO `.agents/tasks.md` in this repo — never create one.
 - When starting work, check `tasks.md` first. If empty or stale, derive tasks from `TODO.md`.
-- Status markers: `- [ ]` ready, `- [→]` in progress, `- [⏸]` blocked (with reason), `- [x]` done (with date).
+- Status lives in an inline marker, not in which section a task sits under — claiming, blocking, or finishing a task means flipping the marker in place, never moving the line: `- [ ]` ready, `- [→ YYYY-MM-DD agent:id]` in progress, `- [⏸ reason]` blocked, `- [x YYYY-MM-DD]` done. Existing `## Ready` / `## In Progress` / `## Blocked` / `## Done` headers are loose thematic grouping, not a requirement to relocate a task when its status changes.
 
 ### Subagent Task Protocol
 When the user says "work on tasks" (or similar), launch subagents to execute tasks from `tasks.md`:
 
-1. **Pick** the first `- [ ]` (Ready) task. Each subagent picks a different task.
-2. **Claim** it: edit `tasks.md`, move it to In Progress (`- [→]`).
+1. **Pick** a `- [ ]` (ready) task. Each subagent picks a different task.
+2. **Claim** it in place: flip the marker to `- [→ YYYY-MM-DD agent:id]`. No move.
 3. **Do the work.** Read relevant `.agents/` docs first. Follow all project conventions.
-4. **If blocked** (needs user input, hardware access, unclear requirements): move to Blocked (`- [⏸] ... — reason: <specific question>`), then stop and return the question.
-5. **If done**: commit the changes, move to Done (`- [x] ... (YYYY-MM-DD)`), then return a summary.
+4. **If blocked** (needs user input, hardware access, unclear requirements): flip the marker to `- [⏸ reason: <specific question>]`, in place, then stop and return the question.
+5. **If done**: commit the changes, flip the marker to `- [x YYYY-MM-DD]`, in place, then return a summary.
 6. **Independent tasks can run in parallel** — launch multiple subagents simultaneously. Tasks that touch the same files must run sequentially.
-7. **Never skip steps** — always update `tasks.md` status before and after work.
+7. **Never skip steps** — always update the task's marker before and after work.
 
 ## Git Workflow
 - **`dev` is the working branch.** Push all changes to `dev` first, deploy and test on hardware.
