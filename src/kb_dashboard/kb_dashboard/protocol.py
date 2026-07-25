@@ -192,10 +192,15 @@ def decode_pneumatic(payload) -> dict:
     # anchored to a gauge reading on 2026-07-12, PRESSURE_2 has never been
     # checked against anything. Treat the piston number as indicative until it
     # is calibrated against a gauge the same way.
+    # A channel pinned at full scale is NOT a reading. An unconnected ADC input floats to the
+    # rail, and converting that gives a confident-looking 9.9 bar - which is what PRESSURE_2
+    # displayed on 2026-07-25 with no sensor fitted. A genuine sensor pegged at full scale is
+    # equally out of range and equally untrustworthy, so both collapse to None and the panel
+    # shows "-- bar". Never emit a number that cannot be distinguished from a fault.
     pres2_adc = payload[2] if len(payload) >= 3 else None
     piston_bar = (
         round(DIVIDER_RATIO * (pres2_adc / ADC_FULL_SCALE * ADC_VREF_V), 2)
-        if pres2_adc is not None
+        if pres2_adc is not None and pres2_adc < ADC_FULL_SCALE
         else None
     )
     return {

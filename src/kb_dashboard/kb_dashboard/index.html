@@ -1816,14 +1816,25 @@ body{
     if (!$('rcSpeedDial')) return;
     // steering gauge — actual (red) + commanded target (amber ghost).
     // degAct/degTgt are screen degrees (clockwise-positive), so positive rad tips left.
-    const degAct = Math.max(-90, Math.min(90, steerScreen(d.esp32_steering_rad) * 180 / Math.PI));
+    // The steering sensor must prove itself before its number is drawn. With nothing on the
+    // I2C bus the firmware still reports an angle - 3.451 rad was observed on 2026-07-25 with
+    // no sensor connected - and the gauge clamped that to a confident "90 LEFT". An absent
+    // sensor reading as a hard-over lock is worse than no reading at all, so the health flags
+    // gate it: no magnet or no I2C means the actual-angle needle is hidden and the readout
+    // says NO SENSOR. The amber target needle stays live, because that is the Orin's own
+    // command and does not depend on the sensor.
+    const steerOk = d.health_magnet_ok && d.health_i2c_ok;
+    const degAct = steerOk ? Math.max(-90, Math.min(90, steerScreen(d.esp32_steering_rad) * 180 / Math.PI)) : 0;
     const degTgt = Math.max(-90, Math.min(90, steerScreen(d.orin_cmd_steering_rad) * 180 / Math.PI));
     $('rcNeedle').setAttribute('transform', `rotate(${degAct} 100 108)`);
+    $('rcNeedle').style.opacity = steerOk ? '' : '0';
     $('rcNeedleTgt').setAttribute('transform', `rotate(${degTgt} 100 108)`);
-    $('rcAngleVal').textContent = Math.round(Math.abs(degAct));
-    $('rcAngleDir').textContent = Math.abs(degAct) < 2 ? 'CENTER' : (degAct > 0 ? 'RIGHT' : 'LEFT');
+    $('rcAngleVal').textContent = steerOk ? Math.round(Math.abs(degAct)) : '--';
+    $('rcAngleDir').textContent = !steerOk ? 'NO SENSOR'
+                                : Math.abs(degAct) < 2 ? 'CENTER' : (degAct > 0 ? 'RIGHT' : 'LEFT');
     const dirPct = 50 + (degAct / 90) * 50, df = $('rcDirFill');
-    if (degAct >= 0) { df.style.left = '50%'; df.style.width = (dirPct - 50) + '%'; }
+    if (!steerOk) { df.style.width = '0%'; }
+    else if (degAct >= 0) { df.style.left = '50%'; df.style.width = (dirPct - 50) + '%'; }
     else { df.style.left = dirPct + '%'; df.style.width = (50 - dirPct) + '%'; }
     // speed hybrid dial (value shown in the dial centre)
     const kmh = (d.esp32_speed || 0) * 3.6;
