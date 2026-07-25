@@ -313,3 +313,34 @@ echo "0" | sudo -S bash -c "echo 0 > /sys/bus/usb/devices/2-3.2/authorized && sl
 - Rule: **a gauge scale is uniform by definition — degrees-per-unit is a single constant for the entire dial.** Never scale two halves independently to make them look balanced. If the physical ranges differ, the arcs differ in length; that asymmetry is the information, not a thing to normalize away.
 - Rule: **when a value has different limits in two directions, keep constant `k = sweep/(max−min)` and anchor the reference (0) at its true angular position** (`angle(v) = topAngle + (v − center)·k`). Don't force the reference to a visual center by warping the scale.
 - Broader: this is the second "made it look nice by distorting the meaning" mistake in this dashboard session (cf. the earlier instinct to shift/normalize). Match the picture to the physics, not the other way round.
+
+## 2026-07-25 — Used a Wi-Fi *join* command as a *scan* probe and knocked the Mac offline
+**What happened:** To answer the read-only question "is the `kart` AP beaconing?", ran
+`networksetup -setairportnetwork en0 kart umotorsport` — a command that *joins* a network, taking the
+radio off its current association — **sixteen times across four rounds**, twice inside retry loops of
+eight and seven iterations. The Mac was on a lab network at `10.7.20.106`. One call eventually
+succeeded, the Mac landed on `172.20.10.4`, its connectivity dropped, the session stalled, and the
+user had to bring up an iPhone hotspot to restore internet. The previous SSID had been saved to a
+scratchpad file as a rollback and was never restored. An earlier "all join attempts failed, nothing to
+restore" reassurance was left standing while sixteen more attempts ran. The successful join was then
+misreported as "the AP appeared" — the `172.20.10.x` address proves it was a phone hotspot with a
+colliding SSID, not the Orin's `10.42.0.x` AP.
+**Root cause:** picked a state-changing command to answer a read-only question, then looped it. The
+read-only alternative (`system_profiler SPAirPortDataType`) had its SSID fields redacted by the agent
+harness, which explains reaching for the join once — not sixteen times, and not while a human who
+could read their own Wi-Fi menu was sitting at the machine.
+**Prevention:**
+- Rule: **never use a state-changing command as a probe.** Before running anything to *learn*
+  something, check whether it also *changes* something. `networksetup -setairportnetwork`,
+  `nmcli con up/down`, `ip link set` and friends are actions, not queries.
+- Rule: **never put a command that alters host network state in a retry loop.** The loop converts one
+  recoverable mistake into a sustained outage.
+- Rule: **if a rollback file is written, restore from it in the same turn the work ends** — or don't
+  write it. An unused safety net creates false confidence.
+- Rule: **"nothing changed" claims expire.** Re-verify before letting an earlier reassurance cover
+  later actions.
+- Rule: **when a human at the machine can answer in one sentence, ask instead of probing.** "Is `kart`
+  in your Wi-Fi list?" beats any number of scans.
+- Fact: **`10.42.0.x` = the Orin's `kart` AP; `172.20.10.x` = an iPhone Personal Hotspot.** Phone
+  hotspots have appeared with the SSID `kart` too, so identify a joined network by its subnet, never
+  by its name.

@@ -621,3 +621,58 @@ Three ways to do it:
   guarantee the AP design was built to provide. Only sensible as a bench-only convenience.
 
 Logged in `tasks.md`.
+
+---
+
+## 2026-07-25 — Knocked the Mac off its Wi-Fi by using a *join* command as a *scan* probe
+
+While diagnosing the unreachable Orin described in the entry above, the question being asked
+was purely read-only: **is the `kart` AP beaconing right now?** The command used to answer it
+was not read-only:
+
+```bash
+networksetup -setairportnetwork en0 kart umotorsport
+```
+
+That is a *join*. It takes the Wi-Fi radio off its current association to attempt a new one,
+and it was run **sixteen times across four rounds**, twice inside retry loops of eight and
+seven iterations. The Mac was working on a lab network at `10.7.20.106`. Eventually one call
+succeeded, the Mac landed on `172.20.10.4`, its connectivity to whatever it had been using
+dropped, the session stalled, and the human had to bring up an iPhone hotspot to restore
+internet.
+
+**Root cause: a state-changing command was chosen to answer a read-only question, and then
+put in a loop.** The loop is what turned a single recoverable mistake into a sustained
+outage — each iteration was another chance to succeed at the thing that broke connectivity.
+
+Three aggravating details, each its own lesson:
+
+1. **The safety net was built and then never used.** The previous SSID was deliberately saved
+   to a scratchpad file *before* the first join, specifically so it could be restored. It was
+   never restored. Writing a rollback and not running it is worse than not writing one, because
+   it produces the feeling of having been careful.
+2. **A "nothing changed" reassurance was allowed to expire.** After the early failures the
+   claim made was "Mac never left its network (all join attempts failed), so nothing to restore
+   there." That was true when written. Sixteen attempts later it was false, and it was never
+   re-checked. **Claims about unchanged state have a shelf life; re-verify before relying on
+   one, and never let an old one cover new actions.**
+3. **The destructive probe returned a false positive anyway.** When a join finally succeeded,
+   it was reported as "the AP appeared and the Mac joined it." Wrong: the address handed out
+   was `172.20.10.4`, which is Apple's hardcoded Personal Hotspot range — the Orin's AP serves
+   `10.42.0.x`. The `kart` that was joined was a *phone hotspot* with a colliding SSID, not the
+   kart AP at all. So the risky probe was not even measuring the right thing.
+
+**What should have happened.** A human was sitting in front of the machine the whole time.
+"Is `kart` in your Wi-Fi menu?" is a one-sentence question with a zero-risk answer, and it
+would have settled in seconds what sixteen joins failed to settle over many minutes. The
+reason the join command was reached for at all is that the read-only scan
+(`system_profiler SPAirPortDataType`) had its SSID fields redacted by the agent harness, so
+network names were unreadable. That explains the first attempt. It does not explain the
+retry loops, and it is exactly the situation where asking beats probing.
+
+Also worth recording for its own sake: **an SSID collision between a phone hotspot and the
+kart AP is a live hazard in this setup.** Both were named `kart` on this occasion. Since the
+whole point of the AP is a dependable local link to the dashboard, a phone in the pit sharing
+its name means clients can silently associate with the wrong one and then fail to reach
+`10.42.0.1`. The subnet is the reliable tell: **`10.42.0.x` is the Orin, `172.20.10.x` is an
+iPhone.** Check the address before concluding which network was joined.
