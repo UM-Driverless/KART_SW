@@ -341,6 +341,39 @@ could read their own Wi-Fi menu was sitting at the machine.
   later actions.
 - Rule: **when a human at the machine can answer in one sentence, ask instead of probing.** "Is `kart`
   in your Wi-Fi list?" beats any number of scans.
-- Fact: **`10.42.0.x` = the Orin's `kart` AP; `172.20.10.x` = an iPhone Personal Hotspot.** Phone
-  hotspots have appeared with the SSID `kart` too, so identify a joined network by its subnet, never
-  by its name.
+- Fact: **`10.42.0.x` = the Orin's `kart` AP; `172.20.10.x` = an iPhone Personal Hotspot.** Identify a
+  joined network by its subnet, never by its name.
+- ~~Phone hotspots have appeared with the SSID `kart` too.~~ **False — corrected 2026-07-25, see the
+  next entry.** The iPhone's hotspot is named `Ruben's iPhone`; there was never an SSID collision.
+
+## 2026-07-25 — Wrote an invented causal story into two permanent files as a "Fact"
+**What happened:** After a probe loop, the Mac held IP `172.20.10.4` — an Apple Personal Hotspot
+address — despite having been told to join `kart`. From that single surprising number a tidy
+explanation was constructed: *a phone hotspot must also be named `kart`, and the join hit the wrong
+one.* That story was written into `history.md` and into the entry above as a **Fact** bullet, and
+reported to the user as confirmed. It was never checked. The user then showed the Mac's Wi-Fi menu:
+the hotspot is named **`Ruben's iPhone`**. There was no SSID collision, and the join never succeeded
+at all — the probe loop printed the literal string `JOINED` because it tested `[ -z "$R" ]` and
+*inferred* success from empty output the command never gave. Confirmed afterwards from the Orin:
+`iw dev wlP1p1s0 station dump` is empty and there is no dnsmasq lease file for `wlP1p1s0`, so no
+client has ever associated with the Orin's AP. The related claim that the probe loop knocked the Mac
+off its lab network was likewise asserted as fact and never demonstrated.
+**Root cause:** the data supported exactly one statement — "the Mac is on some network handing out
+`172.20.10.x`". Everything beyond that was narrative built to make one anomaly feel resolved. It was
+committed inside a write-up whose own subject was carelessness with unverified claims, which is what
+makes it worth logging separately.
+**Prevention:**
+- Rule: **never promote an inference to a `Fact:` bullet in a permanent file without a check that
+  could have falsified it.** Write what was measured; label the rest as a hypothesis.
+- Rule: **when one observation surprises you, find the single cheapest disambiguating check before
+  theorising.** Here it was "what does the Wi-Fi menu say?" — free, instant, and available from the
+  human sitting at the machine.
+- Rule: **do not infer a command's success from empty output.** Check the exit status, or verify the
+  resulting state directly (here: the actual SSID and subnet). A shell idiom like `${R:-JOINED}`
+  manufactures a confident-looking result out of silence.
+- Rule: **establish which two machines a cable physically runs between before diagnosing the link.**
+  "The Orin is connected via USB" meant *the iPhone is plugged into the Orin* (`lsusb` on the Orin:
+  `05ac:12a8 Apple, Inc. iPhone`, giving `enxfe9ca7a9ecdb` = `172.20.10.2` and the metric-100 default
+  route). There was no Mac-to-Orin cable, so the Mac's empty USB bus was correct all along and the
+  entire device-mode investigation — cables, ports, `nv-l4t-usb-device-mode`, UDC state — was
+  diagnosing a link that did not exist.

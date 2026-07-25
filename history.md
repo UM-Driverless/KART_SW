@@ -676,3 +676,55 @@ whole point of the AP is a dependable local link to the dashboard, a phone in th
 its name means clients can silently associate with the wrong one and then fail to reach
 `10.42.0.1`. The subnet is the reliable tell: **`10.42.0.x` is the Orin, `172.20.10.x` is an
 iPhone.** Check the address before concluding which network was joined.
+
+---
+
+## 2026-07-25 — Correction: the "SSID collision" in the entry above was invented, not observed
+
+The preceding entry states as fact that a phone hotspot and the Orin's AP were both named
+`kart`, and that a join command succeeded against the wrong one. **Both claims are false.**
+Correcting rather than rewriting, per this file's convention.
+
+What was actually true:
+
+- **The iPhone's hotspot is named `Ruben's iPhone`**, visible in the Mac's Wi-Fi menu. Apple
+  uses the device name as the hotspot SSID. There was never a second network called `kart`.
+- **The join never succeeded.** The probe loop tested `[ -z "$R" ]` on the command's output and
+  printed the literal string `JOINED` when it was empty. Empty output was *inferred* to mean
+  success; the command never said so. The Mac's `172.20.10.4` came from macOS auto-joining
+  `Ruben's iPhone` when the previous network dropped — an event with no connection to the
+  probe at all.
+- **No client has ever associated with the Orin's AP.** Checked from the Orin:
+  `iw dev wlP1p1s0 station dump` returns nothing and there is no dnsmasq lease file for
+  `wlP1p1s0`. So the Mac never touched `kart`, and the earlier `Could not find network kart`
+  results were plain and correct — the Orin was simply off for most of them.
+- **The claim that the probe loop knocked the Mac off `10.7.20.x` is also unproven.** Repeatedly
+  joining does take the radio off-air, so it is a plausible contributor, but it was asserted as
+  established fact and never demonstrated.
+
+**The real lesson, which is worse than the one originally recorded.** Faced with one surprising
+number — an Apple-range IP after asking to join `kart` — a tidy causal story was constructed
+that explained it, and that story was written into `history.md` and `.agents/error-log.md` as a
+**Fact**, inside a write-up whose entire subject was being careless with unverified claims. The
+data supported exactly one statement: *the Mac is on some network handing out `172.20.10.x`.*
+Everything past that was narrative.
+
+**Prevention:** when an observation surprises you, write down only what was measured, then get
+the one cheap confirmation that separates the candidate explanations — here, "what does the
+Wi-Fi menu say?", asked of the human sitting at the machine. **Never promote an inference to a
+`Fact:` bullet in a permanent file without a check that could have falsified it.**
+
+Two facts from that entry do survive and are worth keeping:
+
+- **Subnets identify the network reliably: `10.42.0.x` is the Orin's AP, `172.20.10.x` is an
+  iPhone Personal Hotspot.** Use the address, not the name.
+- **Using a state-changing command as a read-only probe, sixteen times, inside retry loops, is
+  bad practice on its own merits** — independent of whether it caused this particular outage.
+
+Also settled the same session: the phrase "the Orin is connected via USB" meant the **iPhone is
+plugged into the Orin**, not the Orin into the Mac. `lsusb` on the Orin shows
+`05ac:12a8 Apple, Inc. iPhone`, which is what provides `enxfe9ca7a9ecdb` at `172.20.10.2` and
+the default route at metric 100. There was no Mac-to-Orin cable, so the Mac's empty USB bus was
+the correct and expected reading, and the whole device-mode investigation — cables, ports,
+`nv-l4t-usb-device-mode`, UDC state — was chasing a link nobody had claimed to exist.
+**Establish which two machines a cable actually runs between before diagnosing the link.**
