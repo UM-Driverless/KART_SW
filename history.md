@@ -728,3 +728,40 @@ the default route at metric 100. There was no Mac-to-Orin cable, so the Mac's em
 the correct and expected reading, and the whole device-mode investigation — cables, ports,
 `nv-l4t-usb-device-mode`, UDC state — was chasing a link nobody had claimed to exist.
 **Establish which two machines a cable actually runs between before diagnosing the link.**
+
+---
+
+## 2026-07-25 — Piston pressure and compressor cooldown reach the dashboard
+
+Counterpart to the kart-medulla entry of the same date, which carries the reasoning behind the
+compressor's new 15 s on / 15 s off burst cycle and should be read first.
+
+The firmware's `ESP_PNEUMATIC` frame grew from `[pres1, duty]` to
+`[pres1, duty, pres2, state]`. The two fields were appended rather than inserted, so this
+decoder change is not a flag-day: `decode_pneumatic` still accepts a two-field payload and
+returns `pneu_piston_bar = None` and `esp32_compressor_state = 0` for it. That matters because
+`None` renders as `-- bar` while a defaulted `0` would render as a confident **0.0 bar** — an
+unwired sensor must not be able to look like a real zero reading.
+
+Three changes:
+
+- **`pneu_piston_bar` is now populated** from PRESSURE_2. The dashboard's PISTON bar had been
+  rendering this key since the Race skin was built and showing `-- bar` because nothing ever
+  set it; no UI work was needed, only the decode.
+- **`esp32_compressor_state`** is decoded and the compressor label reads `COOLDOWN` during the
+  forced rest. At duty 0 a resting motor and a satisfied tank produce identical telemetry, and
+  the old label said "off" for both, which implies the tank is full when it may be empty.
+- Both keys added to `DashboardState` defaults.
+
+**PRESSURE_2's bar conversion is uncalibrated.** It reuses PRESSURE_1's ÷3 divider ratio on the
+assumption the channels are identical. PRESSURE_1's factor was anchored to a gauge on
+2026-07-12; PRESSURE_2 has never been checked against anything, and on the bench it reads a
+railed 4095 because no sensor is fitted. Flagged in the code and in tasks.md — treat the piston
+number as indicative until someone puts a gauge on it.
+
+Verified: 27/27 decode tests pass, including the short-payload path; `/esp32/pneumatic`
+publishes four fields on the Orin with the stack running.
+
+**Watch the update rate.** The frame arrives at 0.88 Hz, not the 20 Hz the throttle intends,
+for reasons traced but not solved in the kart-medulla entry. Anything on this dashboard that
+looks laggy in the pneumatics panel is that, not the browser.
