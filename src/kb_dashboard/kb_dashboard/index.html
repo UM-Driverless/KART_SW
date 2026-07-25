@@ -1883,8 +1883,13 @@ body{
     const compState = d.esp32_compressor_state;
     const cf = $('rcPneuCompFill'), cv = $('rcPneuCompVal');
     if (cf) cf.style.width = (compDuty != null ? Math.max(0, Math.min(100, compDuty / 255 * 100)) : 0) + '%';
-    if (cv) cv.textContent = compOn ? 'ON ' + Math.round((compDuty || 0) / 255 * 100) + '%'
-                          : compState === 2 ? 'COOLDOWN' : 'off';
+    // Drive the label from state first, duty second. During the 1 s soft-start the motor is
+    // running but duty is still near 0, and keying off duty alone printed "off" for over a
+    // second while it was actually spinning up. Falling back to compOn keeps pre-2026-07-25
+    // firmware working, which sends no state and leaves it 0.
+    if (cv) cv.textContent = compState === 2 ? 'COOLDOWN'
+                          : (compState === 1 || compOn) ? 'ON ' + Math.round((compDuty || 0) / 255 * 100) + '%'
+                          : 'off';
     document.querySelector('.rc-ebstank')?.classList.toggle('rc-danger', haveTank && !tankOk);
     // any unhealthy item → the System tab pulses red. Tank pressure is judged on the EBS
     // tab now, so it is not counted here — otherwise one fault pulses two tabs.
