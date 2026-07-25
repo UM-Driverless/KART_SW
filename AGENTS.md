@@ -43,6 +43,8 @@
 
 ## Working Style
 - **Add discovered work to `tasks.md` (repo root) immediately, without asking.** Any gap noticed mid-session — missing feature, pending validation, half-done rename, stale doc — becomes a task entry the same turn it's discovered. The board is the memory, not the conversation.
+- **Open a hardware session by writing the bench state into `history.md`** — what is connected, powered, and
+  deliberately absent. More time is lost here diagnosing unplugged hardware than to real bugs.
 - **Use subagents for parallel work.** When tasks are independent (e.g., reading multiple files, searching codebase, running builds while editing), use the Agent tool to delegate to subagents. This keeps the main context clean and speeds up work.
 - **Use background tasks for long-running ops.** Builds (~30s–100s), flashing, serial reads, SSH commands — run these in the background and check results later.
 - **Don't block on things you can parallelize.** If you need to edit 3 files and deploy, edit them all, then deploy. If you need info from 2 different places, query both at once.
@@ -54,6 +56,7 @@
 - **Default working branch on the Mac, the Orin, and the VM is `dev`.** Every `git checkout` / `git pull` you do should be on `dev` unless you have a specific reason (e.g. inspecting `main`).
 - **Commit and push to `dev` first**, every time. Never push directly to `main`, even for "trivial" changes — `main`'s protection will reject you anyway, and a rejected push after a merge/cherry-pick creates annoying recovery work.
 - **Merge `dev` → `main` only after validating** the change drives the kart without regressions. Open a PR (`gh pr create --base main --head dev`), get at least 1 approval from a teammate (the admin-bypass setting lets you self-merge but peer review is strongly preferred), then merge.
+- **Branch-protected repos** (e.g. kart-medulla): open with `gh pr create`, merge with `gh pr merge`.
 - **Feature branches off `dev`** for exploratory work (`feature/xyz`), merged back into `dev` via PR or fast-forward. `main` is not the target for in-progress work.
 - **`dev` is expected to be a tiny bit ahead of `main` most of the time.** If you discover `main` is *ahead of* `dev` (e.g. someone pushed straight to main), merge `main` into `dev` immediately before adding new commits so `dev` remains the "latest + in-progress" snapshot.
 
@@ -63,10 +66,19 @@ A change is NOT done until it's **validated on the target machine**:
 - ESP32 firmware? → **Flash it.**
 - Python/launch change? → **Restart the affected nodes.**
 - Never claim something is fixed if you only pushed — deploy and verify.
+- **A build result is not evidence, nor is "the code looks right".** Evidence: firmware → a measurement off the
+  device; dashboard → the rendered value, seen; logic → a test. Builds can succeed having compiled nothing.
 - **Only then merge `dev` → `main` via PR.** `main` represents "validated on the kart", not "code looks good to me".
 
 ## Critical Rules
 - **Coordinate frame: x forward, y left, z up (ROS REP 103), right-handed.** Yaw is rotation about z, so a **positive steering angle is a LEFT turn** — by the right-hand rule a positive rotation about +z swings the nose toward +y, which is left. This holds everywhere: controller output, `cmd.angular.z`, the ESP32 setpoint, and every dashboard widget. A UI that renders positive to the right is a bug, not a "visual convention" — screen x and SVG `rotate()` are clockwise-positive, so display code must flip the sign when converting to screen space, never the data. See the 2026-07-18 entry in `history.md`.
+- **An absent or out-of-range sensor must read as no-data, never as a number** — a plausible false reading is
+  indistinguishable from a real one and will be acted on. Represent invalidity at the **source** (NaN or a
+  validity flag in firmware), not at the display: the dashboard is one consumer, the PID is another. Test by
+  unplugging the sensor and looking, not by reading code. Cases: `history.md` 2026-07-25.
+- **State only what you measured.** A claim in a report or committed file carries the command that produced it,
+  or is labelled a hypothesis. When a number surprises you, the next action is the measurement that would
+  *falsify* your favourite explanation — not the explanation.
 - **Don't trust auto-memory for technical state.** Auto-memory (`~/.claude/.../memory/`) goes stale fast — file paths, parameter values, launch files, firmware settings all change between conversations. **Always read the actual file or SSH to check** before quoting any value. Treat memory as "might have been true once" not "is true now". `.agents/` docs and the code itself are the source of truth.
 - **Environment is in `.bashrc`** — ROS, workspace, and `IGN_GAZEBO_RESOURCE_PATH` are all sourced in `.bashrc` on every machine. **Never tell the user to source or export these manually.**
 - **Always use `--symlink-install`** when building. This symlinks Python scripts and launch files so edits in `src/` take effect immediately without rebuilding. Only C++ changes need a rebuild.
@@ -134,21 +146,9 @@ When the user says "work on tasks" (or similar), launch subagents to execute tas
 6. **Independent tasks can run in parallel** — launch multiple subagents simultaneously. Tasks that touch the same files must run sequentially.
 7. **Never skip steps** — always update the task's marker before and after work.
 
-## Git Workflow
-- **`dev` is the working branch.** Push all changes to `dev` first, deploy and test on hardware.
-- **Merge to `main` only after confirming changes work.** Use `gh pr merge` to merge PRs when main is protected.
-- For repos with branch protection (like kart-medulla), create PRs with `gh pr create` and merge with `gh pr merge`.
-
 ## Commit Protocol
 1. `git status` — check what will be committed
 2. `git diff --cached` — review changes
 3. Build and verify before committing
 4. If a mistake occurred, document it in `.agents/error-log.md`
 5. If recurring, create a detailed write-up in `.agents/errors/`
-
-## Documentation
-The official documentation for the kart project lives in a separate repo:
-- **Repo:** https://github.com/UM-Driverless/kart-docs
-- **Site:** https://um-driverless.github.io/kart-docs/
-
-The `.agents/` directory in this repo is for AI agent workflow only — not official project docs.
