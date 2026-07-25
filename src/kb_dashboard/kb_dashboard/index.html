@@ -1875,11 +1875,16 @@ body{
     const pf = $('rcPneuPistFill'), pv = $('rcPneuPistVal');
     if (pf) pf.style.width = (pist != null ? Math.max(0, Math.min(100, pist / PNEU_MAX_BAR * 100)) : 0) + '%';
     if (pv) pv.textContent = (pist != null ? pist.toFixed(1) + ' bar' : '-- bar');
-    // compressor: fill tracks the soft-start duty (0-255), label shows ON/off
+    // compressor: fill tracks the soft-start duty (0-255), label shows ON/off.
+    // State 2 is the forced 15 s cooldown after a full-length burst — it must read
+    // differently from a plain "off", because at duty 0 the two look identical and
+    // "off" would suggest the tank is full when the motor is actually resting.
     const compDuty = d.esp32_compressor_duty, compOn = d.esp32_compressor_on;
+    const compState = d.esp32_compressor_state;
     const cf = $('rcPneuCompFill'), cv = $('rcPneuCompVal');
     if (cf) cf.style.width = (compDuty != null ? Math.max(0, Math.min(100, compDuty / 255 * 100)) : 0) + '%';
-    if (cv) cv.textContent = compOn ? 'ON ' + Math.round((compDuty || 0) / 255 * 100) + '%' : 'off';
+    if (cv) cv.textContent = compOn ? 'ON ' + Math.round((compDuty || 0) / 255 * 100) + '%'
+                          : compState === 2 ? 'COOLDOWN' : 'off';
     document.querySelector('.rc-ebstank')?.classList.toggle('rc-danger', haveTank && !tankOk);
     // any unhealthy item → the System tab pulses red. Tank pressure is judged on the EBS
     // tab now, so it is not counted here — otherwise one fault pulses two tabs.

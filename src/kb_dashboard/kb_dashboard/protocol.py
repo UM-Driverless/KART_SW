@@ -159,25 +159,51 @@ DIVIDER_RATIO = 3.0        # bar per volt-at-pin (SDE5 1 V/bar through the ÷3 d
 def decode_pneumatic(payload) -> dict:
     """@brief Decode pneumatics telemetry to dict.
 
-    Payload: [tank_pressure_adc, compressor_duty].
-    tank_pressure_adc: raw 12-bit ADC (0-4095). compressor_duty: 0-255, 0 = MOSFET off.
+    Payload: [pres1_adc, compressor_duty, pres2_adc, compressor_state].
+    pres1_adc is PRESSURE_1, the tank sensor. pres2_adc is PRESSURE_2, the
+    piston/brake-line sensor. Both are raw 12-bit ADC (0-4095). compressor_duty
+    is 0-255 with 0 = MOSFET off. compressor_state is 0 idle / 1 running /
+    2 cooldown.
+
+    Fields 3 and 4 were appended to the frame on 2026-07-25, so a two-field
+    payload from older firmware still decodes: pres2 and state come back None
+    and 0, which render as "-- bar" and no cooldown badge rather than as zeros.
+
+    PRESSURE_3 exists on the board (GPIO 1) but is shared with the AS5600
+    PWM-angle input and has no sensor fitted, so it is deliberately not sent.
 
     @param payload List of int32 values from the Frame.
-    @return Dict with pneu_tank_bar (float, feeds the tank dial), esp32_compressor_on
-            (bool), and esp32_compressor_duty (int 0-255).
+    @return Dict with pneu_tank_bar, pneu_piston_bar (floats or None),
+            esp32_compressor_on (bool), esp32_compressor_duty (int 0-255) and
+            esp32_compressor_state (int).
     """
     if len(payload) < 2:
         return {
             "pneu_tank_bar": None,
+            "pneu_piston_bar": None,
             "esp32_compressor_on": False,
             "esp32_compressor_duty": 0,
+            "esp32_compressor_state": 0,
         }
     pressure_adc, comp_duty = payload[0], payload[1]
     v_adc = pressure_adc / ADC_FULL_SCALE * ADC_VREF_V
+    # PRESSURE_2 is assumed to sit behind the same ÷3 divider as PRESSURE_1 and
+    # is converted with the same map. UNVERIFIED — PRESSURE_1's factor was
+    # anchored to a gauge reading on 2026-07-12, PRESSURE_2 has never been
+    # checked against anything. Treat the piston number as indicative until it
+    # is calibrated against a gauge the same way.
+    pres2_adc = payload[2] if len(payload) >= 3 else None
+    piston_bar = (
+        round(DIVIDER_RATIO * (pres2_adc / ADC_FULL_SCALE * ADC_VREF_V), 2)
+        if pres2_adc is not None
+        else None
+    )
     return {
         "pneu_tank_bar": round(DIVIDER_RATIO * v_adc, 2),
+        "pneu_piston_bar": piston_bar,
         "esp32_compressor_on": comp_duty > 0,
         "esp32_compressor_duty": comp_duty,
+        "esp32_compressor_state": payload[3] if len(payload) >= 4 else 0,
     }
 
 
@@ -335,8 +361,10 @@ class DashboardState:
             "health_heap_kb": 0,
             "health_i2c_errors": 0,
             "pneu_tank_bar": None,          # tank pressure (bar); None → dial shows "-- bar"
+            "pneu_piston_bar": None,        # piston/brake-line pressure (bar); None → "-- bar"
             "esp32_compressor_on": False,   # EBS compressor MOSFET on/off
             "esp32_compressor_duty": 0,     # compressor PWM duty 0-255 (soft-start ramp)
+            "esp32_compressor_state": 0,    # 0 idle / 1 running / 2 forced cooldown
             # EBS (emergency brake system) — no signal reaches the Orin yet, nothing publishes
             # these. None means "not wired" and the dashboard renders it as NOT WIRED in grey.
             # Keep None as the default rather than a boolean: a safety indicator that reads
