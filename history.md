@@ -556,3 +556,68 @@ actually bound rather than the one it was asked for.
 `decode_steering_raw` reads three, and the ESP32 simulator uses that encoder — so the
 dashboard's steering PWM readout is permanently 0% in simulation. Real firmware sends all
 three. Logged in `tasks.md`.
+
+---
+
+## 2026-07-25 — Orin unreachable from home, and reopening the "Wi-Fi when no tether" question
+
+### The Orin was not reachable, and the evidence says it was not running
+
+Checked from the Mac with the Orin sitting on the desk connected by a USB cable. Four
+independent probes, all negative:
+
+1. **No USB device enumerated on the Mac at all.** `system_profiler SPUSBDataType` returned
+   nothing and `ioreg -rc IOUSBHostDevice` listed zero devices — only the two empty XHCI root
+   controllers. No `/dev/cu.usb*` either. So the cable was carrying no data link in either
+   direction.
+2. **The `kart` AP was not beaconing.** `networksetup -setairportnetwork en0 kart umotorsport`
+   answered `Could not find network kart.` on three attempts spread over several minutes (the
+   command forces a fresh scan each time). Since the Orin boots the `kart-ap` connection at
+   autoconnect-priority 200 and it has been the default operating mode since 2026-07-06, a
+   booted Orin in the same room would have been visible.
+3. **The Cloudflare tunnel was down.** `ssh orin-remote` failed with
+   `Connection closed by UNKNOWN port 65535`, which is `cloudflared` finding no tunnel on the
+   far end. Expected whenever the Orin has no internet, so on its own this proves nothing —
+   it only rules out the remote path.
+4. **Not on the local LAN either.** A ping sweep of the Mac's /24 found four hosts, none of
+   them the Orin.
+
+The likely cause is simply that the board was not powered. An AGX Orin devkit needs its 19 V
+barrel supply (or the kart's converter); a Mac USB-C port cannot boot it, and the AGX's
+device-mode USB port only enumerates on a host once Linux is up — which is consistent with
+probe 1 finding an entirely empty USB bus.
+
+Worth remembering as a diagnostic ordering: **probe 1 is the cheap decisive one.** If the USB
+bus is empty there is no point scanning Wi-Fi or poking the tunnel, because all three
+symptoms have the same single cause.
+
+### Can the Orin fall back to a normal Wi-Fi network when no phone is tethered?
+
+Not as configured. The Wi-Fi radio (`wlP1p1s0`, RTL8822CE) is fully occupied being the `kart`
+access point, and a single radio cannot be an AP and a client at the same time unless the
+driver advertises concurrency. Internet therefore only arrives over the USB tether today.
+
+This is the same question as the 2026-04-20 entry above, but the premise has changed: back
+then the Orin was still a Wi-Fi *client* and the AP was the hypothetical, so option 2 (a USB
+Wi-Fi dongle) was shelved as unnecessary. Since 2026-07-06 the AP is the permanent default,
+which inverts the trade — the dongle is now the thing that adds a capability rather than
+duplicating one.
+
+Three ways to do it:
+
+- **A USB Wi-Fi dongle as a second radio.** Built-in radio keeps serving `kart`; the dongle
+  joins known networks as a client and NetworkManager routes internet out through it. Two
+  independent radios means no shared-channel compromise and no driver concurrency to trust.
+  ~€10. This is the recommended path, and it is the 2026-04-20 "option 2" taken off the shelf.
+- **AP+STA concurrency on the built-in radio.** Free, but 2026-04-20 rejected it as
+  driver-flaky on Realtek parts. That was a paper judgement, never tested against the
+  hardware, so it is worth one command next time the Orin is up:
+  `iw list | grep -A15 "valid interface combinations"`. If `{ managed, AP } <= 2` does not
+  appear, the question is settled for good. Even if it does appear, both interfaces must share
+  one channel, so joining a 5 GHz network would drag the AP off 2.4 GHz and cut the range that
+  makes the AP useful at the kart.
+- **Switch between AP and client mode automatically.** No hardware, but while it is in client
+  mode there is no `kart` network, so the local dashboard disappears — which is precisely the
+  guarantee the AP design was built to provide. Only sensible as a bench-only convenience.
+
+Logged in `tasks.md`.
