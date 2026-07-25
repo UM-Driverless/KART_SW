@@ -765,3 +765,75 @@ publishes four fields on the Orin with the stack running.
 **Watch the update rate.** The frame arrives at 0.88 Hz, not the 20 Hz the throttle intends,
 for reasons traced but not solved in the kart-medulla entry. Anything on this dashboard that
 looks laggy in the pneumatics panel is that, not the browser.
+
+---
+
+## 2026-07-25 (later) — Two false sensor readings, and the stall-then-burst control task
+
+### An absent sensor must never produce a plausible number
+
+Two instances of the same defect were found by looking at the dashboard with the hardware
+unplugged, and neither was visible from reading the code:
+
+- The **steering gauge read a confident `90° LEFT`** with no sensor connected at all. The
+  firmware reports 3.451 rad when nothing answers on I2C; the gauge clamped that to its −90°
+  limit and drew it as a measurement, needle hard over.
+- The **PISTON bar read `9.9 bar`**. An unconnected ADC input floats to the rail, 4095 converts
+  to full scale, and full scale on this map is 9.9 bar.
+
+Both now refuse to invent a value. Steering keys off the health flags — no magnet or no I2C
+hides the actual-angle needle and the readout says `NO SENSOR` — while the amber target needle
+stays live, because that is the Orin's own command and does not depend on the sensor. A
+pressure channel pinned at full scale decodes to `None` and shows `-- bar`; a genuine sensor
+pegged at full scale is equally out of range, so both collapse to no-reading rather than to a
+number.
+
+**The rule this establishes: a false reading is never acceptable.** No-data must look like
+no-data — `--`, `NO SENSOR`, `NaN` — because a plausible number is indistinguishable from a
+real one and will be acted on. The EBS tab's existing `NOT WIRED` treatment was already the
+right pattern; these two panels had simply not followed it. A sweep of the remaining panels is
+in tasks.md, and the way to do it is to unplug things and look, not to read the code.
+
+### The control task does not run slowly — it stalls, then sprints
+
+An earlier entry today recorded that `control_task` runs at 8.9 Hz against a 500 Hz nominal,
+and left a 1/10 discrepancy in the pneumatics frame rate as unexplained. Both statements were
+built on an average, and the average was hiding the actual behaviour.
+
+Measured at the serial line, steering frames arrive in **bursts of 10 with 0.0 ms between
+them, separated by 1102 ms gaps** — 8 such gaps against 81 zero-gaps in a 10 s capture. So the
+task blocks about 1.1 s on the AS5600 read (nothing is on the I2C bus; the steering sensor is
+mid-migration to an MT6701 read as PWM on GPIO 1), and then `KM_RTOS`'s
+`vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(period_ms))` returns immediately and repeatedly
+until `xLastWakeTime` catches up with real time, replaying the ten periods it missed
+back-to-back.
+
+That single fact reconciles the two measurements that had looked contradictory:
+
+- The **pneumatics throttle is correct after all.** It throttles on wall-clock, sees ~0 ms
+  elapsed between the ten iterations inside a burst, and so emits exactly once per burst. The
+  deterministic 1-in-10 was the burst length, not a broken clock. No bug to fix there.
+- The **compressor's 15 s burst timing stayed accurate** (measured 15.5 s / 15.6 s) because it
+  compares absolute tick counts across bursts, where the stalls are included rather than
+  skipped.
+
+The diagnosis only became possible after adding an iteration counter to the frame: a frame that
+is never sent and a frame lost in transit look identical from the Orin, so arrival rate could
+never have answered it. That counter is now permanent, for the same reason.
+
+**What actually needs fixing, and it is not the sensor.** The blocking read is expected and
+temporary. The `vTaskDelayUntil` catch-up is neither: it converts *any* transient stall into a
+burst of PID steps with dt≈0, which is worse for a controller than running evenly slow, and it
+will still be there when the MT6701 lands. The wrapper should resync `xLastWakeTime` to the
+current tick after an overrun instead of replaying missed periods. The requirement to design
+against is a steering loop at **500 Hz or faster**; the compressor and pneumatics need about
+1 Hz and should move to their own task rather than riding the PID's.
+
+### On method
+
+Three times this session a tidy explanation was offered for a surprising number before the
+cheap decisive measurement had been taken, and each time the explanation was wrong: an invented
+SSID collision, a "the Orin is unpowered" conclusion drawn from a cable that was never plugged
+into the Mac, and a control-loop rate reported as steady when it was bursting. The counter that
+settled the last one took two minutes to add. **When a number is surprising, the next action is
+the measurement that would falsify the favourite theory, not the theory.**
