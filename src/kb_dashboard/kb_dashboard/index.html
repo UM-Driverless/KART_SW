@@ -1096,11 +1096,14 @@ const RC_DIAL_HEAP = { min: 0, max: 300, major: 100, minor: 25, numbers: true, l
 // range 6-10 bar: 10 bar charged (FS T9.3.2 caps operating pressure at 10 bar), 6 bar
 // minimum to guarantee ~3 brake activations (10->6 bar). Tank sensor: Festo SDE5-D10
 // (567465), 0-10 bar. Source: ~/dv/kart/pneumatics/README.md + history.md.
-// TANK_MIN is 7, not 6, so the green band starts where the compressor actually stops
-// pumping: the firmware's hysteresis fills to 8 bar and restarts at 7 (ADC 2858 / 2500 in
-// kart-medulla's main.c). A band starting at 6 called the bottom of every normal pump cycle
-// "healthy" and only went red once the kart was already a bar below where it refills.
-const PNEU_MAX_BAR = 10, PNEU_TANK_MIN = 7, PNEU_TANK_MAX = 10;
+// TANK_MIN is back to 6 (2026-07-27). It was briefly 7, set from firmware trip points
+// that were believed to be 7 and 8 bar under a gauge-anchored calibration since
+// withdrawn -- the schematic showed the divider is 3:1, not the ~4:1 that anchor
+// implied, so the anchor had no support. 6 bar is the pneumatics figure: the reservoir
+// needs roughly that to guarantee ~3 brake activations. Note the dial's top end is not
+// reachable by measurement -- the divider maps 10 bar to 3.33 V but the ADC saturates
+// near 2.9 V, so readings stop being real around 8.7 bar.
+const PNEU_MAX_BAR = 10, PNEU_TANK_MIN = 6, PNEU_TANK_MAX = 10;
 const RC_DIAL_TANK = { min: 0, max: PNEU_MAX_BAR, major: 2, minor: 1, numbers: true, topLabel: 'TANK', label: 'bar',
   fmt: v => (v == null || isNaN(v)) ? '--' : v.toFixed(1),
   // dim bands (the below-min region is a big slice of the scale, so bright red would look alarming

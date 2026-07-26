@@ -984,3 +984,45 @@ this change into it — its own message notes that two `TestDecodePneumatic` cas
 The commit was already pushed, so it was fixed forward rather than rewritten. Worth knowing when
 reading that commit: it contains two unrelated changes, and the pneumatic half of it is only complete
 as of the following commit.
+
+
+## 2026-07-27 — The divider is 3:1. The gauge anchor was wrong, and the fix is millivolts
+
+Rubén, on reading the previous entry: the KiCad design is three equal resistors in series with the
+tap after one, so a third of the voltage. Checked the schematic
+(`dv-hardware/projects/kart-medulla/kart-medulla_P1.kicad_sch`) — **R11 = R12 = R13 = 10K**, and the
+nets are named `PRESSURE_n__0_10V` → `PRESSURE_n__0_3V3`. The divider is exactly 3:1 and always was.
+
+**So the 2026-07-26 conclusion was wrong.** The chain of reasoning was: the gauge says 7.5 bar at ADC
+2679; the ADC's full scale is 2900 mV; therefore the divider must be ~3.95:1. Two of those are sound
+and the third was an inference about hardware I had not looked at, when the schematic was one grep
+away. The original comment in `protocol.py` — `bar = 3.0 * V_adc` — had the hardware right all along.
+
+**What the disagreement actually is.** With a confirmed 3:1 divider, ADC 2679 is 6.48 bar at a 3.3 V
+full scale or 5.69 bar at 2.9 V, against a mechanical gauge reading 7.5. For the gauge to be right the
+ADC would need a 3.82 V full scale, which is above VDDA — impossible. So the gauge is the outlier by
+16–32%, and *that* is now the open question. It is not the divider.
+
+**The real fix, and why no constant was needed at all.** Rubén again: 1 V = 1 bar, we take a third, so
+1 V at the ESP32 is 3 bar — where is the confusion? There wasn't any, in the physics. The only unknown
+was raw count → volts, and that is not something to choose: every ESP32 carries per-chip ADC
+calibration in eFuse and ESP-IDF converts through it. Guessing a counts-per-volt constant was the
+whole mistake, twice over — first the 3.3 V assumption, then the gauge anchor replacing it.
+
+So the firmware now sends **millivolts**. `KM_GPIO_ReadADC_mV()` converts via
+`esp_adc_cal_raw_to_voltage()`, and `ESP_PNEUMATIC` gained fields 8 and 9 (PRESSURE_1/2 in mV).
+`decode_pneumatic` prefers them and computes `bar = 3 * V_pin`, falling back to the old 3.3 V
+approximation only for firmware that predates the fields, with a `pneu_calibrated` flag so the
+difference is visible rather than silent. `BAR_PER_ADC_COUNT` is gone. This was the surviving bullet
+from a task I had marked obsolete the day before — written down, then not applied.
+
+**Range ceiling, worth keeping in mind.** The divider maps the sensor's 0–10 V onto 0–3.33 V, but the
+S3's ADC at 11 dB is good to about 2900 mV. Readings saturate around **8.7 bar**, so the top of both
+the sensor's span and the dial is unreachable by measurement. Saturated readings now decode to None
+rather than to a number.
+
+`PNEU_TANK_MIN` went back to 6, undoing the move to 7 that was based on the withdrawn anchor.
+
+**Process note.** Two wrong conclusions in two days, both from inferring hardware instead of reading
+it, and both stated confidently in committed files. The schematic is in a repo on this machine. Check
+the design before deducing it from a calibration mismatch.

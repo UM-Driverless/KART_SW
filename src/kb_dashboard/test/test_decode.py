@@ -134,23 +134,53 @@ class TestDecodeEffort:
 # ── decode_pneumatic ─────────────────────────────────────────────────
 
 class TestDecodePneumatic:
+    def _frame(self, mv1=None, duty=0, mv2=None, state=0, sdc=0):
+        """8-field frame plus the two calibrated millivolt fields."""
+        f = [0, duty, 0, state, 100, 0, 0, sdc]
+        if mv1 is not None:
+            f.append(mv1)
+            f.append(mv2 if mv2 is not None else 0)
+        return f
+
+    def test_bar_is_three_times_pin_volts(self):
+        # The whole conversion: SDE5 gives 1 V/bar, the board's three equal 10k
+        # resistors (R11/R12/R13) divide by three, so bar = 3 * V_pin. 7 bar puts
+        # 2333 mV on the pin, 8 bar puts 2667 mV.
+        assert abs(decode_pneumatic(self._frame(mv1=2333))["pneu_tank_bar"] - 7.0) < 0.01
+        assert abs(decode_pneumatic(self._frame(mv1=2667))["pneu_tank_bar"] - 8.0) < 0.01
+        assert abs(decode_pneumatic(self._frame(mv1=1000))["pneu_tank_bar"] - 3.0) < 0.01
+
+    def test_calibrated_flag_tracks_the_mv_fields(self):
+        assert decode_pneumatic(self._frame(mv1=2333))["pneu_calibrated"] is True
+        assert decode_pneumatic([2500, 0])["pneu_calibrated"] is False
+
+    def test_saturated_pin_is_not_a_pressure(self):
+        # At/above the 11 dB ceiling the ADC is pegged, and a pegged channel cannot
+        # be told from a fault. It must read "--", never a confident number. This
+        # also means the top of the sensor's span is unreachable: the divider maps
+        # 10 bar to 3333 mV, well past the ceiling.
+        assert decode_pneumatic(self._frame(mv1=2900))["pneu_tank_bar"] is None
+        assert decode_pneumatic(self._frame(mv1=3100))["pneu_tank_bar"] is None
+        assert decode_pneumatic(self._frame(mv1=2899))["pneu_tank_bar"] is not None
+
     def test_compressor_on(self):
-        # gauge-anchored calibration: 7.5 bar at ADC 2679, so 1 bar ≈ 357.2 ADC.
-        # duty 153 → compressor on.
-        fields = decode_pneumatic([357, 153])
-        assert abs(fields["pneu_tank_bar"] - 1.0) < 0.02
+        fields = decode_pneumatic(self._frame(mv1=1000, duty=153))
         assert fields["esp32_compressor_on"] is True
         assert fields["esp32_compressor_duty"] == 153
 
-    def test_full_scale(self):
-        # raw 4095 → 11.46 bar, past the SDE5-D10's 10 bar span. Asserted as the
-        # number the map actually produces, not as a plausible-looking 9.9: the
-        # map is anchored at one mid-range point and is not claimed to hold here.
-        fields = decode_pneumatic([4095, 0])
-        assert abs(fields["pneu_tank_bar"] - 11.46) < 0.05
+    def test_raw_fallback_for_old_firmware(self):
+        # Pre-2026-07-27 firmware sends no millivolts, so the decoder falls back to
+        # the assumed 3.3 V full scale. Approximate by construction -- asserted here
+        # so the fallback is known to work, not because the number is trusted.
+        fields = decode_pneumatic([2500, 0])
+        assert abs(fields["pneu_tank_bar"] - 6.04) < 0.02
+        assert fields["pneu_calibrated"] is False
+
+    def test_full_scale_raw_is_none(self):
+        assert decode_pneumatic([4095, 0])["pneu_tank_bar"] is None
 
     def test_compressor_off(self):
-        fields = decode_pneumatic([1365, 0])
+        fields = decode_pneumatic(self._frame(mv1=1365, duty=0))
         assert fields["esp32_compressor_on"] is False
         assert fields["esp32_compressor_duty"] == 0
 
@@ -159,15 +189,6 @@ class TestDecodePneumatic:
         assert fields["pneu_tank_bar"] is None
         assert fields["esp32_compressor_on"] is False
         assert fields["esp32_sdc_closed"] is None
-
-    def test_firmware_trip_points_read_as_7_and_8_bar(self):
-        # The whole point of the 2026-07-26 recalibration: main.c pumps below
-        # ADC_PRESSURE_LOW (2500) and stops above ADC_PRESSURE_HIGH (2858), and the
-        # dial has to show those as 7 and 8 bar. Under the old datasheet-derived map
-        # they rendered as ~6.0 and ~6.9, so one hysteresis band read as two
-        # different pressure ranges depending on which side you looked from.
-        assert abs(decode_pneumatic([2500, 0])["pneu_tank_bar"] - 7.0) < 0.01
-        assert abs(decode_pneumatic([2858, 0])["pneu_tank_bar"] - 8.0) < 0.01
 
     def test_compressor_disabled_state(self):
         # state 3 = operator latch. Duty is 0, same as idle and cooldown, so the

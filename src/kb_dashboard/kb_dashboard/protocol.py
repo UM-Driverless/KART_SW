@@ -216,54 +216,67 @@ def decode_health(payload) -> dict:
     }
 
 
-# Tank pressure calibration. Tank sensor = Festo SDE5-D10, part 567465, on PRESSURE_1
-# (CN7.1 -> GPIO 6). The firmware sends the raw 12-bit ADC count; this converts it to
-# bar with one gauge-anchored factor: on 2026-07-18 the mechanical tank gauge read
-# 7.5 bar while this channel read ADC 2679, hence 7.5 / 2679 bar per count.
+# Tank pressure. Sensor = Festo SDE5-D10 (567465): 0-10 bar -> 0-10 V, so 1 V/bar
+# with a 0 V zero offset (datasheet in ~/dv/datasheets/). On the board it goes
+# through three equal 10 k resistors, R11/R12/R13 -- net PRESSURE_n__0_10V ->
+# PRESSURE_n__0_3V3 -- so the pin sees a third of it. Hence:
 #
-# CHANGED 2026-07-26. The previous comment here derived bar from the datasheet chain
-# and explicitly warned "do not sync the two" against main.c's trip points. It was
-# wrong on two counts at once, which is why its answer was ~16% low and why the
-# dashboard drew the firmware's 7-and-8-bar hysteresis band as ~6.0 and ~6.9 bar:
+#     bar = 3 * V_pin
 #
-#   1. ADC full scale is 2900 mV, not 3300. ESP32-S3 datasheet Table 5-6 ("ADC
-#      Calibration Results"), copy in ~/dv/datasheets/esp32-s3_espressif_datasheet.pdf:
-#      ATTEN3 has an effective measurement range of 0~2900 mV. ATTEN3 is
-#      ADC_ATTEN_DB_11, which is what km_gpio.c sets for this channel.
-#   2. The divider is very unlikely to be 3:1. The SDE5-D10 datasheet (567465, copy
-#      in ~/dv/datasheets/) gives 0-10 bar -> 0-10 V, i.e. 1 V/bar with a 0 V zero
-#      offset. Note the gauge reading fixes only the PRODUCT full_scale x ratio,
-#      which is 0.0027995 * 4095 = 11.46 V — it cannot separate the two. So each
-#      candidate ratio implies a required full scale:
-#          3.00:1 -> 3.82 V     3.47:1 -> 3.30 V     3.95:1 -> 2.90 V
-#      The S3's widest attenuation gives 2900 mV and the pin cannot exceed VDDA
-#      (~3.3 V), so no configuration produces 3.82 V: 3:1 is inconsistent with the
-#      gauge under any real ADC setup, while 3.95 lands exactly on the datasheet
-#      figure. 4:1 is also the sane design choice — 10 bar -> 2.5 V, inside the
-#      range with margin, where 3:1 would clip a 10 bar tank at 8.7 bar.
+# That is the whole conversion, and every term in it is a documented property of
+# the sensor or the schematic. There is no fitted constant and nothing to anchor.
 #
-#      This inference is only as good as the single gauge reading behind it. If that
-#      gauge is off by ~30%, 3:1 becomes viable again. Hence "measure R11/R12/R13"
-#      is still an open task rather than a settled fact.
+# The firmware sends the pin voltage in MILLIVOLTS (ESP_PNEUMATIC fields 8 and 9),
+# converted on-chip through the ESP32's eFuse ADC calibration. That is deliberate:
+# a raw count only becomes a voltage if you know the ADC's real full scale, which
+# is neither the 3.3 V rail nor a number worth guessing, and guessing it is what
+# made this dial disagree with the firmware. The chip knows its own answer, so it
+# is the chip's job.
 #
-# Those two corrections together give 2.9 * 4 / 4095 = 0.0028327 bar/count, which
-# agrees with the gauge anchor's 0.0027995 to within 1.2%. Two independent datasheets
-# and one mechanical gauge landing within ~1% of each other is the real reason to
-# trust this number — not the gauge alone.
+# History, so nobody re-derives the wrong thing: until 2026-07-26 this file used
+# bar = 3.0 * (raw/4095 * 3.3). On 2026-07-27 that was briefly replaced by a
+# gauge-anchored 7.5/2679 after a mechanical gauge disagreed by ~16%, on the
+# mistaken inference that the divider must be ~4:1. The schematic says otherwise --
+# R11/R12/R13 are all 10 k, the divider is exactly 3:1 -- so the divider was never
+# the problem and that anchor is gone. The gauge disagreement is still unexplained
+# and is now the open question (see tasks.md); the millivolt path above sidesteps
+# it entirely for the ADC's part of the chain.
 #
-# STILL UNVERIFIED, in rough order of how much they could move the number: nobody has
-# measured R11/R12/R13 to confirm 4:1 (predicted, not observed); the anchor is a single
-# point, so an offset would tilt the whole scale; and the SDE5 itself is only +/-3 %FS.
-# Under this factor ADC full scale computes to 11.46 bar, past the sensor's 10 bar
-# span, so the top of the range is extrapolation. The settling measurement is a meter
-# on the ADC pin read against the gauge and the raw count at the same instant, at two
-# well-separated pressures — that separates divider, sensor and gauge in one pass.
-# Open in tasks.md.
-#
-# Recalibrating means editing this constant AND main.c's ADC_PRESSURE_LOW/HIGH
-# together: they are two expressions of the same calibration in different repos.
+# RANGE CEILING, worth knowing: the divider maps the sensor's 0-10 V onto 0-3.33 V,
+# but the ESP32-S3 ADC at 11 dB is only good to about 2900 mV. Readings saturate
+# around 8.7 bar, so anything at or above that is out of range rather than a
+# pressure. The dial's 10 bar top end is therefore unreachable by measurement.
+BAR_PER_PIN_VOLT = 3.0      # three equal 10 k resistors: the pin sees V_sensor / 3
+
+# Fallback only, for firmware too old to send millivolts. Same shape as the map
+# this file used before 2026-07-26, and it inherits that map's unverified 3.3 V
+# full-scale assumption -- which is precisely why the firmware now sends mV. Any
+# bar figure derived through here is approximate.
+ADC_VREF_V_ASSUMED = 3.3
 ADC_FULL_SCALE = 4095.0     # 12-bit
-BAR_PER_ADC_COUNT = 7.5 / 2679.0   # gauge anchor, 2026-07-18 (see above)
+SENSOR_MAX_BAR = 10.0       # SDE5-D10 span; above this the reading is out of range
+ADC_CEILING_MV = 2900.0     # 11 dB effective range; readings at/above are saturated
+
+
+def _bar_from_mv(mv):
+    """@brief Pin millivolts -> bar, or None when the reading is not trustworthy.
+
+    bar = 3 * V_pin: the SDE5 gives 1 V/bar and the board divides by three. Returns
+    None rather than a number when the ADC is saturated or the result exceeds the
+    sensor's span, because a pegged channel is indistinguishable from a fault and
+    must not render as a confident pressure.
+    """
+    if mv is None or mv >= ADC_CEILING_MV:
+        return None
+    bar = BAR_PER_PIN_VOLT * mv / 1000.0
+    return round(bar, 2) if bar <= SENSOR_MAX_BAR else None
+
+
+def _bar_from_raw_approx(adc):
+    """@brief Fallback for firmware too old to send mV. Approximate — see above."""
+    if adc is None or adc >= ADC_FULL_SCALE:
+        return None
+    return round(BAR_PER_PIN_VOLT * (adc / ADC_FULL_SCALE * ADC_VREF_V_ASSUMED), 2)
 
 
 def decode_pneumatic(payload) -> dict:
@@ -312,16 +325,19 @@ def decode_pneumatic(payload) -> dict:
     # equally out of range and equally untrustworthy, so both collapse to None and the panel
     # shows "-- bar". Never emit a number that cannot be distinguished from a fault.
     pres2_adc = payload[2] if len(payload) >= 3 else None
-    piston_bar = (
-        round(BAR_PER_ADC_COUNT * pres2_adc, 2)
-        if pres2_adc is not None and pres2_adc < ADC_FULL_SCALE
-        else None
-    )
     # -1 means the build has no SDC pin; anything else is the measured level.
     sdc_raw = payload[7] if len(payload) >= 8 else None
+    # Fields 8/9 are the calibrated pin voltages. Prefer them whenever present:
+    # they need no assumption about the ADC's full scale, only the divider ratio.
+    pres1_mv = payload[8] if len(payload) >= 9 else None
+    pres2_mv = payload[9] if len(payload) >= 10 else None
+    tank_bar = _bar_from_mv(pres1_mv) if pres1_mv is not None else _bar_from_raw_approx(pressure_adc)
+    piston_bar = _bar_from_mv(pres2_mv) if pres2_mv is not None else _bar_from_raw_approx(pres2_adc)
     return {
-        "pneu_tank_bar": round(BAR_PER_ADC_COUNT * pressure_adc, 2),
+        "pneu_tank_bar": tank_bar,
         "pneu_piston_bar": piston_bar,
+        "pneu_tank_mv": pres1_mv,
+        "pneu_calibrated": pres1_mv is not None,
         "esp32_compressor_on": comp_duty > 0,
         "esp32_compressor_duty": comp_duty,
         "esp32_compressor_state": payload[3] if len(payload) >= 4 else 0,
