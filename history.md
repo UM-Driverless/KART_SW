@@ -908,6 +908,11 @@ fixed address is part of what makes the AP useful trackside.
 
 ## 2026-07-26 — EBS compressor disable button, and the tank dial was reading a bar low
 
+> **THE CALIBRATION HALF IS WITHDRAWN — see the 2026-07-27 (later) entry at the end of this file.**
+> The compressor button and the SDC interlock stand. The 'dial was reading a bar low' conclusion does
+> not: it rests on a 7.5 bar figure that turned out to be unusable, and there is no mechanical gauge
+> on this kart. Do not re-apply the gauge anchor described below.
+
 Added a button on the dashboard's EBS page that stops the EBS compressor, so the kart is quiet to
 work on. It also forces emergency, because a kart that cannot refill its air reservoir must not go on
 looking ready to drive. The interlock itself lives in the ESP32 firmware (see kart-medulla's
@@ -987,6 +992,10 @@ as of the following commit.
 
 
 ## 2026-07-27 — The divider is 3:1. The gauge anchor was wrong, and the fix is millivolts
+
+> **PARTLY SUPERSEDED — see the 2026-07-27 (later) entry at the end of this file.** The 3:1 divider
+> and the millivolt path are correct and stand. The parts that still treat 7.5 bar as a real reading,
+> or that ask why 'the gauge' disagrees, do not — no such instrument exists.
 
 Rubén, on reading the previous entry: the KiCad design is three equal resistors in series with the
 tap after one, so a third of the voltage. Checked the schematic
