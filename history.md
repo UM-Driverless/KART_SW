@@ -864,3 +864,23 @@ USB Wi-Fi dongle is now the only route to a fallback rather than one of two opti
 half of what we want is already in place and needs no config: the tether's DHCP default route has
 metric 100 against Wi-Fi's 600, so USB always wins when plugged, and the client profiles are already
 ordered phone hotspots (100, 90, 50) above `Robots_urjc` (10), all below `kart-ap` at 200.
+
+### Same day, on-hardware confirmation: no Wi-Fi fallback, verified by unplugging the cable
+
+The `iw list` inference above was checked against the hardware rather than trusted. A logger sampled
+`nmcli device`, NM connectivity, `iw dev wlP1p1s0 info` and the default route every 5 s while the USB
+cable was physically pulled for **2m 07s (14:37:40 → 14:39:47)**. Result across all 112 samples:
+`wlP1p1s0` stayed `connected:kart-ap` in `type AP` mode, **`type managed` never appeared once**, the
+tether interface vanished from the device list, the default route read `NONE` for the entire outage,
+and connectivity sat at `limited`. NetworkManager made no attempt to associate with any client
+profile — confirmed independently from the phone, whose hotspot showed no connected-device indicator
+for the duration. Two unrelated observations, same conclusion.
+
+Worth keeping as the reassuring half: the `kart` AP served continuously through the outage, so the
+local dashboard at `http://10.42.0.1/` never went down. Losing the cable costs internet only
+(`kart.rubenayla.xyz`, `ssh orin-remote`), never trackside telemetry.
+
+Method note that made this cheap: SSH to the Orin dies with the cable, since `orin-remote` rides the
+Cloudflare tunnel over that same link. Rather than trying to hold a session open, a `nohup` logger
+writing to `/tmp/netwatch.log` recorded the whole event unattended and was read back after the
+replug. Any future test that severs the observer's own connection should be instrumented this way.
