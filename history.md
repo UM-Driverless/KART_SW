@@ -837,3 +837,30 @@ SSID collision, a "the Orin is unpowered" conclusion drawn from a cable that was
 into the Mac, and a control-loop rate reported as steady when it was bursting. The counter that
 settled the last one took two minutes to add. **When a number is surprising, the next action is
 the measurement that would falsify the favourite theory, not the theory.**
+
+## 2026-07-26 — Dashboard "unreachable over USB" was a stale home-screen shortcut; AP+STA ruled out
+
+The dashboard would not load on the USB-tethered iPhone while `https://kart.rubenayla.xyz` worked
+from the same phone. The Orin side was healthy throughout: `enxfe9ca7a9ecdb` at 172.20.10.2/28,
+the phone at 172.20.10.1 answering pings in 0.6 ms, the dashboard listening on `0.0.0.0:80`,
+`curl http://172.20.10.2/` on the Orin returning 200, `iptables` INPUT policy ACCEPT with only the
+AP's `nm-sh-in-wlP1p1s0` chain. A 90 s packet capture on the USB interface saw 81 port-80 packets,
+every one of them the Orin's own NetworkManager connectivity checks to Canonical hosts, and nothing
+inbound from the phone. The cause turned out to be the **phone's home-screen shortcut**, not the
+network — a freshly typed `http://172.20.10.2/` works. The dashboard moved from `:9090` to port 80
+on 2026-07-08, so saved shortcuts and bookmarks from before then point at a port nothing listens on.
+Worth remembering that a port migration leaves stale client-side launchers behind, and that a
+"host unreachable" report from a saved shortcut says nothing about the host.
+
+Tooling note: **`tcpdump` is not installed on the Orin.** The capture was a raw `AF_PACKET` Python
+sniffer run under sudo, which needs no install and was quicker than apt.
+
+Then the follow-up question: if the USB tether drops, does the Orin fall back to Wi-Fi? **No, and it
+cannot on the built-in radio.** `iw list` on the RTL8822CE prints no "valid interface combinations"
+section at all, so AP+STA concurrency is not advertised by the driver — the radio serves the `kart`
+AP (currently `type AP`, channel 1) or joins a network as a client, never both. This is the check
+the `tasks.md` dongle task said to run before spending money, and it comes back negative, so the
+USB Wi-Fi dongle is now the only route to a fallback rather than one of two options. The routing
+half of what we want is already in place and needs no config: the tether's DHCP default route has
+metric 100 against Wi-Fi's 600, so USB always wins when plugged, and the client profiles are already
+ordered phone hotspots (100, 90, 50) above `Robots_urjc` (10), all below `kart-ap` at 200.
