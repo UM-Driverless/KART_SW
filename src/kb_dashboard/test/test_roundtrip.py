@@ -224,6 +224,29 @@ class TestHealthRoundTrip:
         assert result["health_steer_ok"] is False
         assert result["health_steer_rejects"] == 3
 
+    def test_split_health_topics_decode(self):
+        # kb_coms_micro does NOT publish the whole health frame on one topic: it
+        # splits it into /esp32/health/flags (just the flag word) and
+        # /esp32/health/data ([agc, heap_kb, i2c_errors]). Feeding either half to
+        # decode_health() hits its len < 4 guard and yields all-False, which is
+        # how every health field read "bad" while the ESP32 was healthy.
+        from kb_dashboard.protocol import decode_health_flags, decode_health_data
+
+        flags = decode_health_flags([0x0c])       # heap + steer, no I2C/magnet
+        assert flags["health_steer_ok"] is True
+        assert flags["health_heap_ok"] is True
+        assert flags["health_i2c_ok"] is False
+        assert flags["health_magnet_ok"] is False
+        assert flags["health_steer_trip"] is False
+
+        data = decode_health_data([0, 200, 0])
+        assert data["health_agc"] == 0
+        assert data["health_heap_kb"] == 200
+        assert data["health_i2c_errors"] == 0
+
+        # the failure this guards: the whole-frame decoder on a flags-only payload
+        assert decode_health([0x0c])["health_steer_ok"] is False
+
     def test_four_field_health_still_decodes(self):
         # older firmware, before the frame counters were appended
         result = decode_health([0x07, 50, 200, 0])

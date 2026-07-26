@@ -126,6 +126,48 @@ def decode_throttle(payload) -> float:
     return payload[0] / 255.0
 
 
+def decode_health_flags(payload) -> dict:
+    """@brief Decode the flags-only health payload from /esp32/health/flags.
+
+    kb_coms_micro splits the ESP32's health frame across two topics: this one
+    carries a single int32 of flag bits, and /esp32/health/data carries the
+    numbers. Decoding either half with decode_health() does not work — it needs
+    4 fields and returns all-False for anything shorter, which is exactly how the
+    dashboard's health pills silently read "bad" while the ESP32 was healthy.
+
+    @param payload List with one int32 of flag bits.
+    @return Dict of the boolean health fields only.
+    """
+    flags = payload[0] if len(payload) >= 1 else 0
+    return {
+        "health_magnet_ok": bool(flags & 0x01),
+        "health_i2c_ok": bool(flags & 0x02),
+        "health_heap_ok": bool(flags & 0x04),
+        "health_steer_ok": bool(flags & 0x08),
+        "health_steer_trip": bool(flags & 0x10),
+    }
+
+
+def decode_health_data(payload) -> dict:
+    """@brief Decode the numeric health payload from /esp32/health/data.
+
+    kb_coms_micro currently forwards only [agc, heap_kb, i2c_errors]; the
+    firmware's appended steering frame counters are dropped before they get
+    here, so those are not decodable from this topic yet.
+
+    @param payload List of int32: [agc, heap_kb, i2c_errors].
+    @return Dict of the numeric health fields present.
+    """
+    out = {}
+    if len(payload) >= 1:
+        out["health_agc"] = payload[0]
+    if len(payload) >= 2:
+        out["health_heap_kb"] = payload[1]
+    if len(payload) >= 3:
+        out["health_i2c_errors"] = payload[2]
+    return out
+
+
 def decode_health(payload) -> dict:
     """@brief Decode health payload to dict.
 

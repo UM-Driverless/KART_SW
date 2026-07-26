@@ -179,7 +179,7 @@ let manualSteerType = 'angle'; // 'angle' or 'pwm'
 let currentMission = 'manual'; // Track mission state locally to show/hide widget
 // Demo mode (?demo=1): no backend, so mission/state changes are simulated locally.
 const DEMO = new URLSearchParams(location.search).has('demo');
-let demoMission = 'manual', demoState = 'idle';
+let demoMission = 'manual', demoState = 'idle', demoCompDisabled = false;
 let currentControllerType = 'geometric';
 let currentSpeedControllerType = 'curve_factor';
 let currentSvoFile = 'live';
@@ -517,6 +517,10 @@ function wsSend(obj) {
     // can be explored (mission grid, Start/Stop, joystick widget, algo dropdowns).
     if (obj.action === 'set_mission') demoMission = obj.mission;
     else if (obj.action === 'set_state') demoState = obj.state;
+    else if (obj.action === 'set_compressor') {
+      demoCompDisabled = obj.disabled;
+      if (obj.disabled) demoState = 'ebs';   // mirrors what the server does
+    }
     return;
   }
   if (ws && ws.readyState === 1) {
@@ -526,6 +530,16 @@ function wsSend(obj) {
     }
     ws.send(JSON.stringify(obj));
   }
+}
+
+// Stop the EBS compressor so the kart is quiet to work on. Disabling also forces
+// emergency: with the compressor off the air reservoir cannot refill, so the kart must
+// not go on looking ready to drive. Only the disable direction is confirmed — enabling
+// just restores normal behaviour and needs no ceremony.
+function toggleCompressor() {
+  const disabled = !(lastData && lastData.compressor_disabled);
+  if (disabled && !confirm('Disable the EBS compressor?\n\nThis also forces EMERGENCY — the kart will not arm until the compressor is enabled again.')) return;
+  wsSend({ action: 'set_compressor', disabled: disabled });
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1612,7 +1626,10 @@ body{
             <div class="ebs-row"><span>Compressor</span><span class="v" id="rcEbsComp">--</span></div>
             <div class="ebs-row"><span>Shutdown circuit</span><span class="v unwired" id="rcEbsSdc">--</span></div>
           </div>
-          <button class="ctrl-btn ebs" id="rcCompBtn" style="width:100%;"
+          <!-- flex:none like its siblings — .rc-ebsstatus is a flex column, and a
+               growable button eats the space .ebs-note's margin-top:auto needs,
+               pushing the pressure bars out of the panel. -->
+          <button class="ctrl-btn ebs" id="rcCompBtn" style="width:100%;flex:none;padding:9px;"
                   onclick="toggleCompressor()">Disable compressor</button>
           <div class="ebs-bars">
             <div class="pneu-pist"><span class="pneu-lbl">Piston</span><div class="pneu-bar"><div class="pneu-fill" id="rcPneuPistFill"></div></div><span class="pneu-val" id="rcPneuPistVal">-- bar</span></div>
@@ -1835,15 +1852,20 @@ body{
     // target needle stays live, because that is the Orin's own command and does not depend
     // on the sensor.
     //
-    // The gate asks the FIRMWARE whether the angle is real, via the steering frame's validity
-    // field and health flag bit 3. It used to test health_magnet_ok && health_i2c_ok, which
-    // broke on 2026-07-26: the kart's sensor is now an MT6701 read over PWM, the firmware
-    // stopped polling an AS5600 that cannot answer, and both of those bits went permanently
-    // false. The gauge then hid a perfectly good angle and reported NO SENSOR. Those two bits
-    // describe an I2C bus this board no longer uses for steering - they are not, and never
-    // really were, the question being asked here.
+    // The gate asks the FIRMWARE whether the angle is real, using the validity field that
+    // rides in the steering frame itself. It deliberately does NOT consult any health_* field:
+    // those arrive on a different topic, at 1 Hz, and are the wrong shape of answer - the
+    // question here is "is THIS angle trustworthy", which only the frame carrying it can say.
+    //
+    // Two earlier versions of this line both failed by depending on something else. It first
+    // tested health_magnet_ok && health_i2c_ok, which describe an AS5600 on I2C; the kart's
+    // sensor became an MT6701 read over PWM, the firmware stopped polling a chip that cannot
+    // answer, and those bits went permanently false. The replacement additionally required
+    // health_steer_ok, which is never populated at all, because the dashboard subscribed to
+    // /esp32/health while kb_coms_micro publishes /esp32/health/flags and /esp32/health/data.
+    // Both times the gauge hid a perfectly good angle and reported NO SENSOR.
     const steerOk = (d.esp32_steering_valid !== undefined)
-      ? (d.esp32_steering_valid && d.health_steer_ok !== false)
+      ? !!d.esp32_steering_valid
       : (d.health_magnet_ok && d.health_i2c_ok);
     const degAct = steerOk ? Math.max(-90, Math.min(90, steerScreen(d.esp32_steering_rad) * 180 / Math.PI)) : 0;
     const degTgt = Math.max(-90, Math.min(90, steerScreen(d.orin_cmd_steering_rad) * 180 / Math.PI));
@@ -2150,7 +2172,13 @@ if (new URLSearchParams(location.search).has('demo')) {
       stack_comms: 620, stack_control: 540, stack_heartbeat: 810, stack_health: 760,
       yolo_fps: 68 + Math.sin(t * 0.7) * 6, esp_fps: 95 + Math.sin(t * 1.3) * 8,
       pneu_tank_bar: pneuTank, pneu_piston_bar: pneuPist,
-      esp32_compressor_duty: pneuComp, esp32_compressor_on: pneuComp > 0,
+      esp32_compressor_duty: demoCompDisabled ? 0 : pneuComp,
+      esp32_compressor_on: !demoCompDisabled && pneuComp > 0,
+      esp32_compressor_state: demoCompDisabled ? 3 : (pneuComp > 0 ? 1 : 0),
+      compressor_disabled: demoCompDisabled,
+      // demo SDC: closed only when the kart is meant to be moving and the compressor
+      // is enabled — the same whitelist the firmware applies.
+      esp32_sdc_closed: !demoCompDisabled && demoState === 'running',
       battery_voltage: batV, battery_soc: batSoc,
       battery_current: batCur, battery_temp: batTemp, battery_temps: [batTemp, batTemp - 1.5],
       battery_charge: 42 * batSoc / 100, battery_cells_mv: batCells,
@@ -2160,6 +2188,9 @@ if (new URLSearchParams(location.search).has('demo')) {
     };
     // mirror the WebSocket handler: on a mission change, re-run the show/hide UI
     if (d.mission !== currentMission) { currentMission = d.mission; updateJoystickWidget(); updateMissionUI(); }
+    // Also mirror its lastData assignment. Controls that read the current state back
+    // before acting (the compressor toggle) are dead in demo mode without this.
+    lastData = d;
     try { skinRace.update(d); } catch (e) {}
   }, 100);
   dbgLog('DEMO MODE — simulated telemetry');

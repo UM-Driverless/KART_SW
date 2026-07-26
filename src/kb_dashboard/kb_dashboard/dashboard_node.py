@@ -35,7 +35,8 @@ from kb_dashboard.protocol import (
     decode_accel,
     decode_braking,
     decode_throttle,
-    decode_health,
+    decode_health_flags,
+    decode_health_data,
     decode_pneumatic,
     encode_compressor_disable,
     encode_steer_mode,
@@ -90,8 +91,14 @@ class DashboardNode(Node):
         self.create_subscription(
             Frame, "/esp32/braking", self._on_esp_braking, qos_reliable
         )
+        # kb_coms_micro splits the ESP32's health frame across these two topics.
+        # Nothing publishes a bare /esp32/health, which is what this used to
+        # subscribe to — so every health_* field sat at its default forever.
         self.create_subscription(
-            Frame, "/esp32/health", self._on_esp_health, qos_reliable
+            Frame, "/esp32/health/flags", self._on_esp_health_flags, qos_reliable
+        )
+        self.create_subscription(
+            Frame, "/esp32/health/data", self._on_esp_health_data, qos_reliable
         )
         self.create_subscription(
             Frame, "/esp32/pneumatic", self._on_esp_pneumatic, qos_reliable
@@ -305,10 +312,14 @@ class DashboardNode(Node):
             return
         self.state.update("cones_3d_ground", self._det3d_to_cone_list(msg))
 
-    def _on_esp_health(self, msg: Frame):
-        """@brief Callback for ESP32 health status frames. Updates magnet, I2C, heap fields."""
-        fields = decode_health(list(msg.payload))
-        for k, v in fields.items():
+    def _on_esp_health_flags(self, msg: Frame):
+        """@brief Callback for the flag-bits half of the ESP32 health frame."""
+        for k, v in decode_health_flags(list(msg.payload)).items():
+            self.state.update(k, v)
+
+    def _on_esp_health_data(self, msg: Frame):
+        """@brief Callback for the numeric half of the ESP32 health frame."""
+        for k, v in decode_health_data(list(msg.payload)).items():
             self.state.update(k, v)
 
     def _on_esp_pneumatic(self, msg: Frame):
