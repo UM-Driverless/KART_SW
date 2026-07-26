@@ -884,3 +884,24 @@ Method note that made this cheap: SSH to the Orin dies with the cable, since `or
 Cloudflare tunnel over that same link. Rather than trying to hold a session open, a `nohup` logger
 writing to `/tmp/netwatch.log` recorded the whole event unattended and was read back after the
 replug. Any future test that severs the observer's own connection should be instrumented this way.
+
+### Correction: "you need a second radio" was too strong
+
+The conclusion above was overstated in one word. What the RTL8822CE cannot do is AP **and** client at
+the *same time*; it can perfectly well do one then the other. Ruben pushed back on the second-radio
+framing and he is right — sequential mode-switching on the single radio is a real option, and it is
+what this machine did before 2026-07-06, when it joined `Ruben's iPhone` as a client at priority 100.
+So the tasks.md item now carries both options rather than presenting the dongle as a requirement.
+
+The decisive constraint for a mode-switch design is not the radio, it is that **there must always be
+a resting state that serves the dashboard**. In client mode the `kart` network does not exist, so if
+the switch fires and no known network associates, the kart is left with no AP, no client and no
+dashboard. Hence: event-driven on cable up/down via a NetworkManager dispatcher, with a ~30 s
+association timeout that returns to `kart-ap` on failure. An earlier version of the task said not to
+mode-switch at all; that warning was aimed at a blind timer-based swap and was written in a way that
+read as forbidding the event-driven version too.
+
+Second cost worth stating plainly, since it is easy to miss when reasoning about this: mode-switching
+makes the dashboard's address state-dependent. Plugged in it is `10.42.0.1`; in client mode it is
+whatever the joined network assigns. Cloudflare or the hotspot's client list will find it, but the
+fixed address is part of what makes the AP useful trackside.
