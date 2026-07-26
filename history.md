@@ -1026,3 +1026,31 @@ rather than to a number.
 **Process note.** Two wrong conclusions in two days, both from inferring hardware instead of reading
 it, and both stated confidently in committed files. The schematic is in a repo on this machine. Check
 the design before deducing it from a calibration mismatch.
+
+## 2026-07-27 (later) — The 7.5 bar figure is void, and the last two entries were built on it
+
+Rubén: there is no mechanical dial. It does not exist.
+
+The "gauge-read 7.5 bar at ADC 2679" line came from a 2026-07-18 commit message and was treated as a
+measurement for two days. It is not usable, and the reasons are more basic than accuracy: the code and
+the wiring have both changed since, a regulator may sit between whatever was read and PRESSURE_1, the
+two figures may refer to different points in the circuit, and 7.5 may simply have been a value seen
+earlier and said out loud while the tank had already dropped by the time the ADC was sampled. The note
+records a number. It does not record a measurement.
+
+Everything that number touched is withdrawn: the dashboard recalibration of 2026-07-26, the invented
+3.95:1 divider, and the claim that a faulty gauge explained the mismatch. The two `history.md` entries
+above are left in place because they describe how the mistake was made, but their conclusions are
+superseded by this one.
+
+**What is actually true** is short: SDE5 gives 1 V/bar, the board divides by three, the ESP32 converts
+counts to millivolts with its own eFuse calibration, so `bar = 3 * V_pin`. That chain never needed a
+calibration point and there was never a conflict to resolve — only an old number that nothing
+supported.
+
+`ADC_PRESSURE_LOW/HIGH` stay at 2500/2858 raw. They are about 6.0 and 6.9 bar by the sensor chain, not
+the 7 and 8 their comment claimed, and nobody has yet decided what they *should* be. That is now a
+task rather than a calibration bug.
+
+Root-cause write-up: kart-medulla `.agents/error-log.md` 2026-07-27. The pattern worth remembering is
+that each time a verified fact contradicted the unsourced number, the verified fact got adjusted.

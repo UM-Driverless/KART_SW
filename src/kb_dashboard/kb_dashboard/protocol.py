@@ -233,14 +233,15 @@ def decode_health(payload) -> dict:
 # made this dial disagree with the firmware. The chip knows its own answer, so it
 # is the chip's job.
 #
-# History, so nobody re-derives the wrong thing: until 2026-07-26 this file used
-# bar = 3.0 * (raw/4095 * 3.3). On 2026-07-27 that was briefly replaced by a
-# gauge-anchored 7.5/2679 after a mechanical gauge disagreed by ~16%, on the
-# mistaken inference that the divider must be ~4:1. The schematic says otherwise --
-# R11/R12/R13 are all 10 k, the divider is exactly 3:1 -- so the divider was never
-# the problem and that anchor is gone. The gauge disagreement is still unexplained
-# and is now the open question (see tasks.md); the millivolt path above sidesteps
-# it entirely for the ADC's part of the chain.
+# History, so nobody re-derives the wrong thing. Until 2026-07-26 this file used
+# bar = 3.0 * (raw/4095 * 3.3). It was then briefly replaced by an "anchor" of
+# 7.5/2679, taken from a line in a 2026-07-18 commit message, and a divider ratio of
+# ~4:1 was invented to make that number fit. Both are withdrawn. R11/R12/R13 are all
+# 10 k, so the divider is exactly 3:1, and the 7.5 figure is unusable: there is no
+# mechanical gauge on this kart, the wiring and firmware have changed since, a
+# regulator may sit between that measurement point and this sensor, and the two
+# numbers may not be simultaneous. It records a number, not a measurement. Full
+# write-up in kart-medulla .agents/error-log.md 2026-07-27.
 #
 # RANGE CEILING, worth knowing: the divider maps the sensor's 0-10 V onto 0-3.33 V,
 # but the ESP32-S3 ADC at 11 dB is only good to about 2900 mV. Readings saturate
@@ -314,11 +315,9 @@ def decode_pneumatic(payload) -> dict:
             "esp32_sdc_closed": None,
         }
     pressure_adc, comp_duty = payload[0], payload[1]
-    # PRESSURE_2 is assumed to sit behind the same ÷3 divider as PRESSURE_1 and
-    # is converted with the same map. UNVERIFIED — PRESSURE_1's factor was
-    # anchored to a gauge reading on 2026-07-12, PRESSURE_2 has never been
-    # checked against anything. Treat the piston number as indicative until it
-    # is calibrated against a gauge the same way.
+    # PRESSURE_2 sits behind an identical 3:1 divider (same three-10k pattern in the
+    # schematic) and uses the same conversion. No sensor is fitted to it yet, so the
+    # channel normally floats — which is why the saturation guard below matters.
     # A channel pinned at full scale is NOT a reading. An unconnected ADC input floats to the
     # rail, and converting that gives a confident-looking 9.9 bar - which is what PRESSURE_2
     # displayed on 2026-07-25 with no sensor fitted. A genuine sensor pegged at full scale is
