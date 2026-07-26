@@ -63,7 +63,7 @@ class TestSteeringCommandRoundTrip:
 class TestSteeringFeedbackRoundTrip:
     def test_angle_only(self):
         payload = encode_act_steering(0.3)
-        angle, raw, _pwm = decode_steering_raw(payload)
+        angle, raw, _pwm, _valid = decode_steering_raw(payload)
         assert abs(angle - 0.3) < STEER_TOL
         assert raw == 0
 
@@ -71,13 +71,13 @@ class TestSteeringFeedbackRoundTrip:
         angle = 0.3
         raw_encoder = 2048 + int(angle * 650)
         payload = encode_act_steering(angle, raw_encoder)
-        decoded_angle, decoded_raw, _pwm = decode_steering_raw(payload)
+        decoded_angle, decoded_raw, _pwm, _valid = decode_steering_raw(payload)
         assert abs(decoded_angle - angle) < STEER_TOL
         assert decoded_raw == raw_encoder
 
     def test_negative_angle(self):
         payload = encode_act_steering(-0.15, 1900)
-        angle, raw, _pwm = decode_steering_raw(payload)
+        angle, raw, _pwm, _valid = decode_steering_raw(payload)
         assert abs(angle - (-0.15)) < STEER_TOL
         assert raw == 1900
 
@@ -205,6 +205,31 @@ class TestHealthRoundTrip:
         payload = encode_health(True, True, True, 50, 65535, 0)
         result = decode_health(payload)
         assert result["health_heap_kb"] == 65535
+
+    def test_steering_health_is_independent_of_i2c(self):
+        # The exact shape the ESP32-S3 sends: the AS5600 I2C and magnet bits are
+        # false because the firmware no longer polls an AS5600 at all, while the
+        # steering sensor (an MT6701 on PWM) is working. flags 0x0c = heap + steer.
+        result = decode_health([0x0c, 0, 200, 0, 12936, 0])
+        assert result["health_i2c_ok"] is False
+        assert result["health_magnet_ok"] is False
+        assert result["health_steer_ok"] is True    # the bit that actually answers it
+        assert result["health_steer_trip"] is False
+        assert result["health_steer_frames"] == 12936
+        assert result["health_steer_rejects"] == 0
+
+    def test_steering_trip_flag(self):
+        result = decode_health([0x10, 0, 200, 0, 5000, 3])
+        assert result["health_steer_trip"] is True
+        assert result["health_steer_ok"] is False
+        assert result["health_steer_rejects"] == 3
+
+    def test_four_field_health_still_decodes(self):
+        # older firmware, before the frame counters were appended
+        result = decode_health([0x07, 50, 200, 0])
+        assert result["health_i2c_ok"] is True
+        assert result["health_steer_frames"] == 0
+        assert result["health_steer_rejects"] == 0
 
 
 # ── Int32 precision ──────────────────────────────────────────────────

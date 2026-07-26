@@ -53,7 +53,7 @@ class TestDecodeSteering:
 class TestDecodeSteeringRaw:
     def test_with_encoder(self):
         payload = encode_act_steering(0.3, 2243)
-        angle, raw, pid_pwm = decode_steering_raw(payload)
+        angle, raw, pid_pwm, _valid = decode_steering_raw(payload)
         assert abs(angle - 0.3) < 0.001
         assert raw == 2243
         # encode_act_steering emits two elements, so the PID term is absent and reads 0.0
@@ -61,17 +61,40 @@ class TestDecodeSteeringRaw:
 
     def test_without_encoder(self):
         payload = encode_act_steering(0.1)
-        angle, raw, pid_pwm = decode_steering_raw(payload)
+        angle, raw, pid_pwm, _valid = decode_steering_raw(payload)
         assert abs(angle - 0.1) < 0.001
         assert raw == 0
         assert pid_pwm == 0.0
 
     def test_with_pid_term(self):
         # what the real firmware sends: [angle x1000, raw encoder, pid_out x1000]
-        angle, raw, pid_pwm = decode_steering_raw([300, 2243, -750])
+        angle, raw, pid_pwm, _valid = decode_steering_raw([300, 2243, -750])
         assert abs(angle - 0.3) < 0.001
         assert raw == 2243
         assert abs(pid_pwm - (-0.75)) < 0.001
+
+    def test_valid_flag_set(self):
+        # 4-field frame from the MT6701 firmware, sensor reading normally
+        _angle, _raw, _pid, valid = decode_steering_raw([1084, 1543, 0, 1])
+        assert valid is True
+
+    def test_invalid_flag_clears_valid(self):
+        # firmware has no angle: flag 0 and the angle field is the INT32_MIN sentinel
+        angle, _raw, _pid, valid = decode_steering_raw([-(2 ** 31), -1, 0, 0])
+        assert valid is False
+        # the angle is still decoded, but it is nonsense by construction — the
+        # caller is expected to gate on `valid`, not to sanity-check the number
+        assert angle < -1e6
+
+    def test_sentinel_alone_is_enough(self):
+        # defence in depth: sentinel angle with a mistakenly-set flag is still invalid
+        _angle, _raw, _pid, valid = decode_steering_raw([-(2 ** 31), -1, 0, 1])
+        assert valid is False
+
+    def test_three_field_frame_is_treated_as_valid(self):
+        # firmware predating the validity field had no way to say "no angle"
+        _angle, _raw, _pid, valid = decode_steering_raw([300, 2243, -750])
+        assert valid is True
 
 
 # ── decode_speed ─────────────────────────────────────────────────────

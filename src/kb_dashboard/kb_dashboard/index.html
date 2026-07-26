@@ -1082,7 +1082,11 @@ const RC_DIAL_HEAP = { min: 0, max: 300, major: 100, minor: 25, numbers: true, l
 // range 6-10 bar: 10 bar charged (FS T9.3.2 caps operating pressure at 10 bar), 6 bar
 // minimum to guarantee ~3 brake activations (10->6 bar). Tank sensor: Festo SDE5-D10
 // (567465), 0-10 bar. Source: ~/dv/kart/pneumatics/README.md + history.md.
-const PNEU_MAX_BAR = 10, PNEU_TANK_MIN = 6, PNEU_TANK_MAX = 10;
+// TANK_MIN is 7, not 6, so the green band starts where the compressor actually stops
+// pumping: the firmware's hysteresis fills to 8 bar and restarts at 7 (ADC 2858 / 2500 in
+// kart-medulla's main.c). A band starting at 6 called the bottom of every normal pump cycle
+// "healthy" and only went red once the kart was already a bar below where it refills.
+const PNEU_MAX_BAR = 10, PNEU_TANK_MIN = 7, PNEU_TANK_MAX = 10;
 const RC_DIAL_TANK = { min: 0, max: PNEU_MAX_BAR, major: 2, minor: 1, numbers: true, topLabel: 'TANK', label: 'bar',
   fmt: v => (v == null || isNaN(v)) ? '--' : v.toFixed(1),
   // dim bands (the below-min region is a big slice of the scale, so bright red would look alarming
@@ -1605,12 +1609,19 @@ body{
             <div class="ebs-row"><span>Valve</span><span class="v unwired" id="rcEbsValve">NOT WIRED</span></div>
             <div class="ebs-row"><span>Tank in range</span><span class="v" id="rcEbsTankOk">--</span></div>
             <div class="ebs-row"><span>AS state</span><span class="v" id="rcEbsAs">--</span></div>
+            <div class="ebs-row"><span>Compressor</span><span class="v" id="rcEbsComp">--</span></div>
+            <div class="ebs-row"><span>Shutdown circuit</span><span class="v unwired" id="rcEbsSdc">--</span></div>
           </div>
+          <button class="ctrl-btn ebs" id="rcCompBtn" style="width:100%;"
+                  onclick="toggleCompressor()">Disable compressor</button>
           <div class="ebs-bars">
             <div class="pneu-pist"><span class="pneu-lbl">Piston</span><div class="pneu-bar"><div class="pneu-fill" id="rcPneuPistFill"></div></div><span class="pneu-val" id="rcPneuPistVal">-- bar</span></div>
             <div class="pneu-pist"><span class="pneu-lbl">Comp</span><div class="pneu-bar"><div class="pneu-fill" id="rcPneuCompFill"></div></div><span class="pneu-val" id="rcPneuCompVal">--</span></div>
           </div>
-          <div class="ebs-note">Pressures are live. EBS state and valve read NOT WIRED until connected.</div>
+          <div class="ebs-note">Pressures are live. EBS state and valve read NOT WIRED until connected.
+            Disabling the compressor opens the shutdown circuit in firmware, but the Q3 gate
+            is not wired to anything yet, so no brakes actually apply — the row above reports
+            the pin, not the kart.</div>
         </div>
       </div>
 
@@ -1819,11 +1830,21 @@ body{
     // The steering sensor must prove itself before its number is drawn. With nothing on the
     // I2C bus the firmware still reports an angle - 3.451 rad was observed on 2026-07-25 with
     // no sensor connected - and the gauge clamped that to a confident "90 LEFT". An absent
-    // sensor reading as a hard-over lock is worse than no reading at all, so the health flags
-    // gate it: no magnet or no I2C means the actual-angle needle is hidden and the readout
-    // says NO SENSOR. The amber target needle stays live, because that is the Orin's own
-    // command and does not depend on the sensor.
-    const steerOk = d.health_magnet_ok && d.health_i2c_ok;
+    // sensor reading as a hard-over lock is worse than no reading at all, so the needle is
+    // hidden and the readout says NO SENSOR unless the reading is vouched for. The amber
+    // target needle stays live, because that is the Orin's own command and does not depend
+    // on the sensor.
+    //
+    // The gate asks the FIRMWARE whether the angle is real, via the steering frame's validity
+    // field and health flag bit 3. It used to test health_magnet_ok && health_i2c_ok, which
+    // broke on 2026-07-26: the kart's sensor is now an MT6701 read over PWM, the firmware
+    // stopped polling an AS5600 that cannot answer, and both of those bits went permanently
+    // false. The gauge then hid a perfectly good angle and reported NO SENSOR. Those two bits
+    // describe an I2C bus this board no longer uses for steering - they are not, and never
+    // really were, the question being asked here.
+    const steerOk = (d.esp32_steering_valid !== undefined)
+      ? (d.esp32_steering_valid && d.health_steer_ok !== false)
+      : (d.health_magnet_ok && d.health_i2c_ok);
     const degAct = steerOk ? Math.max(-90, Math.min(90, steerScreen(d.esp32_steering_rad) * 180 / Math.PI)) : 0;
     const degTgt = Math.max(-90, Math.min(90, steerScreen(d.orin_cmd_steering_rad) * 180 / Math.PI));
     $('rcNeedle').setAttribute('transform', `rotate(${degAct} 100 108)`);
@@ -1936,6 +1957,32 @@ body{
     }
     const eaEl = $('rcEbsAs');
     if (eaEl) eaEl.textContent = (d.as_state || d.state || '--').toUpperCase();
+    // Compressor row: same four states the firmware reports, spelled out. State 3 is the
+    // operator latch and reads DISABLED rather than "off", because it is also the reason
+    // the kart will not arm — an operator seeing "off" would look for a pressure problem.
+    const COMP_TEXT = { 0: ['IDLE', 'rc-dim'], 1: ['RUNNING', 'rc-ok'], 2: ['COOLDOWN', 'rc-dim'], 3: ['DISABLED', 'rc-bad'] };
+    const ecEl = $('rcEbsComp');
+    if (ecEl) {
+      const [txt, cls] = COMP_TEXT[compState] || (compOn ? ['RUNNING', 'rc-ok'] : ['IDLE', 'rc-dim']);
+      ecEl.textContent = txt;
+      ecEl.className = 'v ' + cls;
+    }
+    // Shutdown circuit, read back off the ESP32's pin. null means the firmware predates the
+    // field — that must NOT render as OPEN, which is a real and different state.
+    const sdc = d.esp32_sdc_closed;
+    const esdEl = $('rcEbsSdc');
+    if (esdEl) {
+      esdEl.textContent = sdc == null ? 'NO DATA' : (sdc ? 'CLOSED' : 'OPEN (EMERGENCY)');
+      esdEl.className = 'v ' + (sdc == null ? 'unwired' : sdc ? 'rc-ok' : 'rc-bad');
+    }
+    // Button reflects the latch the server echoes back, so it stays correct for a second
+    // browser that did not press it.
+    const cbEl = $('rcCompBtn');
+    if (cbEl) {
+      const dis = !!d.compressor_disabled;
+      cbEl.textContent = dis ? 'Enable compressor' : 'Disable compressor';
+      cbEl.classList.toggle('on', dis);
+    }
     const ebsTab = document.querySelector('.race-tab[data-page="ebs"]');
     if (ebsTab) ebsTab.classList.toggle('bad', (haveTank && !tankOk) || ebsState === 'activated');
     const st = $('rcSysState');

@@ -23,6 +23,7 @@ ORIN_TARG_THROTTLE = 0x20
 ORIN_TARG_BRAKING = 0x21
 ORIN_TARG_STEERING = 0x22
 ORIN_STEER_MODE = 0x29
+ORIN_COMPRESSOR_DISABLE = 0x2A
 
 MISSIONS = {
     "manual": 0,
@@ -53,17 +54,30 @@ def decode_steering(payload) -> float:
 def decode_steering_raw(payload) -> tuple:
     """@brief Decode steering payload to (angle_rad, raw_encoder, pid_pwm).
 
-    Payload: [angle_rad x 1000, raw_encoder, pid_out x 1000].
+    Payload: [angle_rad x 1000, raw_encoder, pid_out x 1000, valid].
+
+    The 4th field was appended when the steering sensor moved from an AS5600 on
+    I2C to an MT6701 read over PWM: 1 = the angle is a real measurement, 0 = the
+    firmware has no angle and the first field is a sentinel, not a reading.
 
     @param payload List of int32 values from the Frame.
-    @return Tuple of (angle in radians, raw AS5600 encoder value, PID output -1.0 to 1.0).
+    @return Tuple of (angle in radians, raw 12-bit encoder value,
+            PID output -1.0 to 1.0, angle-is-valid bool).
     """
     if len(payload) < 1:
-        return 0.0, 0, 0.0
+        return 0.0, 0, 0.0, False
     angle_rad = payload[0] / 1000.0
     raw_encoder = payload[1] if len(payload) >= 2 else 0
     pid_pwm = payload[2] / 1000.0 if len(payload) >= 3 else 0.0
-    return angle_rad, raw_encoder, pid_pwm
+    # Field 4 is the firmware's own verdict on whether the angle is real. When it
+    # says no, the angle field carries INT32_MIN rather than a plausible number,
+    # so both checks below catch it. Firmware predating the field sends 3 values;
+    # treat that as valid, since it had no way to say otherwise.
+    if len(payload) >= 4:
+        valid = bool(payload[3]) and payload[0] != -(2 ** 31)
+    else:
+        valid = payload[0] != -(2 ** 31)
+    return angle_rad, raw_encoder, pid_pwm, valid
 
 
 def decode_speed(payload) -> float:
@@ -115,8 +129,19 @@ def decode_throttle(payload) -> float:
 def decode_health(payload) -> dict:
     """@brief Decode health payload to dict.
 
-    Payload: [flags, agc, heap_kb, i2c_errors].
-    Flags: bit0=magnet_ok, bit1=i2c_ok, bit2=heap_ok.
+    Payload: [flags, agc, heap_kb, i2c_errors, steer_frames, steer_rejects].
+    Flags: bit0=magnet_ok, bit1=i2c_ok, bit2=heap_ok, bit3=steer_ok,
+           bit4=steer_trip.
+
+    bit0/bit1 and `agc` are AS5600-over-I2C facts. On the ESP32-S3 kart board the
+    firmware no longer polls an AS5600 — the sensor is an MT6701 read over PWM —
+    so those two bits are permanently False there and must NOT be used as
+    "is the steering sensor working". bit3 is that answer. bit4 means the
+    steering fault latched: the EBS fired and throttle is refused until reboot.
+
+    steer_frames/steer_rejects separate the failure modes: frames flat at 0 means
+    no signal edges at all, rejects climbing with frames flat means edges are
+    arriving at the wrong rate.
 
     @param payload List of int32 values from the Frame.
     @return Dict with health_magnet_ok, health_i2c_ok, health_heap_ok, etc.
@@ -126,56 +151,85 @@ def decode_health(payload) -> dict:
             "health_magnet_ok": False,
             "health_i2c_ok": False,
             "health_heap_ok": False,
+            "health_steer_ok": False,
+            "health_steer_trip": False,
             "health_agc": 0,
             "health_heap_kb": 0,
             "health_i2c_errors": 0,
+            "health_steer_frames": 0,
+            "health_steer_rejects": 0,
         }
     flags = payload[0]
     return {
         "health_magnet_ok": bool(flags & 0x01),
         "health_i2c_ok": bool(flags & 0x02),
         "health_heap_ok": bool(flags & 0x04),
+        "health_steer_ok": bool(flags & 0x08),
+        "health_steer_trip": bool(flags & 0x10),
         "health_agc": payload[1],
         "health_heap_kb": payload[2],
         "health_i2c_errors": payload[3],
+        "health_steer_frames": payload[4] if len(payload) >= 5 else 0,
+        "health_steer_rejects": payload[5] if len(payload) >= 6 else 0,
     }
 
 
-# Tank pressure calibration (verified 2026-07-12 bench, kart-brain tasks.md):
-# tank sensor = Festo SDE5-D10 on PRESSURE_1 (CN7.1 → GPIO 6). The SDE5 outputs
-# 1 V/bar and the on-board divider (R11+R12 series / R13 to GND) scales it ÷3, so
-# at the ADC pin the signal is (1/3) V/bar and bar = 3.0 * V_adc.
-# The firmware sends the raw 12-bit ADC count, so we recover V_adc with a LINEAR
-# ADC model (count → volts). This ignores the ESP32-S3 ADC's nonlinearity; for an
-# accurate reading the firmware should convert with esp_adc_cal / analogReadMilliVolts
-# and send millivolts instead. NOTE: this is unrelated to main.c's ADC_1_BAR/ADC_2_BAR,
-# which are the compressor's (separately uncalibrated) pump-on/off trip points, not a
-# bar display — do not "sync" the two.
+# Tank pressure calibration. Tank sensor = Festo SDE5-D10 (0-10 bar) on PRESSURE_1
+# (CN7.1 → GPIO 6). The firmware sends the raw 12-bit ADC count and this converts it
+# to bar with a single gauge-anchored factor: on 2026-07-18 the mechanical tank gauge
+# read 7.5 bar while this channel read ADC 2679, so 7.5 / 2679 bar per count,
+# assuming the response is linear through zero.
+#
+# CHANGED 2026-07-26, and the previous comment here said the opposite ("do not sync
+# the two") — so the reversal is recorded rather than quietly applied. This file used
+# to derive bar from the datasheet chain instead: SDE5 at 1 V/bar, through the
+# on-board divider (R11+R12 series / R13 to GND) at ÷3, against a linear 3.3 V ADC
+# full scale, giving bar = 3.0 * V_adc. The two maps disagree by about 16%: the
+# firmware's pump-on/pump-off trip points (ADC 2500 / 2858, main.c) are 7 and 8 bar
+# under the gauge anchor but rendered here as ~6.0 and ~6.9 bar, so the same two
+# thresholds read as two different pressures depending on which screen you looked at.
+#
+# The gauge anchor wins because the datasheet chain's weakest assumption is the one
+# that would produce exactly this error: the ESP32-S3 ADC at 11 dB attenuation is
+# markedly nonlinear and saturates below 3.3 V, so treating full scale as a linear
+# 3.3 V biases the derived pressure LOW — the direction observed. A physical gauge
+# has no such failure mode.
+#
+# Still only ONE point, with an unverified zero offset (many pressure senders idle at
+# 0.5 V rather than 0 V, which would make both maps read high). Under this factor
+# full scale is 11.46 bar, past the sensor's rated 10 bar span, so the ends of the
+# range are certainly not linear. Settling it needs a second gauge reading at a
+# different pressure — open in tasks.md. Recalibrating means editing this constant
+# AND main.c's ADC_PRESSURE_LOW/HIGH together; they are now two expressions of the
+# same calibration living in different repos.
 ADC_FULL_SCALE = 4095.0     # 12-bit
-ADC_VREF_V = 3.3            # nominal full-scale volts at ADC_ATTEN_DB_11 (approx)
-DIVIDER_RATIO = 3.0        # bar per volt-at-pin (SDE5 1 V/bar through the ÷3 divider)
+BAR_PER_ADC_COUNT = 7.5 / 2679.0   # gauge anchor, 2026-07-18 (see above)
 
 
 def decode_pneumatic(payload) -> dict:
     """@brief Decode pneumatics telemetry to dict.
 
-    Payload: [pres1_adc, compressor_duty, pres2_adc, compressor_state].
-    pres1_adc is PRESSURE_1, the tank sensor. pres2_adc is PRESSURE_2, the
-    piston/brake-line sensor. Both are raw 12-bit ADC (0-4095). compressor_duty
-    is 0-255 with 0 = MOSFET off. compressor_state is 0 idle / 1 running /
-    2 cooldown.
+    Payload (8 fields): [pres1_adc, compressor_duty, pres2_adc, compressor_state,
+    control_iters, ledc_readback, gpio_init_err, sdc_level]. pres1_adc is
+    PRESSURE_1, the tank sensor. pres2_adc is PRESSURE_2, the piston/brake-line
+    sensor. Both are raw 12-bit ADC (0-4095). compressor_duty is 0-255 with
+    0 = MOSFET off. compressor_state is 0 idle / 1 running / 2 cooldown /
+    3 disabled by the operator. sdc_level is the shutdown-circuit pin read back
+    off the pin itself: 1 = chain closed, 0 = emergency asserted, -1 = no such
+    pin on that build.
 
-    Fields 3 and 4 were appended to the frame on 2026-07-25, so a two-field
-    payload from older firmware still decodes: pres2 and state come back None
-    and 0, which render as "-- bar" and no cooldown badge rather than as zeros.
+    Fields are only ever appended, so shorter payloads from older firmware still
+    decode. Anything absent comes back None (or 0 for compressor_state) so it
+    renders as "--" rather than as a confident wrong value — a missing sdc_level
+    must not display as "chain open", which is a real and different condition.
 
-    PRESSURE_3 exists on the board (GPIO 1) but is shared with the AS5600
-    PWM-angle input and has no sensor fitted, so it is deliberately not sent.
+    PRESSURE_3 exists on the board (GPIO 1) but is shared with the steering
+    sensor's PWM-angle input and has no sensor fitted, so it is deliberately not sent.
 
     @param payload List of int32 values from the Frame.
     @return Dict with pneu_tank_bar, pneu_piston_bar (floats or None),
-            esp32_compressor_on (bool), esp32_compressor_duty (int 0-255) and
-            esp32_compressor_state (int).
+            esp32_compressor_on (bool), esp32_compressor_duty (int 0-255),
+            esp32_compressor_state (int) and esp32_sdc_closed (bool or None).
     """
     if len(payload) < 2:
         return {
@@ -184,9 +238,9 @@ def decode_pneumatic(payload) -> dict:
             "esp32_compressor_on": False,
             "esp32_compressor_duty": 0,
             "esp32_compressor_state": 0,
+            "esp32_sdc_closed": None,
         }
     pressure_adc, comp_duty = payload[0], payload[1]
-    v_adc = pressure_adc / ADC_FULL_SCALE * ADC_VREF_V
     # PRESSURE_2 is assumed to sit behind the same ÷3 divider as PRESSURE_1 and
     # is converted with the same map. UNVERIFIED — PRESSURE_1's factor was
     # anchored to a gauge reading on 2026-07-12, PRESSURE_2 has never been
@@ -199,16 +253,19 @@ def decode_pneumatic(payload) -> dict:
     # shows "-- bar". Never emit a number that cannot be distinguished from a fault.
     pres2_adc = payload[2] if len(payload) >= 3 else None
     piston_bar = (
-        round(DIVIDER_RATIO * (pres2_adc / ADC_FULL_SCALE * ADC_VREF_V), 2)
+        round(BAR_PER_ADC_COUNT * pres2_adc, 2)
         if pres2_adc is not None and pres2_adc < ADC_FULL_SCALE
         else None
     )
+    # -1 means the build has no SDC pin; anything else is the measured level.
+    sdc_raw = payload[7] if len(payload) >= 8 else None
     return {
-        "pneu_tank_bar": round(DIVIDER_RATIO * v_adc, 2),
+        "pneu_tank_bar": round(BAR_PER_ADC_COUNT * pressure_adc, 2),
         "pneu_piston_bar": piston_bar,
         "esp32_compressor_on": comp_duty > 0,
         "esp32_compressor_duty": comp_duty,
         "esp32_compressor_state": payload[3] if len(payload) >= 4 else 0,
+        "esp32_sdc_closed": (sdc_raw == 1) if sdc_raw is not None and sdc_raw >= 0 else None,
     }
 
 
@@ -259,6 +316,19 @@ def encode_steer_mode(mode: int) -> list:
     @return List with one int32 element.
     """
     return [int(mode)]
+
+
+def encode_compressor_disable(disabled: bool) -> list:
+    """@brief Encode the EBS compressor operator latch as [disabled].
+
+    Sent as "disabled" rather than "enabled" to match the firmware's object
+    store, where every value starts at 0 and 0 therefore has to mean "compressor
+    runs normally" (see COMPRESSOR_DISABLED in kart-medulla's km_objects.h).
+
+    @param disabled True to stop the compressor and force the shutdown circuit open.
+    @return List with one int32 element (0 = run normally, 1 = disabled).
+    """
+    return [1 if disabled else 0]
 
 
 # ── Encoders (ESP32 → Orin, used by sim node) ───────────────────────
@@ -358,18 +428,29 @@ class DashboardState:
             "orin_cmd_throttle": 0.0, # target throttle 0.0-1.0
             "orin_cmd_brake": 0.0,    # target brake 0.0-1.0
             "esp32_steering_raw": 0,
+            "esp32_steering_valid": False,
             "orin_cmd_steering_rad": 0.0,
             "health_magnet_ok": False,
             "health_i2c_ok": False,
             "health_heap_ok": False,
+            "health_steer_ok": False,   # firmware's own verdict on the steering sensor
+            "health_steer_trip": False, # steering fault latched: EBS fired, throttle refused
             "health_agc": 0,
             "health_heap_kb": 0,
             "health_i2c_errors": 0,
+            "health_steer_frames": 0,
+            "health_steer_rejects": 0,
             "pneu_tank_bar": None,          # tank pressure (bar); None → dial shows "-- bar"
             "pneu_piston_bar": None,        # piston/brake-line pressure (bar); None → "-- bar"
             "esp32_compressor_on": False,   # EBS compressor MOSFET on/off
             "esp32_compressor_duty": 0,     # compressor PWM duty 0-255 (soft-start ramp)
-            "esp32_compressor_state": 0,    # 0 idle / 1 running / 2 forced cooldown
+            "esp32_compressor_state": 0,    # 0 idle / 1 running / 2 cooldown / 3 operator-disabled
+            "compressor_disabled": False,   # the dashboard's own latch, echoed back to the UI
+            # Shutdown circuit read back off the ESP32's Q3 gate pin: True = chain closed,
+            # False = emergency asserted, None = firmware too old to report it. Not wired to
+            # anything downstream yet (2026-07-26), so this reports the firmware's intent and
+            # the pin's real level, and nothing about whether the kart would actually brake.
+            "esp32_sdc_closed": None,
             # EBS (emergency brake system) — no signal reaches the Orin yet, nothing publishes
             # these. None means "not wired" and the dashboard renders it as NOT WIRED in grey.
             # Keep None as the default rather than a boolean: a safety indicator that reads

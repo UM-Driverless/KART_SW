@@ -27,6 +27,7 @@ from geometry_msgs.msg import Twist
 
 from kb_dashboard.protocol import (
     DashboardState,
+    ORIN_COMPRESSOR_DISABLE,
     ORIN_STEER_MODE,
     decode_steering,
     decode_steering_raw,
@@ -36,6 +37,7 @@ from kb_dashboard.protocol import (
     decode_throttle,
     decode_health,
     decode_pneumatic,
+    encode_compressor_disable,
     encode_steer_mode,
 )
 from kb_dashboard.server import run_websocket_server
@@ -180,6 +182,12 @@ class DashboardNode(Node):
         self._pending_state_cmd_count = 0
         self._pending_steer_mode = None
         self._pending_steer_mode_count = 0
+        # EBS compressor operator latch (Frame to ESP32 via kb_coms_micro)
+        self.compressor_disable_pub = self.create_publisher(Frame, "/orin/compressor_disable", 10)
+        self._pending_compressor_disable = None
+        self._pending_compressor_disable_count = 0
+        self._compressor_disabled = False
+        self._compressor_refresh_tick = 0
         # Controller type publishers (String to cone_follower)
         self.controller_type_pub = self.create_publisher(String, "/dashboard/controller_type", 10)
         self._pending_controller_type = None
@@ -221,10 +229,16 @@ class DashboardNode(Node):
         """@brief Callback for ESP32 steering frames."""
         self._flush_pending()
         p = list(msg.payload)
-        angle_rad, raw_encoder, pid_pwm = decode_steering_raw(p)
-        self.state.update("esp32_steering_rad", angle_rad)
-        if raw_encoder:
-            self.state.update("esp32_steering_raw", raw_encoder)
+        angle_rad, raw_encoder, pid_pwm, valid = decode_steering_raw(p)
+        # Only publish an angle the firmware vouches for. When it does not, the
+        # previous good value is left in place and the validity flag is what the
+        # gauge keys off — so a dropout hides the needle rather than freezing it
+        # at a stale reading that still looks live.
+        self.state.update("esp32_steering_valid", valid)
+        if valid:
+            self.state.update("esp32_steering_rad", angle_rad)
+            if raw_encoder > 0:
+                self.state.update("esp32_steering_raw", raw_encoder)
         self.state.update("esp32_steering_pwm", pid_pwm)
 
     def _on_esp_speed(self, msg: Frame):
@@ -405,6 +419,23 @@ class DashboardNode(Node):
         if self._pending_steer_mode is not None and self._pending_steer_mode_count > 0:
             self.steer_mode_pub.publish(self._pending_steer_mode)
             self._pending_steer_mode_count -= 1
+        if self._pending_compressor_disable is not None and self._pending_compressor_disable_count > 0:
+            self.compressor_disable_pub.publish(self._pending_compressor_disable)
+            self._pending_compressor_disable_count -= 1
+        # Keep re-asserting the disable at 1 Hz for as long as it is set, rather
+        # than sending it once. The firmware's copy of this latch clears on reboot
+        # (its object store zero-initialises, and 0 has to mean "compressor runs"
+        # so a kart that reboots alone does not end up with no air). Without a
+        # refresh, an ESP32 reset while someone is working on the kart would bring
+        # the compressor back with no warning. Only the disable is repeated —
+        # re-enabling is the firmware's own default, so it needs no upkeep.
+        self._compressor_refresh_tick += 1
+        if self._compressor_disabled and self._compressor_refresh_tick >= 100:  # 100 Hz timer → 1 Hz
+            self._compressor_refresh_tick = 0
+            frame = Frame()
+            frame.type = ORIN_COMPRESSOR_DISABLE
+            frame.payload = encode_compressor_disable(True)
+            self.compressor_disable_pub.publish(frame)
         if self._pending_controller_type is not None and self._pending_controller_type_count > 0:
             self.controller_type_pub.publish(self._pending_controller_type)
             self._pending_controller_type_count -= 1
@@ -425,6 +456,26 @@ class DashboardNode(Node):
         self._pending_steer_mode = frame
         self._pending_steer_mode_count = 100  # publish for 1s to ensure delivery
         self.get_logger().info(f"Steer mode: {'PWM' if mode else 'PID'}")
+
+    def publish_compressor_disable(self, disabled: bool):
+        """@brief Publish the EBS compressor operator latch to the ESP32.
+
+        Setting it stops the compressor and, via the firmware interlock, opens the
+        shutdown circuit — the kart cannot be quiet and armed at the same time.
+
+        @param disabled True to stop the compressor and force emergency.
+        """
+        self._compressor_disabled = disabled
+        self.state.update("compressor_disabled", disabled)
+        frame = Frame()
+        frame.type = ORIN_COMPRESSOR_DISABLE
+        frame.payload = encode_compressor_disable(disabled)
+        self._pending_compressor_disable = frame
+        self._pending_compressor_disable_count = 100  # publish for 1s to ensure delivery
+        self.get_logger().warn(
+            "EBS compressor DISABLED — shutdown circuit forced open" if disabled
+            else "EBS compressor re-enabled"
+        )
 
     def publish_controller_type(self, ctrl_type: str):
         """@brief Publish controller type change to cone_follower.
