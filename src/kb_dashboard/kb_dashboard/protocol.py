@@ -230,12 +230,21 @@ def decode_health(payload) -> dict:
 #      Calibration Results"), copy in ~/dv/datasheets/esp32-s3_espressif_datasheet.pdf:
 #      ATTEN3 has an effective measurement range of 0~2900 mV. ATTEN3 is
 #      ADC_ATTEN_DB_11, which is what km_gpio.c sets for this channel.
-#   2. The divider is not 3:1. The SDE5-D10 datasheet (567465, copy in
-#      ~/dv/datasheets/) gives 0-10 bar -> 0-10 V, i.e. 1 V/bar with a 0 V zero
-#      offset. A 3:1 divider would put 10 bar at 3.33 V, well past the ADC's 2.9 V
-#      ceiling, clipping the range at ~8.7 bar on a 10 bar tank — so 3:1 cannot be
-#      what is fitted. The smallest ratio that keeps 10 bar in range is 3.45:1, and
-#      4:1 (10 bar -> 2.5 V, with margin) is the obvious choice.
+#   2. The divider is very unlikely to be 3:1. The SDE5-D10 datasheet (567465, copy
+#      in ~/dv/datasheets/) gives 0-10 bar -> 0-10 V, i.e. 1 V/bar with a 0 V zero
+#      offset. Note the gauge reading fixes only the PRODUCT full_scale x ratio,
+#      which is 0.0027995 * 4095 = 11.46 V — it cannot separate the two. So each
+#      candidate ratio implies a required full scale:
+#          3.00:1 -> 3.82 V     3.47:1 -> 3.30 V     3.95:1 -> 2.90 V
+#      The S3's widest attenuation gives 2900 mV and the pin cannot exceed VDDA
+#      (~3.3 V), so no configuration produces 3.82 V: 3:1 is inconsistent with the
+#      gauge under any real ADC setup, while 3.95 lands exactly on the datasheet
+#      figure. 4:1 is also the sane design choice — 10 bar -> 2.5 V, inside the
+#      range with margin, where 3:1 would clip a 10 bar tank at 8.7 bar.
+#
+#      This inference is only as good as the single gauge reading behind it. If that
+#      gauge is off by ~30%, 3:1 becomes viable again. Hence "measure R11/R12/R13"
+#      is still an open task rather than a settled fact.
 #
 # Those two corrections together give 2.9 * 4 / 4095 = 0.0028327 bar/count, which
 # agrees with the gauge anchor's 0.0027995 to within 1.2%. Two independent datasheets
