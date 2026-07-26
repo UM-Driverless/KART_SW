@@ -1985,7 +1985,8 @@ body{
     // Compressor row: same four states the firmware reports, spelled out. State 3 is the
     // operator latch and reads DISABLED rather than "off", because it is also the reason
     // the kart will not arm — an operator seeing "off" would look for a pressure problem.
-    const COMP_TEXT = { 0: ['IDLE', 'rc-dim'], 1: ['RUNNING', 'rc-ok'], 2: ['COOLDOWN', 'rc-dim'], 3: ['DISABLED', 'rc-bad'] };
+    const COMP_TEXT = { 0: ['IDLE', 'rc-dim'], 1: ['RUNNING', 'rc-ok'], 2: ['COOLDOWN', 'rc-dim'],
+                      3: ['DISABLED', 'rc-bad'], 4: ['NO TANK SENSOR', 'rc-bad'] };
     const ecEl = $('rcEbsComp');
     if (ecEl) {
       const [txt, cls] = COMP_TEXT[compState] || (compOn ? ['RUNNING', 'rc-ok'] : ['IDLE', 'rc-dim']);

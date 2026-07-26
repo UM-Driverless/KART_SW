@@ -190,6 +190,13 @@ class TestDecodePneumatic:
         assert fields["esp32_compressor_on"] is False
         assert fields["esp32_sdc_closed"] is None
 
+    def test_sensor_unusable_state(self):
+        # 4 = firmware refuses to pump because the tank reading is not trustworthy.
+        # Distinct from 0/idle: idle means the tank is full, this means it is unknown.
+        f = decode_pneumatic(self._frame(mv1=0, state=4))
+        assert f["esp32_compressor_state"] == 4
+        assert f["esp32_compressor_on"] is False
+
     def test_compressor_disabled_state(self):
         # state 3 = operator latch. Duty is 0, same as idle and cooldown, so the
         # state field is the only thing that distinguishes them.
