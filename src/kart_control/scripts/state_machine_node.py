@@ -137,8 +137,7 @@ class StateMachineNode(Node):
         old = self._state
         self._state = new_state
         self.get_logger().info(f"State: {STATE_NAMES[old]} → {STATE_NAMES[new_state]}")
-        self._publish_state()
-        self._publish_state_frame()
+        self._publish_state()   # sends both the String and the ESP32 Frame
 
     # ── Muxing (100 Hz) ───────────────────────────────────────────────
 
@@ -161,10 +160,21 @@ class StateMachineNode(Node):
     # ── Publishers ─────────────────────────────────────────────────────
 
     def _publish_state(self):
-        """@brief Publish current AS state name to /kart/state as a String."""
+        """@brief Publish current AS state, as a name to /kart/state and as a Frame to the ESP32.
+
+        Called on every transition and from the 10 Hz timer. The Frame used to go
+        out only on transitions, which was fine while nothing acted on it. The
+        ESP32 now gates its shutdown circuit on this value — it closes the chain
+        only while the state is AS_READY or AS_DRIVING — so a single dropped frame
+        would have left the firmware's copy wrong until the next transition, with
+        no way for either side to notice. Re-sending it continuously means the
+        firmware's view expires and is refreshed rather than being latched from one
+        lucky delivery.
+        """
         msg = String()
         msg.data = STATE_NAMES[self._state]
         self._state_pub.publish(msg)
+        self._publish_state_frame()
 
     def _publish_state_frame(self):
         """@brief Publish current AS state as a Frame to /orin/machine_state for the ESP32."""

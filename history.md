@@ -905,3 +905,82 @@ Second cost worth stating plainly, since it is easy to miss when reasoning about
 makes the dashboard's address state-dependent. Plugged in it is `10.42.0.1`; in client mode it is
 whatever the joined network assigns. Cloudflare or the hotspot's client list will find it, but the
 fixed address is part of what makes the AP useful trackside.
+
+## 2026-07-26 — EBS compressor disable button, and the tank dial was reading a bar low
+
+Added a button on the dashboard's EBS page that stops the EBS compressor, so the kart is quiet to
+work on. It also forces emergency, because a kart that cannot refill its air reservoir must not go on
+looking ready to drive. The interlock itself lives in the ESP32 firmware (see kart-medulla's
+`history.md` for the same date) — the Orin side is the button, a new `ORIN_COMPRESSOR_DISABLE` (0x2A)
+frame on `/orin/compressor_disable`, and the telemetry to see the result.
+
+Two choices on this side worth recording:
+
+**The button is not gated on the controller token**, matching `set_state` and the existing EBS
+button. The token decides who holds the joystick in remote_control; a safety control that silently
+did nothing until you pressed "Take Control" would be indistinguishable from a broken button.
+
+**`state_machine_node` now sends the AS-state Frame from its 10 Hz timer**, not only on transitions.
+The Frame used to go out once per state change, which was fine while nothing acted on it. The ESP32
+now gates its shutdown circuit on that value, so a single dropped frame would have left the firmware's
+copy wrong until the next transition, with neither side able to notice. Continuous re-send means the
+firmware's view is refreshed rather than latched from one lucky delivery.
+
+### The tank dial disagreed with the firmware by about a bar
+
+Reported symptom: the compressor appears to cycle between roughly 6 and 7 bar. It was not — the
+firmware pumps below ADC 2500 and stops above 2858, which are 7 and 8 bar under the calibration the
+firmware uses. This file's `protocol.py` converted the same ADC counts with a different map and drew
+them as ~6.0 and ~6.9. One hysteresis band, two different pressures, depending on which screen you
+read.
+
+`protocol.py` had an explicit comment saying the two maps were unrelated and "do not sync the two".
+That was wrong and has been rewritten in place rather than quietly deleted. The dashboard now uses the
+same gauge anchor as the firmware, `BAR_PER_ADC_COUNT = 7.5 / 2679` (mechanical gauge read 7.5 bar at
+ADC 2679 on 2026-07-18), so ADC 2500/2858 render as exactly 7.00 and 8.00.
+
+Why the gauge won, and what the old map actually got wrong. Two datasheets, both now saved to
+`~/dv/datasheets/`, settle it — the old chain was wrong on **two** counts simultaneously:
+
+1. **ADC full scale is 2900 mV, not 3300.** ESP32-S3 datasheet Table 5-6: ATTEN3 has an effective
+   measurement range of 0~2900 mV. ATTEN3 is `ADC_ATTEN_DB_11`, which is what `km_gpio.c` sets for
+   this channel.
+2. **The divider is not 3:1.** The SDE5-D10 datasheet (part 567465) gives 0-10 bar -> 0-10 V, i.e.
+   1 V/bar with a 0 V zero offset. A 3:1 divider would put 10 bar at 3.33 V, past the ADC's 2.9 V
+   ceiling, clipping a 10 bar tank at ~8.7 bar. So 3:1 cannot be what is fitted; the minimum
+   workable ratio is 3.45:1 and 4:1 (10 bar -> 2.5 V) is the obvious design choice.
+
+Together those give 2.9 x 4 / 4095 = 0.0028327 bar/count, which lands within **1.2%** of the gauge
+anchor's 0.0027995. That agreement — two datasheets and a mechanical gauge converging to ~1% — is the
+actual justification for the number, and it is much stronger than "trust the gauge".
+
+**A first draft of this entry blamed ADC nonlinearity, and it was wrong in a way worth recording.**
+The claim was that the S3's ADC saturates below 3.3 V and so biases the derived pressure low. The
+saturation part is true — 2900 mV — but the *direction* is backwards: a full scale below 3.3 V means
+a linear-3.3 V model over-estimates the pin voltage, pushing the datasheet figure up, away from the
+gauge. Correcting only the ADC makes the chain read 5.69 bar at ADC 2679 against the gauge's 7.50,
+i.e. worse. The gap only closes once the divider error is corrected too. The lesson: a mechanism that
+matches the *magnitude* of an error still has to match its *sign*, and checking the sign here cost one
+datasheet lookup.
+
+What is still unverified, roughly in order of how much it could move the number: **nobody has measured
+R11/R12/R13** — 4:1 is predicted from the two datasheets, not observed; the anchor is a single point,
+so an offset would tilt the whole scale; and the SDE5 is only ±3 %FS to begin with. Under this factor
+ADC full scale computes to 11.46 bar, past the sensor's 10 bar span, so the top of the range is
+extrapolation. `test_decode.py` asserts that 11.46 rather than a plausible-looking 9.9, so the test
+states what the map does instead of implying a confidence it has not earned. The settling measurement
+is a meter on the ADC pin read against the gauge and the raw count at the same instant, at two
+well-separated pressures; filed in `tasks.md`.
+
+`PNEU_TANK_MIN` also moved 6 → 7, so the dial's green band starts where the compressor actually stops
+pumping. At 6 it called the bottom of every normal pump cycle healthy and only went red a bar below
+the refill point.
+
+### Process note: a concurrent session committed this work mid-flight
+
+While this was in progress, another session working in the same repo committed `5e1a5e8`
+("gate the steering needle on the firmware's validity flag") and swept the then-incomplete state of
+this change into it — its own message notes that two `TestDecodePneumatic` cases were left failing.
+The commit was already pushed, so it was fixed forward rather than rewritten. Worth knowing when
+reading that commit: it contains two unrelated changes, and the pneumatic half of it is only complete
+as of the following commit.

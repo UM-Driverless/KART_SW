@@ -22,6 +22,7 @@ from kb_dashboard.protocol import (
     encode_throttle,
     encode_braking,
     encode_health,
+    encode_compressor_disable,
     DashboardState,
     MISSIONS,
 )
@@ -134,17 +135,19 @@ class TestDecodeEffort:
 
 class TestDecodePneumatic:
     def test_compressor_on(self):
-        # verified calibration: bar = 3.0 * (raw/4095 * 3.3); 1 bar ≈ 413.6 ADC.
+        # gauge-anchored calibration: 7.5 bar at ADC 2679, so 1 bar ≈ 357.2 ADC.
         # duty 153 → compressor on.
-        fields = decode_pneumatic([414, 153])
+        fields = decode_pneumatic([357, 153])
         assert abs(fields["pneu_tank_bar"] - 1.0) < 0.02
         assert fields["esp32_compressor_on"] is True
         assert fields["esp32_compressor_duty"] == 153
 
     def test_full_scale(self):
-        # raw 4095 → ~9.9 bar (near the sensor's 10 bar top of range)
+        # raw 4095 → 11.46 bar, past the SDE5-D10's 10 bar span. Asserted as the
+        # number the map actually produces, not as a plausible-looking 9.9: the
+        # map is anchored at one mid-range point and is not claimed to hold here.
         fields = decode_pneumatic([4095, 0])
-        assert abs(fields["pneu_tank_bar"] - 9.9) < 0.1
+        assert abs(fields["pneu_tank_bar"] - 11.46) < 0.05
 
     def test_compressor_off(self):
         fields = decode_pneumatic([1365, 0])
@@ -155,6 +158,54 @@ class TestDecodePneumatic:
         fields = decode_pneumatic([100])
         assert fields["pneu_tank_bar"] is None
         assert fields["esp32_compressor_on"] is False
+        assert fields["esp32_sdc_closed"] is None
+
+    def test_firmware_trip_points_read_as_7_and_8_bar(self):
+        # The whole point of the 2026-07-26 recalibration: main.c pumps below
+        # ADC_PRESSURE_LOW (2500) and stops above ADC_PRESSURE_HIGH (2858), and the
+        # dial has to show those as 7 and 8 bar. Under the old datasheet-derived map
+        # they rendered as ~6.0 and ~6.9, so one hysteresis band read as two
+        # different pressure ranges depending on which side you looked from.
+        assert abs(decode_pneumatic([2500, 0])["pneu_tank_bar"] - 7.0) < 0.01
+        assert abs(decode_pneumatic([2858, 0])["pneu_tank_bar"] - 8.0) < 0.01
+
+    def test_compressor_disabled_state(self):
+        # state 3 = operator latch. Duty is 0, same as idle and cooldown, so the
+        # state field is the only thing that distinguishes them.
+        fields = decode_pneumatic([2500, 0, 0, 3, 100, 0, 0, 0])
+        assert fields["esp32_compressor_state"] == 3
+        assert fields["esp32_compressor_on"] is False
+
+    def test_sdc_closed_and_open(self):
+        closed = decode_pneumatic([2858, 0, 0, 0, 100, 0, 0, 1])
+        assert closed["esp32_sdc_closed"] is True
+        opened = decode_pneumatic([2858, 0, 0, 3, 100, 0, 0, 0])
+        assert opened["esp32_sdc_closed"] is False
+
+    def test_sdc_absent_is_not_open(self):
+        # Seven-field frame from firmware predating the SDC readback. A missing
+        # field must read as "no data", never as an open chain — those are
+        # different conditions and only one of them is an emergency.
+        fields = decode_pneumatic([2858, 0, 0, 1, 100, 255, 0])
+        assert fields["esp32_sdc_closed"] is None
+
+    def test_sdc_minus_one_reads_as_no_data(self):
+        # -1 is the firmware's "this build has no SDC pin" sentinel. Both current
+        # targets do define one, so nothing sends it today — it exists so that a
+        # build without the pin degrades to "no data" instead of to "chain open".
+        fields = decode_pneumatic([2858, 0, 0, 0, 100, 0, 0, -1])
+        assert fields["esp32_sdc_closed"] is None
+
+
+# ── encode_compressor_disable ────────────────────────────────────────
+
+class TestEncodeCompressorDisable:
+    def test_polarity(self):
+        # 1 = disabled. The firmware's object store zero-initialises, so 0 must be
+        # the "compressor runs normally" case — see COMPRESSOR_DISABLED in
+        # kart-medulla's km_objects.h.
+        assert encode_compressor_disable(True) == [1]
+        assert encode_compressor_disable(False) == [0]
 
 
 # ── DashboardState ────────────────────────────────────────────────────

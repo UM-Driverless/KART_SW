@@ -49,6 +49,7 @@ class KB_coms_micro : public rclcpp::Node {
       ORIN_COMPLETE           = 0x27,
       ORIN_CALIBRATE_STEERING = 0x28,
       ORIN_STEER_MODE         = 0x29,
+      ORIN_COMPRESSOR_DISABLE = 0x2A,
 
       // ==========================
       // Others (0x40 - 0xFF)
@@ -95,6 +96,7 @@ class KB_coms_micro : public rclcpp::Node {
     rclcpp::Subscription<kb_interfaces::msg::Frame>::SharedPtr orin_heartbeat_sub_;
     rclcpp::Subscription<kb_interfaces::msg::Frame>::SharedPtr orin_shutdown_sub_;
     rclcpp::Subscription<kb_interfaces::msg::Frame>::SharedPtr orin_steer_mode_sub_;
+    rclcpp::Subscription<kb_interfaces::msg::Frame>::SharedPtr orin_compressor_disable_sub_;
 };
 
 #endif // KB_COMS_MICRO_HPP_

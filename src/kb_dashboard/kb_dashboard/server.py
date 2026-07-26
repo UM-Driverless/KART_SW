@@ -350,6 +350,30 @@ async def run_websocket_server(
             mode = cmd.get("mode", "pid")  # "pid" or "pwm"
             if hasattr(node, "publish_steer_mode"):
                 node.publish_steer_mode(1 if mode == "pwm" else 0)
+        elif action == "set_compressor":
+            # Stops the EBS compressor so the kart is quiet to work on. Disabling it
+            # also forces emergency, because a kart that cannot refill its air
+            # reservoir must not look ready to drive. The interlock itself lives in
+            # the ESP32 firmware, which opens the shutdown circuit whenever this
+            # latch is set — that is what makes it survive an Orin restart or a
+            # dropped frame. The AS state change below only keeps the Orin's own
+            # state machine in step with what the firmware has already done.
+            #
+            # Not gated on the controller token, matching set_state / the EBS
+            # button above. The token decides who holds the joystick in
+            # remote_control; a safety control that silently did nothing until you
+            # pressed "Take Control" would be indistinguishable from a broken button.
+            disabled = bool(cmd.get("disabled", False))
+            state.update("compressor_disabled", disabled)
+            if hasattr(node, "publish_compressor_disable"):
+                node.publish_compressor_disable(disabled)
+            if disabled:
+                node.get_logger().warn(f"Compressor disabled by {client_id} — forcing emergency")
+                state.update("state", "ebs")
+                if hasattr(node, "publish_state_cmd"):
+                    node.publish_state_cmd("ebs")
+            else:
+                node.get_logger().info(f"Compressor re-enabled by {client_id}")
         elif action == "list_svo":
             import glob as _glob
             svo_dir = Path.home() / "kart-brain" / "data" / "svo"

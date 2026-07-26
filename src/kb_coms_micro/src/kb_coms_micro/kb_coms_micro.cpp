@@ -64,6 +64,9 @@ KB_coms_micro::KB_coms_micro() : Node("kb_coms_micro_node") {
     orin_steer_mode_sub_ = create_subscription<kb_interfaces::msg::Frame>(
         "/orin/steer_mode", 10, std::bind(&KB_coms_micro::kb_coms_TXcallback, this, std::placeholders::_1));
 
+    orin_compressor_disable_sub_ = create_subscription<kb_interfaces::msg::Frame>(
+        "/orin/compressor_disable", 10, std::bind(&KB_coms_micro::kb_coms_TXcallback, this, std::placeholders::_1));
+
     // Inicializa la librería serial
     serial_ = std::make_unique<SerialDriver>(
         port, baud, [this](const SerialDriver::Frame &frame) { this->kb_coms_RXcallback(frame); });

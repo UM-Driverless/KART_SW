@@ -216,34 +216,43 @@ def decode_health(payload) -> dict:
     }
 
 
-# Tank pressure calibration. Tank sensor = Festo SDE5-D10 (0-10 bar) on PRESSURE_1
-# (CN7.1 → GPIO 6). The firmware sends the raw 12-bit ADC count and this converts it
-# to bar with a single gauge-anchored factor: on 2026-07-18 the mechanical tank gauge
-# read 7.5 bar while this channel read ADC 2679, so 7.5 / 2679 bar per count,
-# assuming the response is linear through zero.
+# Tank pressure calibration. Tank sensor = Festo SDE5-D10, part 567465, on PRESSURE_1
+# (CN7.1 -> GPIO 6). The firmware sends the raw 12-bit ADC count; this converts it to
+# bar with one gauge-anchored factor: on 2026-07-18 the mechanical tank gauge read
+# 7.5 bar while this channel read ADC 2679, hence 7.5 / 2679 bar per count.
 #
-# CHANGED 2026-07-26, and the previous comment here said the opposite ("do not sync
-# the two") — so the reversal is recorded rather than quietly applied. This file used
-# to derive bar from the datasheet chain instead: SDE5 at 1 V/bar, through the
-# on-board divider (R11+R12 series / R13 to GND) at ÷3, against a linear 3.3 V ADC
-# full scale, giving bar = 3.0 * V_adc. The two maps disagree by about 16%: the
-# firmware's pump-on/pump-off trip points (ADC 2500 / 2858, main.c) are 7 and 8 bar
-# under the gauge anchor but rendered here as ~6.0 and ~6.9 bar, so the same two
-# thresholds read as two different pressures depending on which screen you looked at.
+# CHANGED 2026-07-26. The previous comment here derived bar from the datasheet chain
+# and explicitly warned "do not sync the two" against main.c's trip points. It was
+# wrong on two counts at once, which is why its answer was ~16% low and why the
+# dashboard drew the firmware's 7-and-8-bar hysteresis band as ~6.0 and ~6.9 bar:
 #
-# The gauge anchor wins because the datasheet chain's weakest assumption is the one
-# that would produce exactly this error: the ESP32-S3 ADC at 11 dB attenuation is
-# markedly nonlinear and saturates below 3.3 V, so treating full scale as a linear
-# 3.3 V biases the derived pressure LOW — the direction observed. A physical gauge
-# has no such failure mode.
+#   1. ADC full scale is 2900 mV, not 3300. ESP32-S3 datasheet Table 5-6 ("ADC
+#      Calibration Results"), copy in ~/dv/datasheets/esp32-s3_espressif_datasheet.pdf:
+#      ATTEN3 has an effective measurement range of 0~2900 mV. ATTEN3 is
+#      ADC_ATTEN_DB_11, which is what km_gpio.c sets for this channel.
+#   2. The divider is not 3:1. The SDE5-D10 datasheet (567465, copy in
+#      ~/dv/datasheets/) gives 0-10 bar -> 0-10 V, i.e. 1 V/bar with a 0 V zero
+#      offset. A 3:1 divider would put 10 bar at 3.33 V, well past the ADC's 2.9 V
+#      ceiling, clipping the range at ~8.7 bar on a 10 bar tank — so 3:1 cannot be
+#      what is fitted. The smallest ratio that keeps 10 bar in range is 3.45:1, and
+#      4:1 (10 bar -> 2.5 V, with margin) is the obvious choice.
 #
-# Still only ONE point, with an unverified zero offset (many pressure senders idle at
-# 0.5 V rather than 0 V, which would make both maps read high). Under this factor
-# full scale is 11.46 bar, past the sensor's rated 10 bar span, so the ends of the
-# range are certainly not linear. Settling it needs a second gauge reading at a
-# different pressure — open in tasks.md. Recalibrating means editing this constant
-# AND main.c's ADC_PRESSURE_LOW/HIGH together; they are now two expressions of the
-# same calibration living in different repos.
+# Those two corrections together give 2.9 * 4 / 4095 = 0.0028327 bar/count, which
+# agrees with the gauge anchor's 0.0027995 to within 1.2%. Two independent datasheets
+# and one mechanical gauge landing within ~1% of each other is the real reason to
+# trust this number — not the gauge alone.
+#
+# STILL UNVERIFIED, in rough order of how much they could move the number: nobody has
+# measured R11/R12/R13 to confirm 4:1 (predicted, not observed); the anchor is a single
+# point, so an offset would tilt the whole scale; and the SDE5 itself is only +/-3 %FS.
+# Under this factor ADC full scale computes to 11.46 bar, past the sensor's 10 bar
+# span, so the top of the range is extrapolation. The settling measurement is a meter
+# on the ADC pin read against the gauge and the raw count at the same instant, at two
+# well-separated pressures — that separates divider, sensor and gauge in one pass.
+# Open in tasks.md.
+#
+# Recalibrating means editing this constant AND main.c's ADC_PRESSURE_LOW/HIGH
+# together: they are two expressions of the same calibration in different repos.
 ADC_FULL_SCALE = 4095.0     # 12-bit
 BAR_PER_ADC_COUNT = 7.5 / 2679.0   # gauge anchor, 2026-07-18 (see above)
 

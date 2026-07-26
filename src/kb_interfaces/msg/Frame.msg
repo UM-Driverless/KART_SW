@@ -28,6 +28,7 @@ uint8 ORIN_SHUTDOWN         = 0x26
 uint8 ORIN_COMPLETE         = 0x27
 uint8 ORIN_CALIBRATE_STEERING = 0x28
 uint8 ORIN_STEER_MODE       = 0x29
+uint8 ORIN_COMPRESSOR_DISABLE = 0x2A
 
 # ==========================
 # Others (0x40 - 0xFF)
