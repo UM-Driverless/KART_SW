@@ -288,8 +288,9 @@ def decode_pneumatic(payload) -> dict:
     PRESSURE_1, the tank sensor. pres2_adc is PRESSURE_2, the piston/brake-line
     sensor. Both are raw 12-bit ADC (0-4095). compressor_duty is 0-255 with
     0 = MOSFET off. compressor_state is 0 idle / 1 running / 2 cooldown /
-    3 disabled by the operator / 4 tank sensor
-    unusable, so pumping is refused. sdc_level is the shutdown-circuit pin read back
+    3 disabled by the operator / 4 pumping
+    latched off after a full burst produced no pressure rise (dead sensor, dead
+    compressor or a large leak) / 5 tank reading pegged over-range. sdc_level is the shutdown-circuit pin read back
     off the pin itself: 1 = chain closed, 0 = emergency asserted, -1 = no such
     pin on that build.
 

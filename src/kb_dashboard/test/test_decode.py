@@ -190,12 +190,21 @@ class TestDecodePneumatic:
         assert fields["esp32_compressor_on"] is False
         assert fields["esp32_sdc_closed"] is None
 
-    def test_sensor_unusable_state(self):
-        # 4 = firmware refuses to pump because the tank reading is not trustworthy.
-        # Distinct from 0/idle: idle means the tank is full, this means it is unknown.
+    def test_pump_stall_state(self):
+        # 4 = a full burst raised no pressure, so pumping is latched off and the
+        # shutdown circuit is held open. Note mv1=0 is a LEGITIMATE empty tank --
+        # the SDE5's characteristic starts at 0 V -- so an empty tank and a dead
+        # sensor cannot be told apart by voltage. This state is how they are
+        # distinguished: by whether pumping actually achieves anything.
         f = decode_pneumatic(self._frame(mv1=0, state=4))
         assert f["esp32_compressor_state"] == 4
         assert f["esp32_compressor_on"] is False
+        assert f["pneu_tank_bar"] == 0.0     # 0 bar is a real reading, not an error
+
+    def test_over_range_state(self):
+        f = decode_pneumatic(self._frame(mv1=2950, state=5))
+        assert f["esp32_compressor_state"] == 5
+        assert f["pneu_tank_bar"] is None    # pegged is not a pressure
 
     def test_compressor_disabled_state(self):
         # state 3 = operator latch. Duty is 0, same as idle and cooldown, so the

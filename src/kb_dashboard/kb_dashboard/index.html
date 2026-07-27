@@ -1986,7 +1986,8 @@ body{
     // operator latch and reads DISABLED rather than "off", because it is also the reason
     // the kart will not arm — an operator seeing "off" would look for a pressure problem.
     const COMP_TEXT = { 0: ['IDLE', 'rc-dim'], 1: ['RUNNING', 'rc-ok'], 2: ['COOLDOWN', 'rc-dim'],
-                      3: ['DISABLED', 'rc-bad'], 4: ['NO TANK SENSOR', 'rc-bad'] };
+                      3: ['DISABLED', 'rc-bad'], 4: ['STALLED — NO PRESSURE RISE', 'rc-bad'],
+                      5: ['SENSOR OVER-RANGE', 'rc-bad'] };
     const ecEl = $('rcEbsComp');
     if (ecEl) {
       const [txt, cls] = COMP_TEXT[compState] || (compOn ? ['RUNNING', 'rc-ok'] : ['IDLE', 'rc-dim']);
