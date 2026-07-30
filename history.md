@@ -1400,3 +1400,60 @@ changed hands failed it. Now uses `_ws_read_until`, as the sibling test two line
 did. It failed once in six full-suite runs before the fix and has not failed in twelve since.
 
 NOT yet run against real hardware — the ESP32 has not been flashed with the firmware half.
+
+## 2026-07-30 — "The Status panel removal was lost in a merge" — it wasn't, and here is the proof
+
+Rubén saw the **Status** panel on the race skin's Mission page while trying the new PID panel and
+recalled an earlier commit having removed it to make room for the joystick. That reads exactly like
+a merge silently reverting committed work, which is worth taking seriously — so it was investigated
+as one. **Nothing was lost.** Recording both the alarm and the answer, because the next person to
+notice this panel will have the same reaction.
+
+**What the remembered commit actually did.** `164cdfe` (2026-07-11, "add Battery tab and roll out
+Ferrari-hybrid gauges"). Its own message says: *"Mission tab reflows so the joystick gets its own
+non-scrollable right pane in remote and the Algorithms pane hides when no algorithm applies."* It
+hid the **Algorithms** pane, not the Status pane. The memory conflated the two — understandably,
+since the visible effect is "a panel disappeared to make room for the joystick".
+
+**How that was established, in order:**
+
+1. Pickaxe search across every branch for the Status panel's markup —
+   `git log --all -S'pillState' -- src/kb_dashboard/kb_dashboard/index.html` — returns only commits
+   that ADD it. No commit anywhere removes it.
+2. Walked all 129 commits that ever touched `index.html` and counted `>Status<` in each blob. Exactly
+   one transition in the whole history: 0 → 1 at `3f4131c` (2026-07-06, the race skin landing). It
+   has been 1 ever since, on every branch.
+3. `git stash list`, `git reflog --all`, and `git fsck --lost-found` (87 dangling commits) — scanned
+   every dangling commit for an `index.html` containing `rcJoyPane` but no `>Status<`, i.e. a
+   post-race-skin build with the panel removed. Zero matches. The change is not in the object store,
+   reachable or not.
+4. `updateMissionUI` at `164cdfe` diffs byte-identical against the current one.
+5. Rendered the actual `164cdfe` blob in a browser in demo mode, remote_control mission, and read the
+   computed styles of the Mission page panes:
+   `Mission flex · Algorithms none · Status flex · Remote control flex`.
+   The current build in the same state gives exactly the same four values.
+
+Step 5 is the one that settles it: the 2026-07-11 dashboard showed the Status panel in remote mode,
+just as today's does. There is no state to restore.
+
+**The `main` branch is genuinely behind and does contain a reverted merge**, which is what made the
+merge theory plausible — but it is unrelated to this. `main` sits at `c200e56`
+`Revert "Merge pull request #3 from UM-Driverless/feature/stanley-controller"`, and that revert
+touched only `launch.py`, `kart_control/CMakeLists.txt` and `stanley_controller_node.py` — no
+dashboard files. It was itself undone later by `a186964` ("Restore max_steer=1.309 and Stanley
+speed-controller integration"). Worth knowing separately: **local `main` is 24 commits behind
+`origin/main`**, so anyone reading `main` on this machine is reading a stale tree.
+
+**Still open, and the more useful question:** the Status panel occupies a full grid column in
+remote_control while showing only three pills (state, mission, heartbeat) — its Controls row is
+hidden in non-autonomous missions by `updateMissionUI`. So the panel really is mostly empty space
+next to a joystick that could use it. That is a live design decision, not lost work. Filed in
+`tasks.md`.
+
+**Method note worth keeping.** The commit-by-commit scan first returned "no matches" for every
+commit, including HEAD, while the same command run directly returned a match. Cause: this is **zsh**,
+and in `git show "$c:src/kb_dashboard/..."` zsh parses `$c:s/...` as a *parameter modifier*
+(`:s` = substitute) and silently mangles the path — the error revealed it as
+`'<sha>d/index.html'`. Writing `git show "$c":"src/..."` (closing the quote before the colon) fixes
+it. A history scan that silently reports "never present" is indistinguishable from a real answer, so
+always sanity-check such a scan against one known-good commit before believing it.
