@@ -1259,3 +1259,60 @@ continuity check from the R12/R13 junction to the module pin settles case 2 imme
 **Unresolved as of this entry.** Nothing here is concluded: the contradiction stands, and the
 supply-voltage hypothesis from the entry above is still untested. Do not act on either until the
 readings above exist.
+
+### Resolved: the pin is GPIO 6, and the 0 V reading was taken on the wrong pad
+
+Three independent audits (kart-medulla firmware, dv-hardware KiCad project, kart-docs) all agree,
+so the pin question is closed:
+
+**Tank pressure = `PRESSURE_1` = terminal `CN7.1` -> ESP32-S3 **GPIO 6** = `ADC1_CH5`**, module
+physical pin 28. Corroborated by: `km_gpio.h`'s S3 section; both switches in `km_gpio.c` (the
+attenuation setup and `KM_GPIO_ReadADC`, which agree); kart-medulla `.agents/esp32s3-pinmap.md`
+line 24; dv-hardware `docs/pinout-esp32-s3.md` line 185; net `/P1/PRESSURE_1__0_3V3` traced in
+`kart-medulla.kicad_pcb` to socket `U23` pads 11/12; kart-docs
+`docs/assembly/electronics/kart-medulla/index.md:86`; and a bench verification already recorded in
+kart-medulla `tasks.md:74` on 2026-07-12. The ESP32-S3 IDF header
+(`components/soc/esp32s3/include/soc/adc_channel.h`) confirms the channel arithmetic: ADC1 covers
+GPIO 1-10 only, so GPIO 6 -> channel 5 is right.
+
+**GPIO 35 is not the pressure pin on any revision of this hardware.** On the classic ESP32 it was
+`PEDAL_ACC` (ADC1_CH7). On the ESP32-S3 it has **no ADC channel at all** and is worse than
+unusable: it is an octal-PSRAM pin on the fitted module, internally reserved, assigned to no
+signal. Nothing in either repo has ever put a pressure net on 35.
+
+**Where the confusion came from.** The pinout photo used to identify the pad was a *classic*
+ESP32 diagram (the labels `GPIO35 / ADC1_7 / VDET_2 / RTC` are classic-ESP32 nomenclature). The
+medulla is a carrier for an **ESP32-S3-DevKitC-1**: sockets `U23`/`U24` are 22-position strips,
+44 pins total, so a 38-pin classic DevKitC cannot even align in them — this board was an S3
+design from the start. The left header's true order is 3V3, 3V3, RST, 4, 5, **6**, 7, ... so the
+sixth contact down is GPIO 6, and only on a classic diagram does that position read 35.
+
+**Therefore the 0 V measurement was almost certainly taken on a pin carrying no signal** — most
+likely the pad silkscreened 35, which on this module connects to internal PSRAM and to nothing
+else. Reading 0 V there is expected and says nothing about the pressure channel.
+
+**An earlier hypothesis in this thread is now withdrawn.** It was suggested that the module's
+GPIO 6 socket contact might be open, leaving the ADC floating. The evidence is against it: on this
+board a genuinely floating ADC pad rails to 4095 — which is exactly what PRESSURE_2 on GPIO 7
+does, with no sensor fitted — whereas GPIO 6 sits stable at 2040-2046 with a few counts of live
+noise. A pad held quietly at mid-scale is being *driven*. That also matches
+`.agents/error-log.md:174` in kart-medulla: a reading that matches an unconnected pin is evidence
+of an unconnected pin, and this reading does not match one.
+
+**So the leading explanation returns to the sensor's supply.** With the pin mapping cleared and
+the open-contact theory weakened, the best-fitting untested hypothesis is the one from the first
+entry: the Festo SDE5 requires **15-30 V DC** and its output is undefined below that. A steady,
+plausible-but-wrong 5.36 V is what an under-volted sensor would give.
+
+**Next measurements, unchanged in substance but now aimed at the right places:**
+1. `BN`-`BU` at the sensor's M8 connector (pin 1 brown = supply, pin 3 blue = GND). Must be
+   15-30 V. Per kart-docs `wiring.md:71-81` the harness is specified for 24 V.
+2. `BK`-`BU` (pin 4 black = 0-10 V signal). At atmosphere this must be ~0 V. If it reads ~5.36 V
+   the sensor is the fault.
+3. Only if those look right, re-measure on the board at the **R12/R13 junction** (the divider tap,
+   net `PRESSURE_1__0_3V3`) or the pad silkscreened **6** — *not* 35.
+
+**One wiring caveat worth checking while there:** kart-docs `index.md:163-164` warns that physical
+top-to-bottom order matches the numbering only for CN1-CN5, and that **CN6-CN10 may be physically
+reversed** — CN7 is in that group. So the terminal counted as CN7.1 may physically be the other
+one. Verify against the board before concluding anything about which channel a sensor feeds.
