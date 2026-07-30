@@ -13,6 +13,11 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#111113">
 <title>Kart Dashboard</title>
+<!-- Inline data-URI favicon (steering wheel). Without any rel="icon" the browser falls back to
+     requesting /favicon.ico, which the dashboard server does not serve — one 404 per page load in
+     the console. Kept as a data URI so the page stays a single self-contained file with no extra
+     request and no external host. -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23111113'/%3E%3Cg stroke='%23e2001a' stroke-width='2.5' fill='none' stroke-linecap='round'%3E%3Ccircle cx='16' cy='16' r='10'/%3E%3Cpath d='M16 16 L16 26 M16 16 L7.3 11 M16 16 L24.7 11'/%3E%3C/g%3E%3Ccircle cx='16' cy='16' r='2.6' fill='%23e2001a'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&family=Rajdhani:wght@400;500;600;700&family=VT323&family=JetBrains+Mono:wght@300;400;500;600;700&family=Titillium+Web:ital,wght@0,400;0,600;0,700;1,700&display=swap" rel="stylesheet">
 <style>
@@ -78,7 +83,7 @@ body {
   </div>
 </div>
 <div id="healthBar" style="max-width:480px;margin:0 auto;padding:0 12px 4px;display:flex;gap:6px;font-size:10px;font-family:monospace;opacity:0.7">
-  <span id="hMag">MAG --</span>
+  <span id="hMag">STEER --</span>
   <span id="hI2c">I2C --</span>
   <span id="hHeap">HEAP --</span>
   <span id="hAgc">AGC --</span>
@@ -88,10 +93,10 @@ body {
   <span id="hInfo" style="cursor:pointer;color:#888;user-select:none" onclick="toggleHealthInfo()">ⓘ</span>
 </div>
 <div id="healthInfo" style="display:none;max-width:480px;margin:0 auto;padding:4px 12px 6px;font-size:9px;font-family:monospace;color:#aaa;line-height:1.5">
-  <b>MAG</b> AS5600 magnet detected (OK) or missing (BAD)<br>
-  <b>I2C</b> I2C bus status to AS5600 steering sensor<br>
+  <b>STEER</b> Steering sensor (MT6701 read over PWM). OK, NO SIGNAL, or TRIPPED = latched fault, EBS fired, throttle refused until the ESP32 reboots<br>
+  <b>I2C</b> Legacy AS5600-over-I2C bus. N/A on this board — the ESP32-S3 firmware does not poll an AS5600<br>
   <b>HEAP</b> Free heap memory on ESP32 (KB)<br>
-  <b>AGC</b> Auto Gain Control (0–255). Ideal: 20–235. Indicates magnet field strength<br>
+  <b>AGC</b> AS5600 Auto Gain Control (0–255, ideal 20–235). N/A on this board for the same reason as I2C<br>
   <b>STK</b> Min free stack bytes: comms / control / heartbeat / health. Red if &lt;200<br>
   <b>YOLO</b> YOLO inference rate (Hz). Green &gt;30, yellow 15-30, red &lt;15<br>
   <b>ESP</b> ESP32 steering-frame rate over USB serial (Hz). Firmware target 100. Green &ge;80, yellow 30-80, red &lt;30
@@ -628,14 +633,19 @@ function updateHealth(d) {
   const hm=$('hMag'), hi=$('hI2c'), hh=$('hHeap'), ha=$('hAgc'), hs=$('hStk');
   if (!hm) return;
   if (d.health_agc === undefined) return; // no health data yet
-  hm.textContent = d.health_magnet_ok ? 'MAG OK' : 'MAG BAD';
-  hm.style.color = d.health_magnet_ok ? ok : bad;
-  hi.textContent = d.health_i2c_ok ? 'I2C OK' : 'I2C ERR '+d.health_i2c_errors;
-  hi.style.color = d.health_i2c_ok ? ok : bad;
+  // Steering sensor is an MT6701 read over PWM on this board, so health_steer_ok (flags
+  // bit3) is the pill that means "the sensor works"; bit4 is the latched fault. The AS5600
+  // magnet/I2C/AGC values below belong to the older classic board and are never populated
+  // here — they read N/A in grey rather than raising a permanent false alarm.
+  const as5600Live = !!d.health_magnet_ok || !!d.health_i2c_ok || (d.health_agc || 0) > 0;
+  hm.textContent = d.health_steer_trip ? 'STEER TRIPPED' : (d.health_steer_ok ? 'STEER OK' : 'STEER NO SIGNAL');
+  hm.style.color = (d.health_steer_ok && !d.health_steer_trip) ? ok : bad;
+  hi.textContent = !as5600Live ? 'I2C N/A' : (d.health_i2c_ok ? 'I2C OK' : 'I2C ERR '+d.health_i2c_errors);
+  hi.style.color = !as5600Live ? dim : (d.health_i2c_ok ? ok : bad);
   hh.textContent = 'HEAP '+d.health_heap_kb+'K';
   hh.style.color = d.health_heap_ok ? dim : bad;
-  ha.textContent = 'AGC '+d.health_agc;
-  ha.style.color = (d.health_agc >= 20 && d.health_agc <= 235) ? dim : bad;
+  ha.textContent = as5600Live ? 'AGC '+d.health_agc : 'AGC N/A';
+  ha.style.color = (!as5600Live || (d.health_agc >= 20 && d.health_agc <= 235)) ? dim : bad;
   if (hs && d.stack_comms !== undefined) {
     const vals = [d.stack_comms, d.stack_control, d.stack_heartbeat, d.stack_health];
     hs.textContent = 'STK '+vals.join('/');
@@ -1220,7 +1230,11 @@ body{
   justify-content:center; padding:10px 16px; position:relative;
   clip-path:polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px));
   box-shadow:inset 0 0 0 1px rgba(0,0,0,.4), inset 0 2px 8px rgba(0,0,0,.5); }
-.rc-card .row1{ display:flex; justify-content:space-between; align-items:baseline; }
+/* wraps to a stacked label/value layout instead of clipping or overlapping when a long
+   label and a long value can't both fit on one line (narrow card, long telemetry string) */
+.rc-card .row1{ display:flex; flex-wrap:wrap; justify-content:space-between; align-items:baseline;
+  column-gap:8px; row-gap:2px; }
+.rc-card .row1 .rc-label, .rc-card .row1 .val{ white-space:nowrap; }
 .rc-card .val{ font-size:22px; display:flex; align-items:baseline; gap:5px; }
 .rc-card .val .u{ font-size:11px; color:var(--rc-label); font-weight:600; font-family:'Titillium Web',sans-serif; }
 .rc-card .bar{ width:100%; height:5px; background:var(--rc-raised); margin-top:8px; overflow:hidden; border:1px solid var(--rc-line); }
@@ -1228,7 +1242,14 @@ body{
 .rc-speeddial{ display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; padding:8px 6px 6px; }
 #rcSpeedDial{ max-height:54%; max-width:82%; width:auto; height:auto; }
 .rc-minis{ display:grid; grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr; gap:6px; height:100%; min-height:0; }
-.rc-mini{ display:flex; align-items:center; justify-content:center; padding:5px; min-height:0; }
+/* min-width:0 is load-bearing, not symmetry with min-height. A grid item defaults to
+   min-width:auto, so a 1fr track refuses to shrink below its content's min-content width.
+   The g-force caption under the G-G dial is white-space:nowrap and is rewritten every frame
+   as "LON -0.03 · LAT 0.12 g"; tabular-nums equalises the digits but not the minus sign, so
+   the string's width changed as the values dithered across zero and dragged the column
+   divider with it — a visible twitch on the telemetry page. min-width:0 lets the tracks stay
+   at a fixed 50/50 regardless of what the caption currently says. */
+.rc-mini{ display:flex; align-items:center; justify-content:center; padding:5px; min-height:0; min-width:0; }
 .rc-mini canvas{ max-height:94%; max-width:94%; width:auto; height:auto; }
 .rc-mini-col{ flex-direction:column; gap:3px; }
 .rc-mini-col canvas{ max-height:80%; }
@@ -1318,8 +1339,16 @@ body{
 
 /* ---- page 4: SYSTEM ---- */
 .rc-system{ display:flex; flex-direction:column; gap:8px; height:100%; min-height:0; }
-.rc-sysgrid{ display:grid; grid-template-columns:repeat(4,1fr); grid-auto-rows:1fr; gap:8px; flex:1.6; min-height:0; }
-.rc-sysgrid .rc-card{ flex:none; min-height:0; }
+/* minmax(min-content,1fr): rows share space equally like before when content fits, but a
+   row is never squeezed below what its longest card actually needs (that squeeze was the
+   overflow bug — text rendering past the card into the row below). */
+/* NOT min-height:0 here: the grid itself must be allowed to grow to fit its rows'
+   min-content, or the rows overflow this box's own bottom edge into rc-sysbottom below
+   (the debug console) instead of pushing it down. The console (rc-sysbottom) keeps its
+   own min-height:0 so IT is the one that shrinks first — it already scrolls internally,
+   so giving it less room never hides information, just fewer visible log lines. */
+.rc-sysgrid{ display:grid; grid-template-columns:repeat(4,1fr); grid-auto-rows:minmax(min-content,1fr); gap:8px; flex:1.6; }
+.rc-sysgrid .rc-card{ flex:none; }
 .rc-sysbottom{ display:flex; gap:8px; flex:1.5; min-height:0; }
 .rc-pneu{ flex:1; min-width:0; display:flex; flex-direction:column; align-items:center; gap:6px; padding:8px 10px; }
 .rc-pneu canvas{ flex:1; min-height:0; max-height:250px; max-width:100%; width:auto; height:auto; }
@@ -1333,8 +1362,13 @@ body{
 #rcDbgSlot #dbgConsole{ max-width:none !important; margin:0 !important; width:100%; display:flex !important; flex-direction:column; min-height:0; }
 #rcDbgSlot #dbgToggle{ flex:none; }
 #rcDbgSlot #dbgBody{ flex:1; max-height:none !important; min-height:0; }
-.rc-sysval{ font-size:20px; }
-.rc-sysdesc{ font-size:8.5px; color:var(--rc-label-dim); letter-spacing:.08em; text-transform:uppercase; margin-top:6px; font-weight:600; line-height:1.5; }
+/* scales with viewport width so the longest live values (ERR 9999, 65535 B, 123.4 Hz)
+   still fit a quarter-width card on a phone, while staying 20px on a laptop */
+/* .rc-card .val (2 classes) outweighs a bare .rc-sysval (1 class) in specificity
+   regardless of source order, so this must be written as .rc-card .rc-sysval to win.
+   (Note: this whole block is a JS template literal — no backticks in comments here.) */
+.rc-card .rc-sysval{ font-size:clamp(11px, 2.2vw, 20px); }
+.rc-sysdesc{ font-size:8.5px; color:var(--rc-label-dim); letter-spacing:.08em; text-transform:uppercase; margin-top:6px; font-weight:600; line-height:1.5; overflow-wrap:anywhere; }
 .rc-ok{ color:var(--rc-green); } .rc-bad{ color:var(--rc-red); } .rc-dim{ color:var(--rc-label); }
 
 /* ---- page 5: BATTERY ---- */
@@ -1570,8 +1604,8 @@ body{
 
       <div class="race-page rc-system">
         <div class="rc-sysgrid">
-        <div class="rc-card"><div class="row1"><span class="rc-label">AS5600 magnet</span><span class="val num rc-sysval" id="rcSysMag">--</span></div><div class="rc-sysdesc">steering encoder magnet · field strength AGC <span id="rcSysAgc">--</span> (20&ndash;235 ok)</div></div>
-        <div class="rc-card"><div class="row1"><span class="rc-label">I2C</span><span class="val num rc-sysval" id="rcSysI2c">--</span></div><div class="rc-sysdesc">bus to the AS5600 steering sensor</div></div>
+        <div class="rc-card"><div class="row1"><span class="rc-label">Steering sensor</span><span class="val num rc-sysval" id="rcSysMag">--</span></div><div class="rc-sysdesc">MT6701 encoder read over PWM · <span id="rcSysSteerNote">--</span></div></div>
+        <div class="rc-card"><div class="row1"><span class="rc-label">AS5600 I2C</span><span class="val num rc-sysval" id="rcSysI2c">--</span></div><div class="rc-sysdesc"><span id="rcSysI2cNote">--</span> · AGC <span id="rcSysAgc">--</span></div></div>
         <div class="rc-card"><div class="row1"><span class="rc-label">Heap</span><span class="val num rc-sysval" id="rcSysHeap">--</span></div><div class="rc-sysdesc">free ESP32 memory</div></div>
         <div class="rc-card"><div class="row1"><span class="rc-label">Stack</span><span class="val num rc-sysval" id="rcSysStk">--</span></div><div class="rc-sysdesc">min free task stack, bytes · comms/ctrl/hb/health: <span id="rcSysStkAll">--</span> · red &lt;200</div></div>
         <div class="rc-card"><div class="row1"><span class="rc-label">YOLO</span><span class="val num rc-sysval" id="rcSysYolo">--</span></div><div class="rc-sysdesc">cone inference rate · green &gt;30 Hz</div></div>
@@ -1909,12 +1943,31 @@ body{
     rcDrawPedals($('rcPedalsDial'), d.esp32_throttle || 0, d.esp32_braking || 0, d.orin_cmd_brake || 0);
     // SYSTEM page
     const sys = (id, txt, cls) => { const el = $(id); el.textContent = txt; el.className = 'val num rc-sysval ' + cls; };
+    // Steering sensor. The kart's ESP32-S3 board reads an MT6701 over PWM. health_steer_ok
+    // (flags bit3) is the only bit that answers "is the steering sensor working"; bit4 is a
+    // LATCHED fault, which is worse than a momentary dropout — the EBS has already fired and
+    // the firmware refuses throttle until the ESP32 is rebooted, so it gets its own wording.
+    const steerTrip = !!d.health_steer_trip;
+    const steerHealthy = !!d.health_steer_ok && !steerTrip;
+    sys('rcSysMag', steerTrip ? 'TRIPPED' : (d.health_steer_ok ? 'OK' : 'NO SIGNAL'),
+        steerHealthy ? 'rc-ok' : 'rc-bad');
+    $('rcSysSteerNote').textContent = steerTrip
+      ? 'latched fault · EBS fired, throttle refused until the ESP32 reboots'
+      : (d.health_steer_ok ? 'signal present, angle trusted' : 'no valid signal from the encoder');
+    // AS5600 magnet / I2C / AGC belong to the older classic board, which read the steering
+    // angle from an AS5600 over I2C. The ESP32-S3 firmware never polls that chip, so those
+    // two flags and AGC sit at 0 permanently — that is "not measured", not a fault. Showing
+    // them as BAD/ERR kept the SYSTEM tab red forever and made the warning worthless. The
+    // card is kept (not deleted) and labelled honestly; if a board that really does poll an
+    // AS5600 ever reports back, the live values reappear on their own.
     const agcOk = d.health_agc >= 20 && d.health_agc <= 235;
-    sys('rcSysMag', d.health_magnet_ok ? 'OK' : 'BAD', (d.health_magnet_ok && agcOk) ? 'rc-ok' : 'rc-bad');
+    const as5600Live = !!d.health_magnet_ok || !!d.health_i2c_ok || (d.health_agc || 0) > 0;
     const agcEl = $('rcSysAgc');
-    agcEl.textContent = String(d.health_agc ?? '--');
-    agcEl.style.color = agcOk ? '' : 'var(--rc-red)';
-    sys('rcSysI2c', d.health_i2c_ok ? 'OK' : 'ERR ' + (d.health_i2c_errors || 0), d.health_i2c_ok ? 'rc-ok' : 'rc-bad');
+    sys('rcSysI2c', as5600Live ? (d.health_i2c_ok ? 'OK' : 'ERR ' + (d.health_i2c_errors || 0)) : 'N/A',
+        as5600Live ? (d.health_i2c_ok ? 'rc-ok' : 'rc-bad') : 'rc-dim');
+    $('rcSysI2cNote').textContent = as5600Live ? 'legacy AS5600 path' : 'not polled on this board';
+    agcEl.textContent = as5600Live ? String(d.health_agc ?? '--') : 'not measured';
+    agcEl.style.color = as5600Live && !agcOk ? 'var(--rc-red)' : 'var(--rc-label)';
     sys('rcSysHeap', heap + ' kB', d.health_heap_ok ? 'rc-dim' : 'rc-bad');
     const stacks = [d.stack_comms, d.stack_control, d.stack_heartbeat, d.stack_health];
     const haveStk = stacks.every(v => v !== undefined);
@@ -1950,7 +2003,11 @@ body{
     document.querySelector('.rc-ebstank')?.classList.toggle('rc-danger', haveTank && !tankOk);
     // any unhealthy item → the System tab pulses red. Tank pressure is judged on the EBS
     // tab now, so it is not counted here — otherwise one fault pulses two tabs.
-    const sysBad = !d.health_magnet_ok || !d.health_i2c_ok || !d.health_heap_ok || !agcOk ||
+    // health_magnet_ok, health_i2c_ok and AGC are deliberately NOT counted: they are 0 by
+    // design on this board (see above), so including them held the tab red permanently and
+    // there was no state in which it could warn about anything. The steering sensor is
+    // represented by health_steer_ok / health_steer_trip instead, which do track reality.
+    const sysBad = !steerHealthy || !d.health_heap_ok ||
       !d.esp32_heartbeat || yolo < 15 || esp < 30 || (stkMin !== null && stkMin < 200) || socLow;
     const sysTab = document.querySelector('.race-tab[data-page="system"]');
     if (sysTab) sysTab.classList.toggle('bad', sysBad);
@@ -2167,13 +2224,22 @@ if (new URLSearchParams(location.search).has('demo')) {
     }
     const d = {
       esp32_heartbeat: true, esp32_heartbeat_age: 0.2,
+      // The steering gauge asks the frame itself whether the angle is real. The demo used to
+      // omit this and get vouched for by health_magnet_ok/health_i2c_ok instead; those are
+      // false on this board now, so the demo has to say so explicitly or the needle hides.
+      esp32_steering_valid: true,
       esp32_steering_rad: st, orin_cmd_steering_rad: tst, esp32_steering_pwm: (tst - st) * 1.5,
       esp32_speed: sp / 3.6,
       esp32_accel_lon: lon * 4.9, esp32_accel_lat: -st * sp * 0.2,
       esp32_throttle: th, esp32_braking: br,
       orin_cmd_throttle: Math.min(1, th + 0.08), orin_cmd_brake: br,
-      health_magnet_ok: true, health_i2c_ok: true, health_heap_ok: true,
-      health_agc: 128, health_heap_kb: 205 + Math.round(Math.sin(t) * 8), health_i2c_errors: 0,
+      // Matches what the ESP32-S3 kart actually reports: the steering sensor is an MT6701 on
+      // PWM (steer_ok true, no latched trip), and the AS5600-over-I2C magnet/I2C/AGC values
+      // are never measured, so they stay false/0. The demo used to send magnet+I2C ok and
+      // AGC 128, which made the demo look healthier than any real kart ever can.
+      health_steer_ok: true, health_steer_trip: false,
+      health_magnet_ok: false, health_i2c_ok: false, health_heap_ok: true,
+      health_agc: 0, health_heap_kb: 205 + Math.round(Math.sin(t) * 8), health_i2c_errors: 0,
       stack_comms: 620, stack_control: 540, stack_heartbeat: 810, stack_health: 760,
       yolo_fps: 68 + Math.sin(t * 0.7) * 6, esp_fps: 95 + Math.sin(t * 1.3) * 8,
       pneu_tank_bar: pneuTank, pneu_piston_bar: pneuPist,
