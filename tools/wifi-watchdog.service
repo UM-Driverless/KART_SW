@@ -1,0 +1,12 @@
+[Unit]
+Description=Wi-Fi role watchdog - kart AP when USB-tethered, client Wi-Fi otherwise
+After=NetworkManager.service
+Wants=NetworkManager.service
+
+[Service]
+ExecStart=/usr/local/bin/wifi-watchdog.sh
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
