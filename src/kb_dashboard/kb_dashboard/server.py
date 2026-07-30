@@ -262,6 +262,17 @@ async def run_websocket_server(
                 f"Cache-Control: no-cache\r\n\r\n"
             ).encode()
             writer.write(header + info_body)
+        elif path == "/favicon.ico":
+            # Browsers request this on every page load whether or not the document asks
+            # for one, so without a route it logged a 404 in the console on every visit.
+            # A real icon is declared inline in index.html's <head>; this route exists so
+            # the automatic request is answered rather than left as noise that trains the
+            # reader to ignore console errors. 204 No Content is the answer that says
+            # "there is deliberately nothing here", which is true and costs one packet.
+            writer.write(
+                b"HTTP/1.1 204 No Content\r\nCache-Control: max-age=86400\r\n"
+                b"Connection: close\r\n\r\n"
+            )
         else:
             writer.write(
                 b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
