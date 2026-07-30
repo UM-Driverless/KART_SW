@@ -22,7 +22,8 @@
 ## Access
 ```bash
 ssh orin-local    # LAN — the kart Wi-Fi AP, Orin is 10.42.0.1. Join SSID `kart` (pwd `umotorsport`) first.
-ssh orin-remote   # WAN — Cloudflare Tunnel (orin.rubenayla.xyz). Only while the Orin has internet (USB tether).
+ssh orin-remote   # WAN — Cloudflare Tunnel (orin.rubenayla.xyz). Needs internet on the Orin: the USB
+                  # tether, or a known Wi-Fi network that `wifi-watchdog` fell back to (see below).
 # Dashboard: https://kart.rubenayla.xyz (password: "0", configurable via ROS param `password`)
 #   Cloudflare Tunnel config: /etc/cloudflared/config.yml (system-level, needs sudo)
 #   Routes kart.rubenayla.xyz → localhost:80 on Orin (was :9090; moved to :80 on 2026-07-08)
@@ -42,6 +43,29 @@ net.ipv4.ip_unprivileged_port_start=80
 persisted in **`/etc/sysctl.d/99-kart-dashboard.conf`** (applied at boot by `systemd-sysctl`, before `kart-brain` starts). The Cloudflare tunnel (`/etc/cloudflared/config.yml`) routes `kart.rubenayla.xyz → localhost:80`.
 
 **Failure mode to recognize:** if the sysctl is missing/reverts to 1024, the dashboard can't bind :80, the node exits, and nothing listens on 80 — yet `systemctl is-active kart-brain` still says `active` (the ROS launch as a whole stays up). The dashboard just vanishes. Verify the file with `sudo sysctl --system` (reproduces boot behaviour), not just `sysctl -w`. See `history.md` 2026-07-08.
+
+## The Wi-Fi radio has one role at a time, chosen by `wifi-watchdog` (since 2026-07-30)
+The single Wi-Fi radio `wlP1p1s0` (RTL8822CE) **cannot be an access point and a client at the same time**, and it **cannot scan at all while in AP mode**: with the `kart` AP running, `nmcli -f SSID,SIGNAL dev wifi list --rescan yes` returns only `kart` itself at signal 0, and a direct `sudo iw dev wlP1p1s0 scan` never returns (measured 2026-07-30; killed after 2 minutes). So the role has to be chosen blind, and `wifi-watchdog.service` chooses it:
+
+| USB tether | Radio role | Dashboard address | Remote access |
+|---|---|---|---|
+| plugged in | AP, SSID `kart` | fixed `http://10.42.0.1/` | works (tunnel over the tether) |
+| unplugged | client on a known network | whatever that network assigned | works (tunnel over Wi-Fi) |
+
+Source of truth is the repo: **`tools/wifi-watchdog.sh`** and **`tools/wifi-watchdog.service`**, installed to `/usr/local/bin/` and `/etc/systemd/system/`. Progress is logged: `journalctl -t wifi-watchdog`.
+
+How the handover works, and why it is written this way:
+- **Releasing the radio is `nmcli connection down kart-ap`, never "join network X".** NetworkManager treats a manually deactivated connection as ineligible for autoconnect, so once the AP is down it picks the highest-priority known network that is actually in range by itself. `nmcli connection up kart-ap` clears that state and takes the radio back.
+- **The AP is never dropped while a station is associated to it** (`iw dev wlP1p1s0 station dump`). Anyone on the `kart` network is presumably watching the dashboard.
+- **One client attempt per tether-unplug event, never a repeating timer.** Because the radio cannot scan in AP mode, every attempt costs a blind window of up to 30 s with no `kart` network. If nothing joins, the AP is restored.
+- **No client attempt at boot.** An Orin powered up without a tether keeps the AP, because in the paddock a dashboard at a fixed `10.42.0.1` matters more than remote access.
+- Force one attempt without unplugging anything: `sudo touch /run/kart-wifi-try-client`.
+
+**Interaction to know about: if a phone auto-joins the `kart` Wi-Fi, the fallback will not fire** — the station guard sees a client and correctly refuses to drop the AP. Ruben's iPhone has taken a DHCP lease on `kart` before (`DHCPACK ... 10.42.0.128 ... iPhone`), so for the fallback to work the phone must be tethered over USB only, not also joined to `kart` over Wi-Fi.
+
+**Why "Ruben's iPhone" is a poor fallback target:** an iPhone cannot serve Personal Hotspot over Wi-Fi while it is itself a Wi-Fi client — single radio, same limitation as the Orin. With the phone joined to `kart`, its hotspot SSID is not on air at all; a scan on 2026-07-30 saw `eduroam`, `Robots_urjc` and nothing else. The lab network `Robots_urjc` is the reliable target and gives real internet (verified: `10.7.20.142/24`, ping 1.1.1.1 at 22–35 ms, HTTPS 200, `generate_204` → 204, so no captive portal).
+
+**The old version of this script was actively harmful and is worth recognizing if it ever comes back.** It ran `nmcli device connect wlP1p1s0 || nmcli connection up "iPhone de JBA" || nmcli connection up "Robots_urjc"` every 5 s whenever the device was not `connected`. The first command always succeeds — it brings up `kart-ap`, which holds `autoconnect-priority 200` — so the `||` branches were unreachable dead code and there was no fallback. It also made the AP look like it had an unkillable autoconnect: any manual attempt to join a network was yanked back mid-association, because an association takes longer than one 5 s poll. A backup sits at `/usr/local/bin/wifi-watchdog.sh.bak-20260730`.
 
 ## ⚠️ Wi-Fi and Bluetooth share ONE combo radio
 The Orin's on-board Wi-Fi and Bluetooth are the same chip. **Restarting the `bluetooth` service, `hciX reset`, or a BT adapter power-cycle drops the Wi-Fi too** — which kills the `kart` AP and any `orin-local` SSH going through it. Consequences:
@@ -101,8 +125,8 @@ it was meant to clear. Any `remove` must now be followed by the repopulating sca
 | `http://10.42.0.1` | Dashboard, bare IP | On the `kart` Wi-Fi. Always works, zero internet needed. **Now port 80** (no `:9090` suffix) |
 | `ssh orin@10.42.0.1` (`orin-local`) | SSH | On the `kart` Wi-Fi |
 | `http://172.20.10.2` | Dashboard from the USB-tethered iPhone itself | Phone plugged in via USB-C with Personal Hotspot on. **Now port 80** |
-| `https://kart.rubenayla.xyz` | Dashboard from anywhere | Only while the Orin has internet (USB tether plugged, or other) |
-| `ssh orin-remote` | SSH from anywhere (Cloudflare) | Only while the Orin has internet |
+| `https://kart.rubenayla.xyz` | Dashboard from anywhere | While the Orin has internet: USB tether plugged, or `wifi-watchdog` fell the radio back to a known Wi-Fi network. **In that fallback state the `kart` AP is down, so `10.42.0.1` stops working** |
+| `ssh orin-remote` | SSH from anywhere (Cloudflare) | Same condition as the row above |
 
 Why these numbers: the Orin's hotspot uses NetworkManager's fixed shared-mode subnet (`10.42.0.x`, AP = `.1`); Apple hardcodes `172.20.10.1`/`.2` for every iPhone USB tether (phone = `.1`, first device = `.2`). The device that creates a network is always `.1`.
 

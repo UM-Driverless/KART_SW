@@ -90,12 +90,18 @@ body {
        one page you are not looking at while the kart moves — state, mission and heartbeat
        belong wherever you happen to be. SYS collapses the seven health readouts into one
        worst-case chip; the detail is a tap away rather than permanently eating a column. -->
-  <div id="topbarStatus">
+  <!-- The whole group is one tap target, not just the SYS chip. All four chips are styled
+       identically, so a single clickable one among three inert ones is undiscoverable on a
+       touch screen: `cursor:pointer` is the only thing that marked it, and a phone has no
+       cursor to show. Tapping anywhere in the group opens #healthInfo, whose legend explains
+       all four chips. SYS is a plain div rather than a button because the group above it now
+       handles the click; a button here would fire and then bubble, toggling twice. -->
+  <div id="topbarStatus" onclick="toggleHealthInfo()"
+       title="Kart state, mission, ESP32 heartbeat and system health — tap for the full breakdown">
     <div class="spill" id="pillState">IDLE</div>
     <div class="spill" id="pillMission">MANUAL</div>
     <div class="spill" id="pillHb">HB --</div>
-    <button class="spill sys-chip" id="pillSys" onclick="toggleHealthInfo()"
-            title="ESP32 and perception health — tap for the full breakdown">SYS --</button>
+    <div class="spill sys-chip" id="pillSys">SYS --</div>
   </div>
   <div style="display:flex;align-items:center;gap:8px">
     <button id="netInfoBtn" onclick="toggleNetInfo()"
@@ -115,8 +121,10 @@ body {
             style="background:transparent;border:1px solid rgba(127,29,29,0.6);color:#ff6b6b;border-radius:100px;font-size:9px;font-weight:600;letter-spacing:1.5px;padding:5px 10px;cursor:pointer;font-family:'Inter',-apple-system,sans-serif">POWER OFF</button>
   </div>
 </div>
-<!-- Health detail, opened from the SYS chip in the topbar. The seven readouts keep their
-     original ids so updateHealth() writes to them unchanged; only where they render moved. -->
+<!-- Status detail, opened by tapping anywhere on the topbar's status group. The legend covers
+     all four chips in that group, not only the seven readouts, because the whole group is the
+     tap target. The seven readouts keep their original ids so updateHealth() writes to them
+     unchanged; only where they render moved. -->
 <div id="healthInfo" style="display:none">
   <div class="health-vals">
     <span id="hMag">STEER --</span>
@@ -128,6 +136,11 @@ body {
     <span id="hEspFps">ESP --</span>
   </div>
   <div class="health-legend">
+  <b>STATE</b> Topbar chip 1 — autonomous-system state from the state machine, highlighted while it is RUNNING<br>
+  <b>MISSION</b> Topbar chip 2 — selected mission. REMOTE_CONTROL is the one that hands driving to a human over the network<br>
+  <b>HB</b> Topbar chip 3 — seconds since the last ESP32 heartbeat. Green while they keep arriving, red "HB LOST" once they stop, "HB --" before any has been seen<br>
+  <b>SYS</b> Topbar chip 4 — worst case of the readouts below, naming where the trouble is instead of only changing colour. Red for a tripped or unreadable steering sensor, low heap, any stack under 200 bytes, or a missing ESP32; amber for slow YOLO or ESP frame rates. I2C and AGC are left out on purpose — they are never populated on this board, so folding them in would peg the chip to a permanent false alarm<br>
+  <br>
   <b>STEER</b> Steering sensor (MT6701 read over PWM). OK, NO SIGNAL, or TRIPPED = latched fault, EBS fired, throttle refused until the ESP32 reboots<br>
   <b>I2C</b> Legacy AS5600-over-I2C bus. N/A on this board — the ESP32-S3 firmware does not poll an AS5600<br>
   <b>HEAP</b> Free heap memory on ESP32 (KB)<br>
@@ -847,7 +860,7 @@ function toggleHealthInfo() {
 document.addEventListener('click', (e) => {
   const el = $('healthInfo');
   if (!el || el.style.display !== 'block') return;
-  if (el.contains(e.target) || e.target.closest('#pillSys')) return;
+  if (el.contains(e.target) || e.target.closest('#topbarStatus')) return;
   el.style.display = 'none';
 }, true);
 
@@ -1457,7 +1470,12 @@ body{
 /* Always-visible status group in the topbar. margin-right:auto parks it just after the
    logo instead of centring it, so its width changing (HB LOST 12.4s is far wider than
    HB 0.2s) cannot shove the power button around. */
-#topbarStatus{ display:flex; align-items:center; gap:5px; margin-left:14px; margin-right:auto; }
+#topbarStatus{ display:flex; align-items:center; gap:5px; margin-left:14px; margin-right:auto;
+  cursor:pointer; padding:3px; margin-top:-3px; margin-bottom:-3px; border-radius:100px;
+  border:1px solid transparent; }
+/* The group is tappable, so give it a hover cue — the chips alone look inert. The negative
+   margins above cancel this padding so adding the hit area does not move the chips. */
+#topbarStatus:hover{ border-color:#ffffff1f; background:#ffffff08; }
 #topbarStatus .spill{ flex:none; font:600 9px/1 'Titillium Web',sans-serif; letter-spacing:.1em;
   padding:5px 8px; border-radius:100px; border:1px solid var(--rc-line);
   background:#00000040; color:var(--rc-label); white-space:nowrap; }
