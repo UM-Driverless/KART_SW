@@ -1273,7 +1273,8 @@ body{
 .rc-mini-col canvas{ max-height:80%; }
 .rc-mini-col #rcPedalsDial{ max-height:96%; }
 .rc-gcap{ font-size:8px; color:var(--rc-label-dim); letter-spacing:.06em; text-transform:uppercase;
-  font-weight:700; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  font-weight:700; font-variant-numeric:tabular-nums; white-space:nowrap;
+  display:flex; flex-direction:column; align-items:center; line-height:1.35; }
 
 #ggCanvas{ background:#0a0a0c; border:1px solid var(--rc-line); border-radius:50%; }
 .rc-mini{ position:relative; }
@@ -1586,7 +1587,7 @@ body{
         </div>
         <div class="rc-minis">
           <div class="rc-panel rc-mini"><canvas id="rcDialYolo" width="150" height="150"></canvas></div>
-          <div class="rc-panel rc-mini rc-mini-col"><span class="rc-mini-lbl">G</span><canvas id="ggCanvas" width="140" height="140"></canvas><div class="rc-gcap" id="rcGCap">LON 0.00 · LAT 0.00 g</div></div>
+          <div class="rc-panel rc-mini rc-mini-col"><span class="rc-mini-lbl">G</span><canvas id="ggCanvas" width="140" height="140"></canvas><div class="rc-gcap" id="rcGCap"><span id="rcGCapLon">LON 0.00 g</span><span id="rcGCapLat">LAT 0.00 g</span></div></div>
           <div class="rc-panel rc-mini rc-mini-col"><canvas id="rcBatDial" width="150" height="150"></canvas><div class="rc-gcap" id="rcBatCap">-- V</div></div>
           <div class="rc-panel rc-mini rc-mini-col"><canvas id="rcPedalsDial" width="120" height="200"></canvas></div>
         </div>
@@ -1956,7 +1957,11 @@ body{
     $('rcPwmVal').textContent = Math.round(Math.abs(d.esp32_steering_pwm || 0) * 100);
     // G-G mini dial in the telemetry cluster (holds the exact g-force numbers)
     drawGG(latG, lonG, '#2c2c2f', '#84848a40', '#e2001a', 8);
-    $('rcGCap').textContent = `LON ${lonG.toFixed(2)} · LAT ${latG.toFixed(2)} g`;
+    // Two rows, not one line: side by side this caption was wider than the dial above it
+    // and stretched its grid column. Stacked, the widest row is half as long. Set each
+    // span's textContent rather than rebuilding innerHTML, so the update stays cheap.
+    $('rcGCapLon').textContent = `LON ${lonG.toFixed(2)} g`;
+    $('rcGCapLat').textContent = `LAT ${latG.toFixed(2)} g`;
     // mini instrument dials
     const yolo = d.yolo_fps || 0, esp = d.esp_fps || 0, heap = d.health_heap_kb || 0;
     rcDrawGauge($('rcDialYolo'), RC_DIAL_YOLO, yolo);
