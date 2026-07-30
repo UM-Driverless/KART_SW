@@ -60,6 +60,29 @@
 - **Feature branches off `dev`** for exploratory work (`feature/xyz`), merged back into `dev` via PR or fast-forward. `main` is not the target for in-progress work.
 - **`dev` is expected to be a tiny bit ahead of `main` most of the time.** If you discover `main` is *ahead of* `dev` (e.g. someone pushed straight to main), merge `main` into `dev` immediately before adding new commits so `dev` remains the "latest + in-progress" snapshot.
 
+## Deploying — Never Ask, Just Do It
+
+**Push, pull on the Orin, and restart whatever the change touched. Every time, without asking.**
+"Say the word and I'll push", "shall I deploy?", "let me know if you want this on the kart" are all
+wasted turns — the answer is always yes. A commit that sits unpushed is invisible to the Orin, the VM,
+and every other machine, so committing without pushing is a half-finished job, not a cautious one.
+
+What each kind of change needs after `git pull` on the Orin:
+- **`index.html`** — nothing. The server does `HTML_PATH.read_bytes()` per request and sends
+  `Cache-Control: no-cache`, and `build/kb_dashboard/kb_dashboard` is a symlink into `src/`. Pull, then
+  hard-refresh the browser.
+- **Other Python (`server.py`, nodes, launch files)** — `sudo systemctl restart kart-brain`. The
+  running process already imported the old module; `--symlink-install` does not reload it.
+- **C++** — `colcon build --symlink-install --packages-select <pkg>`, then restart.
+- **ESP32 firmware** — flash it. **Stop `kart-brain` first**: `KB_Coms_micro` holds `/dev/ttyACM0`, and
+  esptool fails with "device reports readiness to read but returned no data (device disconnected or
+  multiple access on port?)" if you skip it. Confirm the port is free with `fuser /dev/ttyACM0`, flash,
+  then start the service again.
+
+Then say in one line what was deployed and what you saw come back. Do not report a push as if it were
+a deployment — the two commits that only moved documentation onto the Orin, while the dashboard fix
+the user was waiting for stayed unpushed, are recorded in `.agents/error-log.md` (2026-07-30).
+
 ## Definition of Done
 A change is NOT done until it's **validated on the target machine**:
 - Code pushed to `dev`? → **Pull on Orin/VM too.**
