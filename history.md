@@ -1501,3 +1501,25 @@ a UI addition, not a cleanup.
 
 Verified in demo mode: pane visibility across manual / remote_control / inspection / autocross, the
 popover opening and closing, all eight SYS states, and zero JS errors.
+
+## 2026-07-30 — Live PID tuning is running on the kart
+
+Flashed kart-medulla `dec5354` to the ESP32-S3 and rebuilt the Orin side. `/esp32/steer_pid` now
+arrives at 1.000 Hz reporting the gains the firmware is actually running, and a tuning pushed to
+`/orin/steer_pid` takes effect with the kart stationary in manual.
+
+Verified against the real firmware, not the demo stand-in: requesting kp 99.0 / ki 0.25 / limit 1.0
+came back as kp 20.0 / ki 0.25 / limit 0.60, so both firmware clamps fired; "restore defaults"
+returned `[0, 1500, 0, 30, 500]`.
+
+**Two Orin-side steps this needs that a Python-only dashboard change would not.** `Frame.msg` gained
+`ESP_STEER_PID`/`ORIN_STEER_PID` and `kb_coms_micro` gained a publisher, so a `git pull` alone is not
+enough — it takes `colcon build --packages-select kb_interfaces kb_coms_micro` and a service restart.
+Skip it and the ESP32 sends 0x0D into a node with nowhere to put it, so the topic never appears,
+which is indistinguishable from firmware that is not sending the frame. That cost a debugging step
+here and will cost one again to whoever forgets.
+
+The firmware bug the on-kart test caught (gains silently dropped in manual mission) is written up in
+kart-medulla's `history.md` under the same date — it matters to this repo mainly as a reminder that
+the demo mode is a *stand-in*, not a test: it happily clamped and echoed values the real firmware had
+never received.
