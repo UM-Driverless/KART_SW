@@ -1063,3 +1063,59 @@ task rather than a calibration bug.
 
 Root-cause write-up: kart-medulla `.agents/error-log.md` 2026-07-27. The pattern worth remembering is
 that each time a verified fact contradicted the unsourced number, the verified fact got adjusted.
+
+## 2026-07-30 — Steering kd raised 50%, and the compressor disable confirmed on hardware
+
+**Bench state.** Kart power OFF. Only the Jetson Orin and the ESP32 were powered, the ESP32 over its
+USB serial link (`/dev/ttyACM0`, WCH CH343 bridge). No air in the system, no 12 V to the compressor,
+and the pressure sensors unpowered. Everything below was measured in that state.
+
+**Steering derivative gain raised 50%: kd 0.02 -> 0.03** in kart-medulla `main/main.c`. kp stays 1.50
+and ki stays 0. Flashed to the ESP32-S3 (`pio run -e esp32-s3-devkitc-1 --target upload`), 332912
+bytes written, hash verified, and the board came back with `/esp32/heartbeat` at exactly 1.000 Hz.
+That is evidence the new image booted and is talking; it is *not* evidence about kd itself, because no
+frame reports the PID gains. Anyone wanting to confirm the gain on the device has to add it to
+telemetry or observe the step response — neither was done here.
+
+**The first flash attempt failed** with `device reports readiness to read but returned no data (device
+disconnected or multiple access on port?)`. The cause was the `kart-brain` service: `KB_Coms_micro`
+holds `/dev/ttyACM0` open, so esptool could not drive the port. `sudo systemctl stop kart-brain`,
+confirm with `fuser /dev/ttyACM0` that the port is free, flash, then start the service again. This is
+a certainty, not a hypothesis — the identical command succeeded once the service was stopped.
+
+**The compressor disable works end to end, on hardware, for the first time.** Publishing
+`ORIN_COMPRESSOR_DISABLE` (type `0x2A`, payload `[1]`) on `/orin/compressor_disable` moved the
+`ESP_PNEUMATIC` frame's compressor state from 4 to **3** (disabled by the operator), with commanded
+duty and the LEDC readback both at 0. The latch held with no publisher running, which is the behaviour
+the object store is supposed to give. Publishing `[0]` restored duty 255 and state 4. Until now this
+path had only ever been reviewed in code.
+
+**Why the button matters more than it looks.** With the kart unpowered the ESP32 still drives the
+compressor pin: an unpowered sensor reads 0, the firmware reads that as an empty tank, and it pumps.
+Measured over 25 s, duty sat at 255 for the full burst and then fell to 0 when the 15 s cap hit — the
+15 s on / 15 s cooldown cycle, running indefinitely. So the compressor is being commanded to full duty
+roughly half the time while the kart sits there, and it will make that noise the instant 12 V arrives.
+Pressing "Disable compressor" *before* plugging power is therefore the correct procedure, not a
+nicety.
+
+**Compressor state 4 does not stop the pump, despite what kart-brain's docstring says.** In
+kart-medulla `main/main.c`, `pump_stall_observed` is declared at line 66, written at line 503, and read
+at line 527 for the status code — and nowhere else. It never gates `compressor_demand` or `comp_duty`.
+A stalled system therefore keeps cycling forever while permanently reporting state 4. The firmware is
+behaving as intended (commit `b5f54f4` deliberately made the stall detector report-only after it had
+been wired to fire the EBS); the wrong text is `decode_pneumatic`'s docstring in kart-brain
+`src/kb_dashboard/kb_dashboard/protocol.py`, which calls state 4 "pumping latched off". Filed as a task.
+
+**The shutdown-circuit half of the bench test cannot be run yet.** `tasks.md` asks to confirm that
+pressing "Disable compressor" flips the shutdown circuit to OPEN. The `sdc_level` field read 0 (open)
+in every frame captured, both before and after the disable, because the chain may only close while the
+tank is at or above `EBS_TANK_ARM_BAR` and there is no air. With an empty system that test cannot
+distinguish "open because the compressor was disabled" from "open because the pressure was never
+verified", so it proves nothing and has to wait for a charged tank.
+
+**One caveat on how this was tested.** The disable was published straight to the ROS topic rather than
+by clicking the dashboard button, to avoid seizing the control token from the browser. That exercises
+the firmware and the comms path but not the button, the control token, or the Orin's 1 Hz re-assert.
+The ESP32 was returned to enabled afterwards so its state matches what the dashboard displays — a
+direct publish leaves the dashboard node's own latch untouched, and a UI that disagrees with the
+hardware is worse than either state on its own.
