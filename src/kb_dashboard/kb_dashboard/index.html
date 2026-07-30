@@ -306,6 +306,13 @@ function updateJoystickWidget() {
   }
 }
 
+// Show/hide a panel's (i) popover. Global because the skin templates are strings with inline
+// onclick handlers, and re-rendered markup would lose any listener bound at init time.
+function rcPop(id) {
+  const el = $(id);
+  if (el) el.classList.toggle('on');
+}
+
 function updateMissionUI() {
   const isAuto = AUTONOMOUS_MISSIONS.has(currentMission);
   document.querySelectorAll('.act-grid, .ctrl-row, .ctrl-grouplbl, .t-ctrl-row, .h-ctrl-row').forEach(
@@ -1452,8 +1459,22 @@ body{
   text-transform:uppercase; color:var(--rc-label); }
 .ebs-row .v{ font-variant-numeric:tabular-nums; color:var(--rc-white); }
 .ebs-row .v.unwired{ color:var(--rc-label-dim); }
-.ebs-note{ margin-top:auto; font-size:8.5px; font-weight:600; letter-spacing:.07em; text-transform:uppercase;
-  color:var(--rc-label-dim); font-family:'Rajdhani',sans-serif; line-height:1.6; }
+/* Explanatory prose does not belong on a driving dashboard — it competes with the readings for
+   the same glance. Anything that is a sentence rather than a value goes behind this (i) and is
+   read once, in the pit. Sits left of the panel's corner mark so it clears the decoration. */
+.rc-i{ position:absolute; top:7px; right:23px; z-index:5; width:16px; height:16px; padding:0;
+  border-radius:50%; border:1px solid var(--rc-line-hard); background:transparent;
+  color:var(--rc-label-dim); font-family:'Rajdhani',sans-serif; font-size:11px; font-weight:700;
+  line-height:1; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+.rc-i:hover{ color:var(--rc-white); border-color:var(--rc-label); }
+/* Tapping the popover itself closes it: on a phone in a holder, aiming back at a 16 px target
+   is harder than hitting the panel that is already under your thumb. */
+.rc-pop{ display:none; position:absolute; top:26px; left:8px; right:8px; z-index:40; cursor:pointer;
+  background:#0d0d10; border:1px solid var(--rc-line-hard); padding:9px 11px;
+  font-family:'Rajdhani',sans-serif; font-size:9.5px; font-weight:600; letter-spacing:.06em;
+  line-height:1.65; text-transform:uppercase; color:var(--rc-label);
+  box-shadow:0 10px 26px rgba(0,0,0,.6); }
+.rc-pop.on{ display:block; }
 
 /* ---- nav rail (persistent, left edge) ---- */
 /* order:-1 puts the rail on the left while it stays last in the DOM, so screen readers and
@@ -1652,15 +1673,15 @@ body{
         <div class="rc-panel rc-ebstank">
           <div class="rc-corner"></div><div class="rc-rivet tl"></div><div class="rc-rivet bl"></div>
           <span class="rc-label">Pneumatics</span>
+          <button class="rc-i" title="What these readings mean" onclick="rcPop('rcEbsInfo')">i</button>
+          <div class="rc-pop" id="rcEbsInfo" onclick="rcPop('rcEbsInfo')">Tank = reservoir.
+            Piston = brake-cylinder pressure, up only while braking. Disabling the compressor
+            opens the shutdown circuit in firmware, but the Q3 gate drives nothing yet, so no
+            brakes apply.</div>
           <div class="ebs-dials">
             <canvas id="rcPneuDial" width="300" height="300"></canvas>
             <canvas id="rcPistDial" width="300" height="300"></canvas>
           </div>
-          <div class="ebs-note">Tank is the reservoir; piston is the brake-cylinder pressure, which
-            rises only while the brakes are applied. EBS state and valve read NOT WIRED until
-            connected. Disabling the compressor opens the shutdown circuit in firmware, but the Q3
-            gate is not wired to anything yet, so no brakes actually apply — the row on the right
-            reports the pin, not the kart.</div>
         </div>
         <div class="rc-panel rc-ebsstatus">
           <div class="rc-corner"></div><div class="rc-rivet tl"></div><div class="rc-rivet bl"></div>

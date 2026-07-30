@@ -1158,3 +1158,12 @@ resting state and there is no measured threshold that means "enough brake force"
 zone would be invented. The compressor duty percentage that the deleted COMP bar showed
 now rides on the Compressor row as e.g. `RUNNING · 60%`, still keyed off the state first
 and the duty second (during the 1 s soft-start the motor runs while duty is still near 0).
+
+**Follow-up the same day: the explanatory paragraph came off the UI.** Moving that note from the
+right panel to the left one fixed the clipped button but left four lines of prose sitting under
+the dials, competing with the readings for the same glance. It now lives behind a 16 px (i) at
+the panel's top-right (`.rc-i` + `.rc-pop`, toggled by the global `rcPop(id)`), trimmed to three
+short sentences, and the popover closes when tapped anywhere on itself — on a phone in a holder,
+aiming back at a 16 px target is harder than hitting the panel already under your thumb. The
+pattern is generic, so any other panel that has grown prose can use it. Standing rule for this
+skin: a value belongs on the panel, a sentence belongs behind the (i).
