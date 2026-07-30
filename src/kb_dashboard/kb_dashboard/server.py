@@ -378,10 +378,22 @@ async def run_websocket_server(
             # second clamp is the one that protects the gears, because it is the only
             # one that still applies when the command comes from something other than
             # this dashboard.
+            # Auto-acquire when nobody holds control, exactly as manual_control does. Without
+            # this, opening the page and pressing Apply did nothing at all and said nothing —
+            # the token is invisible until you touch the joystick, so the button read as broken.
+            if controller["holder"] is None:
+                controller["holder"] = writer
+                controller["id"] = client_id
+                node.get_logger().info(f"Control auto-acquired by {client_id} (PID tuning)")
             if controller["holder"] is not writer:
+                # Someone else is driving. Refuse, but say so on the wire rather than only in
+                # the Orin's log, which the person pressing the button cannot see.
                 node.get_logger().warn(
-                    f"PID tuning from {client_id} ignored — does not hold control"
+                    f"PID tuning from {client_id} refused — {controller['id']} holds control"
                 )
+                ws_send(writer, json.dumps({
+                    "steer_pid_error": f"{controller['id']} holds control — press Take Control first"
+                }).encode())
             elif hasattr(node, "publish_steer_pid"):
                 restore = bool(cmd.get("restore_defaults", False))
                 try:

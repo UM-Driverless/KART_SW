@@ -535,6 +535,25 @@ function wirePidControls() {
   };
 }
 
+// Surface a refused tuning in the panel itself. The server only refuses when another browser
+// holds control; the Orin log is no use to the person pressing the button.
+let pidErrTimer = null, pidErrShowing = false;
+function showPidError(msg) {
+  const src = $('pidSource');
+  if (!src) return;
+  src.textContent = msg;
+  src.style.color = '#e2001a';
+  pidErrShowing = true;
+  clearTimeout(pidErrTimer);
+  // Time-limited: telemetry arrives at ~10 Hz and would otherwise overwrite this within
+  // 100 ms, but a message that never cleared would be worse — pidSource's real job is to
+  // say which gains are running, and a stuck error there would misreport that.
+  pidErrTimer = setTimeout(() => {
+    pidErrShowing = false;
+    if (lastData) updatePidReadback(lastData);
+  }, 4000);
+}
+
 // Steering PID readback. Renders the ESP32's report, never the input boxes — the two
 // disagreeing is the useful signal (firmware clamped the request, or reset and dropped
 // the override), so overwriting one with the other would hide exactly what this shows.
@@ -543,8 +562,15 @@ function updatePidReadback(d) {
   if (!inForce || !src) return;
   if (d.pid_kp === null || d.pid_kp === undefined) {
     inForce.textContent = '--';
-    src.textContent = 'no report yet';
-    src.style.color = '#6a6a7a';
+    if (!pidErrShowing) { src.textContent = 'no report yet'; src.style.color = '#6a6a7a'; }
+    return;
+  }
+  if (pidErrShowing) {
+    // Keep showing the refusal, but let the in-force row below keep updating — the gains
+    // the firmware is running are still true and still worth watching.
+    inForce.textContent =
+      `kp ${d.pid_kp.toFixed(3)}  ki ${d.pid_ki.toFixed(3)}  ` +
+      `kd ${d.pid_kd.toFixed(3)}  limit ${d.pid_pwm_limit.toFixed(2)}`;
     return;
   }
   inForce.textContent =
@@ -686,6 +712,7 @@ function connect() {
       if (lastData.controller_type) { currentControllerType = lastData.controller_type; updateAlgoButtons(); }
       if (lastData.speed_controller_type) { currentSpeedControllerType = lastData.speed_controller_type; updateAlgoButtons(); }
       if (lastData.svo_file) { currentSvoFile = lastData.svo_file; document.querySelectorAll('.svo-dropdown').forEach(sel => sel.value = currentSvoFile); }
+      if (lastData.steer_pid_error) { showPidError(lastData.steer_pid_error); return; }
       // Reflect ESP32 heartbeat in the connection dot (green only when HB alive)
       const d = $('connDot');
       if (d) { if (lastData.esp32_heartbeat) d.classList.add('ok'); else d.classList.remove('ok'); }

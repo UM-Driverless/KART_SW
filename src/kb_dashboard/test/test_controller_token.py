@@ -560,6 +560,38 @@ class TestSteerPidRequiresToken:
         _ws_close(a)
         _ws_close(b)
 
+    def test_refusal_is_reported_to_the_browser(self, srv):
+        """A refused tuning must say so on the wire, not only in the Orin's log."""
+        a = _blocking_ws_connect(srv.port)
+        _ws_read_text(a)
+        _send_manual_control(a, steering=0.1)
+        time.sleep(0.2)
+
+        b = _blocking_ws_connect(srv.port)
+        _ws_read_text(b)
+        self._send_pid(b, kp=9.0, ki=0.0, kd=0.0, pwm_limit=0.5)
+
+        msg = _ws_read_until(b, lambda m: "steer_pid_error" in m)
+        assert msg is not None, "refusal was silent"
+        assert "control" in msg["steer_pid_error"].lower()
+
+        _ws_close(a)
+        _ws_close(b)
+
+    def test_tuning_auto_acquires_when_nobody_holds_control(self, srv):
+        """Opening the page and pressing Apply must work, not silently do nothing."""
+        a = _blocking_ws_connect(srv.port)
+        _ws_read_text(a)
+
+        # No manual_control first — nothing holds the token at this point.
+        self._send_pid(a, kp=2.0, ki=0.0, kd=0.02, pwm_limit=0.5)
+        time.sleep(0.3)
+
+        assert len(srv.node.steer_pid_calls) == 1
+        assert srv.node.steer_pid_calls[0]["kp"] == 2.0
+
+        _ws_close(a)
+
     def test_holder_can_tune(self, srv):
         a = _blocking_ws_connect(srv.port)
         _ws_read_text(a)
