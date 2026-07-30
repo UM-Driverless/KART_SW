@@ -10,6 +10,7 @@ import time
 
 import pytest
 
+from kb_dashboard import server
 from kb_dashboard.protocol import DashboardState
 from kb_dashboard.server import run_websocket_server
 
@@ -27,6 +28,12 @@ class FakeNode:
         return self
 
     def info(self, msg):
+        pass
+
+    def warn(self, msg):
+        pass
+
+    def error(self, msg):
         pass
 
 
@@ -238,4 +245,71 @@ class TestWebSocket:
         _ws_send_text(s, json.dumps({"action": "set_state", "state": "invalid"}))
         time.sleep(0.2)
         assert srv.state.snapshot()["state"] == "idle"
+        s.close()
+
+
+# ── Power off ──────────────────────────────────────────────────────────
+
+def _ws_await_key(sock, key, timeout=10.0):
+    """Return the first JSON frame carrying `key`, or None if none arrives in time.
+
+    Telemetry snapshots are broadcast continuously, so a reply is almost never the very
+    next frame on the wire.
+    """
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        sock.settimeout(max(0.1, deadline - time.time()))
+        try:
+            payload = _ws_read_frame(sock)
+        except socket.timeout:
+            return None
+        if payload is None:
+            return None
+        try:
+            msg = json.loads(payload)
+        except (ValueError, UnicodeDecodeError):
+            continue          # binary HUD frame
+        if isinstance(msg, dict) and key in msg:
+            return msg
+    return None
+
+
+class TestPowerOff:
+    """The browser cannot see the difference between an Orin that powered off and a button
+    that did nothing, so the server has to say both which request it accepted and when the
+    power-off came back refused. POWEROFF_CMD is swapped out here — the real one would take
+    the machine running the tests down."""
+
+    def test_acknowledges_request(self, srv, monkeypatch):
+        monkeypatch.setattr(server, "POWEROFF_CMD", "true")
+        s = _blocking_ws_connect(srv.port)
+        _ws_send_text(s, json.dumps({"action": "shutdown_orin"}))
+        msg = _ws_await_key(s, "shutdown_orin")
+        assert msg is not None, "no acknowledgement for shutdown_orin"
+        assert msg["shutdown_orin"] == "starting"
+        # Let the (stubbed) poweroff finish before the fixture tears the loop down, so the
+        # run does not end on a "Task was destroyed but it is pending" notice.
+        time.sleep(0.3)
+        s.close()
+
+    def test_reports_failure(self, srv, monkeypatch):
+        monkeypatch.setattr(
+            server, "POWEROFF_CMD", "echo 'sudo: a password is required' >&2; exit 1")
+        s = _blocking_ws_connect(srv.port)
+        _ws_send_text(s, json.dumps({"action": "shutdown_orin"}))
+        assert _ws_await_key(s, "shutdown_orin")["shutdown_orin"] == "starting"
+        failed = _ws_await_key(s, "error")
+        assert failed is not None, "poweroff failed without telling the browser"
+        assert failed["shutdown_orin"] == "failed"
+        assert "password is required" in failed["error"]
+        s.close()
+
+    def test_success_stays_silent(self, srv, monkeypatch):
+        """A command that exits 0 has queued the shutdown; the machine going away is the
+        only confirmation there is, so nothing further should be reported as an error."""
+        monkeypatch.setattr(server, "POWEROFF_CMD", "true")
+        s = _blocking_ws_connect(srv.port)
+        _ws_send_text(s, json.dumps({"action": "shutdown_orin"}))
+        assert _ws_await_key(s, "shutdown_orin")["shutdown_orin"] == "starting"
+        assert _ws_await_key(s, "error", timeout=2.0) is None
         s.close()

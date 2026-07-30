@@ -1316,3 +1316,49 @@ plausible-but-wrong 5.36 V is what an under-volted sensor would give.
 top-to-bottom order matches the numbering only for CN1-CN5, and that **CN6-CN10 may be physically
 reversed** — CN7 is in that group. So the terminal counted as CN7.1 may physically be the other
 one. Verify against the board before concluding anything about which channel a sensor feeds.
+
+## 2026-07-30 — POWER OFF told nobody anything, because the machine it kills serves the page
+
+The dashboard's POWER OFF button confirmed, sent `shutdown_orin`, and then showed nothing at
+all. No progress, no result — clicking it felt like pressing a dead button.
+
+The cause is structural, not a missing spinner. The Orin runs the very dashboard being asked
+to kill it, so the only evidence of success is the WebSocket going quiet — and a WebSocket
+going quiet is *also* what a crash, a dropped Wi-Fi link, a refused `sudo`, and a command
+that was never sent all look like. There was no state the page could report that would have
+distinguished them, so it reported none.
+
+Two things were genuinely silent rather than merely unlabelled:
+
+- `wsSend()` drops any command when `ws.readyState !== 1`. Click POWER OFF while the socket
+  is down and nothing is sent and nothing is said — the literal no-op the complaint describes.
+- The server spawned `sleep 3 && echo 0 | sudo -S poweroff` with stdout *and stderr* on
+  `DEVNULL`. A `sudo` that refused produced no log line, no message, no trace anywhere.
+
+**What it does now.** Every step is narrated while there is still a socket alive to narrate
+it with, and each failure gets its own words rather than the same blank screen:
+
+| Situation | What the browser shows |
+|---|---|
+| Socket down at click time | **Not sent** — nothing left the browser, wait for the green dot |
+| Request reached the server | **Powering off** — accepted, power goes in ~3 s |
+| Socket dies afterwards | **Orin is off** — this is what success looks like from here |
+| `poweroff` exits non-zero | **Power off failed** + the stderr line (e.g. `sudo: a password is required`) |
+| Accepted, still answering 25 s later | **Still running** — it did not power off, check `journalctl` |
+
+The reconnect loop is held off in the success case: retrying every 2 s against a machine that
+is off just repaints errors over the explanation. Dismissing the screen puts it back, so the
+page recovers on its own if someone powers the Orin up with the tab still open.
+
+**Server side.** `shutdown_orin` now acknowledges before spawning anything, and the poweroff
+is awaited so a non-zero exit is logged *and* sent back to the client. Success stays silent on
+purpose: `poweroff` returns 0 the moment systemd queues the transition, so exit 0 means
+"queued", not "finished" — the machine disappearing is the only confirmation that exists.
+
+The command lives in `server.POWEROFF_CMD` so tests can swap it. Three tests in
+`test_webserver.py` cover acknowledge / report-failure / stay-silent-on-success; running the
+real command would have powered off the developer's machine.
+
+All five browser states were checked in a headless Chrome against a local server with a
+stubbed command — including the one where the stub kills the server to imitate the power
+actually going.

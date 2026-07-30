@@ -18,6 +18,12 @@ from kb_dashboard.protocol import DashboardState, MISSIONS
 
 HTML_PATH = Path(__file__).parent / "index.html"
 
+# Shell command that powers the Orin down. Named here rather than inlined so tests can
+# swap it for something harmless — the flow around it (acknowledge, then report a refusal)
+# is worth testing, and running the real one would take the developer's machine down.
+# The delay gives the acknowledgement time to reach the browser before the network dies.
+POWEROFF_CMD = "sleep 3 && echo 0 | sudo -S poweroff"
+
 LOGIN_HTML = """\
 <!DOCTYPE html>
 <html lang="en"><head>
@@ -411,10 +417,12 @@ async def run_websocket_server(
                              shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         elif action == "shutdown_orin":
             node.get_logger().warn(f"Orin shutdown requested by {client_id}")
-            import subprocess
-            # Delay a few seconds so the WebSocket response reaches the client before power-off.
-            subprocess.Popen("sleep 3 && echo 0 | sudo -S poweroff",
-                             shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            # Acknowledge before anything else. The browser cannot tell a machine that
+            # powered off from a command that never arrived — both are just a socket that
+            # stopped answering — so it needs to hear that the request landed while there
+            # is still a server alive to say so.
+            ws_send(writer, json.dumps({"shutdown_orin": "starting", "delay_s": 3}).encode())
+            asyncio.get_running_loop().create_task(_poweroff(writer, node))
         elif action == "manual_control":
             # Auto-acquire control on first manual_control if nobody has it
             if controller["holder"] is None:
@@ -430,6 +438,37 @@ async def run_websocket_server(
                         throttle=float(cmd.get("throttle", 0.0)),
                         brake=float(cmd.get("brake", 0.0)),
                     )
+
+    async def _poweroff(writer, node):
+        """Power the Orin off, and report back if it refuses.
+
+        Reaching the end of this function at all means the machine is still up, because a
+        successful power-off takes the process down with everything else. `poweroff` on a
+        systemd host returns 0 as soon as the transition is queued, so only a non-zero exit
+        is a failure — and that is the case worth reporting, since a failed sudo otherwise
+        leaves the browser waiting forever for a shutdown that was never going to happen.
+        """
+        import subprocess
+        # A plain Popen waited on in a worker thread, rather than
+        # asyncio.create_subprocess_shell: the asyncio version installs a child watcher on
+        # the event loop, and this command usually ends with the loop being destroyed
+        # underneath it by the power cut. One idle thread for the few seconds it lasts is
+        # the cheaper side of that trade.
+        proc = subprocess.Popen(POWEROFF_CMD, shell=True,
+                                stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        _, stderr = await asyncio.get_running_loop().run_in_executor(None, proc.communicate)
+        if proc.returncode == 0:
+            return
+        # sudo -S echoes its password prompt to stderr even when it succeeds; the real
+        # reason is whatever it said after that.
+        lines = [ln.strip() for ln in (stderr or b"").decode(errors="replace").splitlines()
+                 if ln.strip() and "password for" not in ln.lower()]
+        reason = lines[-1] if lines else f"poweroff exited with code {proc.returncode}"
+        node.get_logger().error(f"Orin poweroff failed: {reason}")
+        try:
+            ws_send(writer, json.dumps({"shutdown_orin": "failed", "error": reason}).encode())
+        except Exception:
+            pass  # client already gone — the log line above is the record
 
     def ws_send(writer: asyncio.StreamWriter, data: bytes, opcode=0x1):
         frame = bytearray()

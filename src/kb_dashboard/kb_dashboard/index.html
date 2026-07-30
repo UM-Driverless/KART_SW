@@ -58,6 +58,28 @@ body {
 }
 .algo-dropdown:focus { outline:none; border-color:#4a9eff; box-shadow:0 0 0 3px rgba(74,158,255,0.12); }
 .algo-dropdown option { background:#14141f; color:#e0e0e8; padding:8px; }
+
+/* Power-off progress screen. Covers the whole viewport including fullscreen, since
+   fullscreen is entered on documentElement and a fixed overlay stays on top of it. */
+#powerOffOverlay {
+  display:none; position:fixed; inset:0; z-index:100000;
+  background:rgba(6,6,10,0.94); -webkit-backdrop-filter:blur(3px); backdrop-filter:blur(3px);
+  align-items:center; justify-content:center; padding:24px;
+  font-family:'Inter',-apple-system,sans-serif; color:#e0e0e8;
+}
+#powerOffOverlay.on { display:flex; }
+#poIcon { width:44px; height:44px; margin:0 auto 16px; }
+#poIcon.busy { animation:poPulse 1.2s ease-in-out infinite; }
+@keyframes poPulse { 0%,100% { opacity:1; } 50% { opacity:0.25; } }
+#poTitle { font-size:14px; font-weight:700; letter-spacing:3px; text-transform:uppercase; }
+#poMsg { margin-top:12px; font-size:13px; line-height:1.65; color:#a0a0b0; }
+#poMsg code { font-family:monospace; font-size:12px; color:#c8c8d4; background:#14141f;
+  border:1px solid #2a2a3a; border-radius:4px; padding:1px 5px; }
+#poDismiss { display:none; margin-top:22px; background:transparent; border:1px solid #3a3a4a;
+  color:#a0a0b0; border-radius:100px; font-size:10px; font-weight:600; letter-spacing:2px;
+  text-transform:uppercase; padding:9px 20px; cursor:pointer;
+  font-family:'Inter',-apple-system,sans-serif; }
+#poDismiss:active { background:#1a1a2e; }
 </style>
 <style id="skinCss"></style>
 </head>
@@ -77,7 +99,7 @@ body {
     </div>
     <div class="conn-dot" id="connDot"></div>
     <button id="powerOffBtn"
-            onclick="if(confirm('POWER OFF the Orin computer? SSH + dashboard will be unreachable until someone physically powers it back on. This does NOT trigger the kart safety shutdown loop.'))wsSend({action:'shutdown_orin'})"
+            onclick="requestPowerOff()"
             title="Power off the Orin computer (NOT the kart safety shutdown loop / EBS)"
             style="background:transparent;border:1px solid rgba(127,29,29,0.6);color:#ff6b6b;border-radius:100px;font-size:9px;font-weight:600;letter-spacing:1.5px;padding:5px 10px;cursor:pointer;font-family:'Inter',-apple-system,sans-serif">POWER OFF</button>
   </div>
@@ -169,6 +191,21 @@ body {
     <span id="dbgBadge" style="display:none;background:#e74c3c;color:#fff;font:bold 10px sans-serif;padding:1px 6px;border-radius:8px;min-width:14px;text-align:center"></span>
   </div>
   <div id="dbgBody" style="display:none;background:#0d0d1a;border:1px solid #333;border-top:none;border-radius:0 0 6px 6px;color:#0f0;font:12px monospace;padding:6px;max-height:150px;overflow:auto;white-space:pre-wrap"></div>
+</div>
+
+<!-- Power-off progress. From the browser, an Orin that has powered off and a button that
+     never fired look identical: in both cases the WebSocket simply stops answering. This
+     screen names which of the two happened, and stays up after the socket dies because
+     by then there is no server left to report anything. -->
+<div id="powerOffOverlay">
+  <div style="max-width:420px;width:100%;text-align:center">
+    <svg id="poIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="11"/>
+    </svg>
+    <div id="poTitle">Powering off</div>
+    <div id="poMsg"></div>
+    <button id="poDismiss" onclick="dismissPowerOff()">Dismiss</button>
+  </div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/nipplejs/0.10.1/nipplejs.min.js"></script>
@@ -450,6 +487,89 @@ window.addEventListener('DOMContentLoaded', () => {
   startGamepadLoop();
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Power off the Orin
+//
+// The Orin runs the dashboard it is being asked to kill, so the usual "show a result when
+// the command finishes" does not apply: the only thing that can confirm success is the
+// connection dying, and a connection dying is also what a crash, a dropped WiFi link and a
+// no-op button all look like. So the request narrates itself while the socket is still
+// alive (sent → accepted by the Orin → gone), and each way it can fail gets its own words:
+// never sent, refused by the server, or accepted but the machine is still answering.
+// ─────────────────────────────────────────────────────────────────────────────
+let powerOff = { pending: false, timer: null, suppressedReconnect: false };
+
+function paintPowerOff(title, msg, { color = '#ff6b6b', busy = true, dismiss = false } = {}) {
+  $('powerOffOverlay').classList.add('on');
+  $('poTitle').textContent = title;
+  $('poTitle').style.color = color;
+  $('poIcon').style.color = color;
+  $('poIcon').classList.toggle('busy', busy);
+  $('poMsg').innerHTML = msg;
+  $('poDismiss').style.display = dismiss ? 'inline-block' : 'none';
+}
+
+function requestPowerOff() {
+  if (!confirm('POWER OFF the Orin computer? SSH + dashboard will be unreachable until someone physically powers it back on. This does NOT trigger the kart safety shutdown loop.')) return;
+  if (DEMO) {
+    paintPowerOff('Demo mode', 'This page is running without a backend (<code>?demo</code>), so nothing was sent and no computer was powered off.',
+                  { color: '#e6a23c', busy: false, dismiss: true });
+    return;
+  }
+  if (!ws || ws.readyState !== 1) {
+    // wsSend drops commands whenever the socket is down, so without this branch the click
+    // genuinely does nothing — the case this whole screen exists to make visible.
+    paintPowerOff('Not sent', 'The dashboard is not connected to the Orin, so the power-off command was never sent. Wait for the connection dot to turn green, then try again.',
+                  { color: '#e6a23c', busy: false, dismiss: true });
+    return;
+  }
+  powerOff.pending = true;
+  paintPowerOff('Powering off', 'Command sent. Waiting for the Orin to acknowledge&hellip;');
+  wsSend({ action: 'shutdown_orin' });
+  clearTimeout(powerOff.timer);
+  powerOff.timer = setTimeout(() => {
+    if (!powerOff.pending) return;
+    powerOff.pending = false;
+    paintPowerOff('Still running', 'The Orin took the command but is still answering 25 s later, so it has not powered off. Check <code>journalctl -u kart-brain</code> over SSH, or use the power button on the kart.',
+                  { color: '#e6a23c', busy: false, dismiss: true });
+  }, 25000);
+}
+
+// Server replies to the shutdown request: "starting" once the poweroff has been spawned,
+// "failed" if it came back with an error instead of taking the machine down.
+function powerOffUpdate(status, error) {
+  if (!powerOff.pending) return;
+  if (status === 'starting') {
+    paintPowerOff('Powering off', 'The Orin accepted the command and shuts down in about 3 seconds. This page will stop updating when it does.');
+  } else if (status === 'failed') {
+    powerOff.pending = false;
+    clearTimeout(powerOff.timer);
+    paintPowerOff('Power off failed', 'The Orin refused the command and is still running:<br><br><code>' +
+                  String(error || 'no reason given').replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c])) + '</code>',
+                  { color: '#ff6b6b', busy: false, dismiss: true });
+  }
+}
+
+function powerOffFinished() {
+  powerOff.pending = false;
+  clearTimeout(powerOff.timer);
+  powerOff.suppressedReconnect = true;
+  paintPowerOff('Orin is off', 'The connection dropped, which is what a completed power-off looks like from here. The dashboard and SSH stay down until someone presses the power button on the kart.',
+                { color: '#7ec699', busy: false, dismiss: true });
+}
+
+function dismissPowerOff() {
+  $('powerOffOverlay').classList.remove('on');
+  clearTimeout(powerOff.timer);
+  powerOff.pending = false;
+  // Reconnect was held off while the machine went down; resume it so the page recovers on
+  // its own if the Orin is powered back on with this tab still open.
+  if (powerOff.suppressedReconnect) {
+    powerOff.suppressedReconnect = false;
+    if (!reconnectTimer) reconnectTimer = setInterval(connect, 2000);
+  }
+}
+
 function connect() {
   if (typeof dbgLog==='function') dbgLog('WS connecting to '+WS_URL);
   ws = new WebSocket(WS_URL);
@@ -462,6 +582,11 @@ function connect() {
   ws.onclose = (ev) => {
     if (typeof dbgLog==='function') dbgLog('WS CLOSE code='+ev.code+' reason='+ev.reason+' clean='+ev.wasClean);
     const d = $('connDot'); if (d) d.classList.remove('ok');
+    // A socket that dies right after an accepted power-off IS the power-off completing —
+    // report it as the finished state instead of the generic reconnect churn, and stop
+    // retrying, because a machine that is off will not answer until a human presses its
+    // button. Dismissing the screen puts the retry loop back.
+    if (powerOff.pending) { powerOffFinished(); return; }
     if (!reconnectTimer) reconnectTimer = setInterval(connect, 2000);
   };
   ws.onerror = (ev) => { if (typeof dbgLog==='function') dbgLog('WS ERROR '+ev.type); ws.close(); };
@@ -476,6 +601,7 @@ function connect() {
     try {
       lastData = JSON.parse(e.data);
       if (lastData.your_id) { myClientId = lastData.your_id; return; }
+      if (lastData.shutdown_orin) { powerOffUpdate(lastData.shutdown_orin, lastData.error); return; }
       if (lastData.svo_files) {
         document.querySelectorAll('.svo-dropdown').forEach(sel => {
           sel.innerHTML = '<option value="live">Live Camera</option>';
