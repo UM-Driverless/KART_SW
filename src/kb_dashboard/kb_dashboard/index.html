@@ -546,11 +546,15 @@ function wsSend(obj) {
 
 // Stop the EBS compressor so the kart is quiet to work on. Disabling also forces
 // emergency: with the compressor off the air reservoir cannot refill, so the kart must
-// not go on looking ready to drive. Only the disable direction is confirmed — enabling
-// just restores normal behaviour and needs no ceremony.
+// not go on looking ready to drive.
+//
+// No confirmation prompt on either direction. Disabling is not dangerous — it makes the
+// kart safer and quieter, it is the normal thing to do before plugging power, and it is
+// undone by pressing the same button again. The state is visible in the button label and
+// in the Compressor row, so nothing happens silently. A dialog here only added a click to
+// the routine case, and routine dialogs are the ones people learn to dismiss unread.
 function toggleCompressor() {
   const disabled = !(lastData && lastData.compressor_disabled);
-  if (disabled && !confirm('Disable the EBS compressor?\n\nThis also forces EMERGENCY — the kart will not arm until the compressor is enabled again.')) return;
   wsSend({ action: 'set_compressor', disabled: disabled });
 }
 
