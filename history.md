@@ -1167,3 +1167,52 @@ short sentences, and the popover closes when tapped anywhere on itself — on a 
 aiming back at a 16 px target is harder than hitting the panel already under your thumb. The
 pattern is generic, so any other panel that has grown prose can use it. Standing rule for this
 skin: a value belongs on the panel, a sentence belongs behind the (i).
+
+## 2026-07-30 — Tank pressure reads 5.4 bar at atmospheric; the sensor needs 15-30 V
+
+First reading with the kart powered up. The dashboard showed 5.4 bar on a system open to
+atmosphere. The display is not at fault — it is reporting the voltage it was given.
+
+Measured from the `ESP_PNEUMATIC` frame (fields 8/9 are the ESP32's eFuse-calibrated pin
+millivolts, which is why no counts-per-volt assumption enters this):
+
+- PRESSURE_1 (tank): **1786-1789 mV at the ESP32 pin**, steady to ~3 mV across samples. Raw
+  ADC 2040-2046 of 4095, so the channel is **not** saturated — something is actively driving it.
+- Through the board's 3:1 divider that is **~5.36 V at the sensor output**, and `bar = 3 x V_pin`
+  gives 5.36 bar, which is the 5.4 displayed. The maths is self-consistent; the voltage is real.
+- PRESSURE_2 (piston): raw 4095, pegged, as expected with no sensor fitted.
+
+**What the sensor should be doing.** The fitted part is a Festo **SDE5-D10-NF-Q6E-V-M8**
+(567465), per `~/dv/kart/pneumatics/README.md`. Its datasheet
+(`~/dv/kart/pneumatics/resources/festo_567465_sde5_sensor.pdf`) states: measured variable
+**relative** pressure, range 0...10 bar, analogue output 0...10 V with characteristic curve
+start value **0 V** and end value 10 V. At atmospheric it must therefore output **0 V**, not
+5.36 V. This is not a calibration disagreement — 3 %FS accuracy is 0.3 bar, and the error here
+is 5.4 bar, eighteen times that.
+
+**Prime suspect: supply voltage.** The same datasheet gives **operational voltage range DC
+15 V...30 V**. A sensor fed from a 12 V rail is below its minimum and its output is undefined —
+which fits the symptom well, because the reading is steady and plausible rather than noisy or
+railed. This is a hypothesis, not a conclusion: nobody has yet measured what the sensor is
+actually being fed.
+
+**The measurement that decides it**, at the sensor's M8 connector (3-pin, pin 1 BN = +,
+pin 4 BK = signal, pin 3 BU = -):
+
+1. **BN-BU (supply).** Below 15 V and the sensor is out of spec; that is the fault, and the fix
+   is a supply that meets the spec, not a firmware constant.
+2. **BK-BU (output), with the line at atmosphere.** Should read ~0 V.
+   - Reads ~5.4 V -> the sensor really is emitting it. Under-volted, faulty, or wrong part.
+   - Reads ~0 V while the ESP32 pin still shows 1.79 V -> the sensor is fine and the fault lies
+     between the connector and the ADC: divider, wiring, or a short onto that net.
+
+That single pair of readings splits the problem in half either way.
+
+**Do not "fix" this by changing thresholds or adding an offset in firmware.** A 5.4 bar error at
+zero is a hardware or wiring fault. Trimming it out in software would leave the pressure
+readings wrong by an unknown amount everywhere else, and the EBS arm/disarm interlock
+(`EBS_TANK_ARM_BAR` 6.5 / `EBS_TANK_DISARM_BAR` 6.0) decides whether the shutdown circuit may
+close using exactly this number. An offset here would let the chain close on air that is not
+there. Note also that the compressor logic reads the same channel: at a false 5.4 bar the
+firmware believes the tank is nearly charged and will not pump, so this fault also explains a
+compressor that appears to do nothing once power is on.
