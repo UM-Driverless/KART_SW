@@ -1216,3 +1216,46 @@ close using exactly this number. An offset here would let the chain close on air
 there. Note also that the compressor logic reads the same channel: at a false 5.4 bar the
 firmware believes the tank is nearly charged and will not pump, so this fault also explains a
 compressor that appears to do nothing once power is on.
+
+### Follow-up the same day: multimeter says 0 V at the ESP32 pin, firmware says 1786 mV
+
+Rubén measured the ESP32 pin with a multimeter and read **0 V**, while the firmware kept
+reporting 1786 mV on the same channel. Both cannot be true, and which one is wrong changes the
+whole diagnosis, so the evidence on each side is worth writing down.
+
+**The firmware path checks out on inspection.** In kart-medulla `components/km_gpio/km_gpio.c`,
+`PIN_PRESSURE_1` is `GPIO_NUM_6` and both switches — the attenuation setup and
+`KM_GPIO_ReadADC` — map it to `ADC1_CHANNEL_5`. That is the correct ESP32-S3 mapping (ADC1
+channels 0..9 correspond to GPIO 1..10). `adc1_config_width(ADC_WIDTH_BIT_12)` is called, the
+pad is configured `GPIO_MODE_INPUT` with both pulls disabled, and millivolts come from
+`esp_adc_cal_raw_to_voltage` against eFuse calibration. `.agents/esp32s3-pinmap.md` line 24
+independently documents `PRESSURE_1` as GPIO 6. Nothing in the software is obviously reading the
+wrong pad.
+
+**The ADC's readings are internally consistent, which is the strongest argument against 0 V.**
+PRESSURE_2 on GPIO 7 — no sensor fitted, input floating — reads **4095, railed high**. That is
+this board's signature for an unconnected ADC pad. PRESSURE_1 reads **2040-2046**, mid-scale and
+stable to a few counts of live noise. A floating pad here rails; a pad sitting quietly at
+mid-rail is being *driven* by something. And 1.79 V at the pin is precisely what the 3:1 divider
+returns from 5.36 V on the sensor side. Two adjacent channels behaving that differently also
+shows the SAR mux is selecting distinct pads rather than returning one stuck value.
+
+**So the two possibilities are now:**
+
+1. **The probe point was not the GPIO 6 pad.** The M8 connector and the divider input carry the
+   sensor's 0-10 V side, *before* the 3:1 divider; only the R12/R13 junction (net
+   `PRESSURE_1__0_3V3`) and the module pad carry the divided ~1.79 V. Measuring the wrong side,
+   or against a floating ground, would explain a 0 V reading with no fault present.
+2. **The GPIO 6 pad is genuinely disconnected from the divider** — a PCB routing error, a dry
+   joint, or a broken trace. This is weakened, though not excluded, by the mid-scale reading: a
+   disconnected pad on this board should rail to 4095 the way GPIO 7 does, not sit at half scale.
+
+**Next measurements, in this order:** DC volts with the black probe on an ESP32 GND pin, red
+probe on the R12/R13 junction and then on the module's GPIO 6 pad — those two should agree. Then
+`BK`-`BU` at the sensor's M8 connector, which must be ~0 V at atmosphere, and `BN`-`BU`, which
+must be 15-30 V per the SDE5 datasheet. If GPIO 6 really is at 0 V against board ground, a
+continuity check from the R12/R13 junction to the module pin settles case 2 immediately.
+
+**Unresolved as of this entry.** Nothing here is concluded: the contradiction stands, and the
+supply-voltage hypothesis from the entry above is still untested. Do not act on either until the
+readings above exist.
