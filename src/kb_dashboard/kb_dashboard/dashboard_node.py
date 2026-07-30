@@ -327,6 +327,30 @@ class DashboardNode(Node):
         fields = decode_pneumatic(list(msg.payload))
         for k, v in fields.items():
             self.state.update(k, v)
+        # Adopt a disable the ESP32 reports but this node does not know about.
+        #
+        # The two latches live in different places and die at different times: the ESP32
+        # holds COMPRESSOR_DISABLED in RAM until it reboots, while this node holds its copy
+        # until the kart-brain service restarts. Restart the service alone and the ESP32 is
+        # still dutifully holding the compressor off while this node believes it is running.
+        # The visible symptom is a button captioned "Disable compressor" sitting next to a
+        # row reading DISABLED. The dangerous part is invisible: the 1 Hz re-assert below
+        # only fires while _compressor_disabled is True, so in that state an ESP32 reboot
+        # would quietly start the compressor with nobody having asked for it.
+        #
+        # Adoption is deliberately one-way. Telemetry may turn the latch ON, never OFF.
+        # Clearing it on a non-3 state would break the opposite recovery: right after an
+        # ESP32 reboot the firmware reports "running" precisely because it has forgotten the
+        # operator's instruction, and that is the moment the re-assert has to insist, not
+        # give up. So each side heals the other, and neither path can re-enable a compressor
+        # that a human switched off — only pressing the button does that.
+        if fields.get("esp32_compressor_state") == 3 and not self._compressor_disabled:
+            self._compressor_disabled = True
+            self.state.update("compressor_disabled", True)
+            self.get_logger().info(
+                "Compressor reported DISABLED by the ESP32 while this node thought it was "
+                "enabled — adopting the latch so the button matches and the re-assert runs"
+            )
 
     def _on_battery(self, msg: BatteryState):
         """@brief Callback for smart-BMS battery state (kb_bms over BLE).
