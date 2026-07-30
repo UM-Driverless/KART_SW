@@ -1119,3 +1119,42 @@ the firmware and the comms path but not the button, the control token, or the Or
 The ESP32 was returned to enabled afterwards so its state matches what the dashboard displays — a
 direct publish leaves the dashboard node's own latch untouched, and a UI that disagrees with the
 hardware is worse than either state on its own.
+
+## 2026-07-30 — EBS page: the tank dial rendered as an ellipse, and the compressor button fell off the phone layout
+
+Three faults on the race skin's EBS page, all found by opening `index.html?demo=1` in a
+desktop window and at phone-landscape sizes.
+
+**The tank dial was an ellipse, not a circle.** `.ebs-dial` was a `flex:1` box with
+`aspect-ratio:1; max-height:420px; max-width:100%`, and the canvas inside was stretched to
+`width:100%; height:100%`. In a flex column the height comes from the flex line, so
+`aspect-ratio` had to derive the width — which `max-width:100%` then clamped, producing a
+non-square box that stretched the canvas. The code comment above it argued the opposite
+("cap the HEIGHT and let aspect-ratio derive the width — capping width instead lets a tall
+column stretch the box"), which is why the bug survived: the reasoning was written down
+backwards. `rcDrawGauge` draws from `canvas.width` only and assumes a square, so any
+non-square CSS box distorts it. Fix: size the canvas by its own intrinsic 1:1 ratio —
+`width:auto; height:auto;` with `max-width`/`max-height` caps — the pattern `#rcSpeedDial`
+and `.rc-mini canvas` already used successfully.
+
+**"Disable compressor" was below the fold on a landscape phone.** `.rc-ebsstatus` is a
+flex column of non-shrinking children: state block, five rows, the button, then a
+four-line explanatory note. At 390 px viewport height the content ran past the panel and
+the only control on the page was invisible. Fixes: the long note moved to the left panel
+(which had spare room), the two pressure bars were deleted, `.ebs-state` and `.ebs-row`
+padding was tightened, and `.ebs-rows` became the one shrinkable child with
+`overflow-y:auto`. Losing the bottom of a row list is recoverable; losing the button is
+not. Measured after the change: no panel overflow and the button fully on screen at
+844×390, 667×375 and 568×320.
+
+**The two pressure sensors now get two dials.** Tank pressure had a full-panel dial while
+the piston (brake-cylinder) pressure got a 6 px-tall bar, so the two readings looked like
+a headline and a footnote. Both are 0–10 bar from equivalent sensors, so they are now two
+square dials side by side, `RC_DIAL_TANK` and the new `RC_DIAL_PIST`. Deliberately NOT two
+needles on one dial: the tank's green 6–10 bar safe band applies to only one of the two,
+and the piston swings fast during braking while the tank drifts slowly, so a shared arc
+would be misread. `RC_DIAL_PIST` carries no coloured bands at all — 0 bar is the normal
+resting state and there is no measured threshold that means "enough brake force", so any
+zone would be invented. The compressor duty percentage that the deleted COMP bar showed
+now rides on the Compressor row as e.g. `RUNNING · 60%`, still keyed off the state first
+and the duty second (during the 1 s soft-start the motor runs while duty is still near 0).

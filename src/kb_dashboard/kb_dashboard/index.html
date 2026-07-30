@@ -1119,6 +1119,13 @@ const RC_DIAL_TANK = { min: 0, max: PNEU_MAX_BAR, major: 2, minor: 1, numbers: t
   // dim bands (the below-min region is a big slice of the scale, so bright red would look alarming
   // even when healthy): dim red below the 6-bar operating minimum, dim green in the 6–10 safe band.
   arcs: [{ from: 0, to: PNEU_TANK_MIN, color: '#5c0009' }, { from: PNEU_TANK_MIN, to: PNEU_MAX_BAR, color: '#1e5c37' }] };
+// Brake-cylinder pressure: same sensor range and units as the tank, but no bands. 0 bar is the
+// normal resting state (brakes off) and there is no measured threshold that means "enough brake
+// force", so any coloured zone here would be invented. The needle alone says how hard the brakes
+// are on. Deliberately not a second needle on the tank dial: the two numbers move on different
+// timescales and the tank's green safe band applies to only one of them.
+const RC_DIAL_PIST = { min: 0, max: PNEU_MAX_BAR, major: 2, minor: 1, numbers: true, topLabel: 'PISTON', label: 'bar',
+  fmt: v => (v == null || isNaN(v)) ? '--' : v.toFixed(1) };
 
 const skinRace = {
   name: 'Race',
@@ -1350,13 +1357,6 @@ body{
 .rc-sysgrid{ display:grid; grid-template-columns:repeat(4,1fr); grid-auto-rows:minmax(min-content,1fr); gap:8px; flex:1.6; }
 .rc-sysgrid .rc-card{ flex:none; }
 .rc-sysbottom{ display:flex; gap:8px; flex:1.5; min-height:0; }
-.rc-pneu{ flex:1; min-width:0; display:flex; flex-direction:column; align-items:center; gap:6px; padding:8px 10px; }
-.rc-pneu canvas{ flex:1; min-height:0; max-height:250px; max-width:100%; width:auto; height:auto; }
-.pneu-pist{ display:flex; align-items:center; gap:7px; width:100%; font-size:9px; font-weight:700; letter-spacing:.1em;
-  text-transform:uppercase; color:var(--rc-label); font-family:'Rajdhani',sans-serif; }
-.pneu-bar{ flex:1; height:6px; background:var(--rc-raised); border:1px solid var(--rc-line); overflow:hidden; }
-.pneu-fill{ height:100%; width:0%; background:var(--rc-amber); transition:width .2s linear; }
-.pneu-val{ min-width:46px; text-align:right; color:var(--rc-white); font-variant-numeric:tabular-nums; }
 .rc-sysconsole{ flex:2; min-height:0; display:flex; }
 /* the relocated global debug console fills the console panel while the Race skin is active */
 #rcDbgSlot #dbgConsole{ max-width:none !important; margin:0 !important; width:100%; display:flex !important; flex-direction:column; min-height:0; }
@@ -1416,19 +1416,22 @@ body{
 .rc-ebs > *{ min-height:0; min-width:0; }
 .rc-ebstank{ padding:10px 14px; display:flex; flex-direction:column; align-items:center; gap:8px; }
 .rc-ebstank .rc-label{ align-self:flex-start; }
-/* Well above the 250 px cap this dial had as one widget among many in System, but still
-   capped: the below-6-bar danger band is 60% of the 0-10 scale, so at full-panel size it
-   fills the view with red while the tank is perfectly healthy.
-   Cap the HEIGHT and let aspect-ratio derive the width — capping width instead lets a tall
-   column stretch the box and the dial renders as an ellipse. */
-.ebs-dial{ flex:1; min-height:0; aspect-ratio:1; max-height:420px; max-width:100%; margin:0 auto; }
-.ebs-dial canvas{ width:100%; height:100%; display:block; }
+/* Two dials, tank and piston, side by side. Never size a dial by stretching its box: an
+   aspect-ratio box inside a flex column takes its height from the flex line and then has the
+   width clamped by max-width, which is how this rendered as an ellipse. Instead leave
+   width/height auto so the canvas keeps its own 1:1 intrinsic ratio, and constrain it with
+   max-width/max-height only — the same pattern the speed and mini dials use. The px cap keeps
+   a desktop window from blowing the dial up until the below-6-bar band (60% of the 0-10
+   scale) fills the panel with red while the tank is perfectly healthy. */
+.ebs-dials{ flex:1; min-height:0; width:100%; display:flex; align-items:center;
+  justify-content:center; gap:10px; }
+.ebs-dials canvas{ width:auto; height:auto; max-width:47%; max-height:min(100%, 300px); display:block; }
 
-.rc-ebsstatus{ padding:10px 12px; display:flex; flex-direction:column; gap:7px; }
+.rc-ebsstatus{ padding:10px 12px; display:flex; flex-direction:column; gap:7px; overflow:hidden; }
 /* sized to its content — stretching it leaves a large empty box around two words. Spacing is
    tight because the whole column has to fit a 390 px-tall phone in landscape without scrolling. */
 .ebs-state{ flex:none; display:flex; flex-direction:column; align-items:center; justify-content:center;
-  gap:6px; padding:14px 12px; background:var(--rc-raised); border:1px solid var(--rc-line); }
+  gap:5px; padding:9px 12px; background:var(--rc-raised); border:1px solid var(--rc-line); }
 .ebs-state-val{ font-family:'Orbitron',sans-serif; font-weight:900; font-size:22px; letter-spacing:.05em;
   text-align:center; line-height:1.1; }
 /* Unknown must never look like a pass. Grey = no signal, and it is the default. */
@@ -1439,14 +1442,16 @@ body{
   animation:rcPulse 1s ease-in-out infinite; }
 .ebs-state-desc{ font-size:9px; font-weight:700; letter-spacing:.09em; text-transform:uppercase;
   color:var(--rc-label-dim); font-family:'Rajdhani',sans-serif; text-align:center; line-height:1.5; }
-.ebs-rows{ flex:none; display:flex; flex-direction:column; gap:6px; }
-.ebs-row{ display:flex; align-items:center; justify-content:space-between; gap:10px;
-  padding:7px 9px; background:var(--rc-raised); border:1px solid var(--rc-line);
+/* The rows are the one shrinkable part of this column, and they scroll rather than clip: on a
+   shorter phone than the 390 px this is tuned for, losing the bottom of a row list is recoverable,
+   losing the compressor button below it is not. */
+.ebs-rows{ flex:0 1 auto; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:5px; }
+.ebs-row{ flex:none; display:flex; align-items:center; justify-content:space-between; gap:10px;
+  padding:6px 9px; background:var(--rc-raised); border:1px solid var(--rc-line);
   font-family:'Rajdhani',sans-serif; font-size:10px; font-weight:700; letter-spacing:.1em;
   text-transform:uppercase; color:var(--rc-label); }
 .ebs-row .v{ font-variant-numeric:tabular-nums; color:var(--rc-white); }
 .ebs-row .v.unwired{ color:var(--rc-label-dim); }
-.ebs-bars{ display:flex; flex-direction:column; gap:7px; }
 .ebs-note{ margin-top:auto; font-size:8.5px; font-weight:600; letter-spacing:.07em; text-transform:uppercase;
   color:var(--rc-label-dim); font-family:'Rajdhani',sans-serif; line-height:1.6; }
 
@@ -1646,8 +1651,16 @@ body{
       <div class="race-page rc-ebs">
         <div class="rc-panel rc-ebstank">
           <div class="rc-corner"></div><div class="rc-rivet tl"></div><div class="rc-rivet bl"></div>
-          <span class="rc-label">Tank pressure</span>
-          <div class="ebs-dial"><canvas id="rcPneuDial" width="300" height="300"></canvas></div>
+          <span class="rc-label">Pneumatics</span>
+          <div class="ebs-dials">
+            <canvas id="rcPneuDial" width="300" height="300"></canvas>
+            <canvas id="rcPistDial" width="300" height="300"></canvas>
+          </div>
+          <div class="ebs-note">Tank is the reservoir; piston is the brake-cylinder pressure, which
+            rises only while the brakes are applied. EBS state and valve read NOT WIRED until
+            connected. Disabling the compressor opens the shutdown circuit in firmware, but the Q3
+            gate is not wired to anything yet, so no brakes actually apply — the row on the right
+            reports the pin, not the kart.</div>
         </div>
         <div class="rc-panel rc-ebsstatus">
           <div class="rc-corner"></div><div class="rc-rivet tl"></div><div class="rc-rivet bl"></div>
@@ -1663,19 +1676,11 @@ body{
             <div class="ebs-row"><span>Compressor</span><span class="v" id="rcEbsComp">--</span></div>
             <div class="ebs-row"><span>Shutdown circuit</span><span class="v unwired" id="rcEbsSdc">--</span></div>
           </div>
-          <!-- flex:none like its siblings — .rc-ebsstatus is a flex column, and a
-               growable button eats the space .ebs-note's margin-top:auto needs,
-               pushing the pressure bars out of the panel. -->
+          <!-- The only control on this page, so it must be reachable without scrolling on a
+               short landscape phone. Nothing growable follows it, and the long explanatory note
+               now lives in the left panel — both changes exist so this button stays on screen. -->
           <button class="ctrl-btn ebs" id="rcCompBtn" style="width:100%;flex:none;padding:9px;"
                   onclick="toggleCompressor()">Disable compressor</button>
-          <div class="ebs-bars">
-            <div class="pneu-pist"><span class="pneu-lbl">Piston</span><div class="pneu-bar"><div class="pneu-fill" id="rcPneuPistFill"></div></div><span class="pneu-val" id="rcPneuPistVal">-- bar</span></div>
-            <div class="pneu-pist"><span class="pneu-lbl">Comp</span><div class="pneu-bar"><div class="pneu-fill" id="rcPneuCompFill"></div></div><span class="pneu-val" id="rcPneuCompVal">--</span></div>
-          </div>
-          <div class="ebs-note">Pressures are live. EBS state and valve read NOT WIRED until connected.
-            Disabling the compressor opens the shutdown circuit in firmware, but the Q3 gate
-            is not wired to anything yet, so no brakes actually apply — the row above reports
-            the pin, not the kart.</div>
         </div>
       </div>
 
@@ -1869,6 +1874,7 @@ body{
     rcDrawGauge($('rcBatTempGauge'), RC_GAUGE_TEMP, NaN);
     rcDrawPedals($('rcPedalsDial'), 0, 0, 0);
     rcDrawGauge($('rcPneuDial'), RC_DIAL_TANK, NaN);  // '-- bar' until the sensor reports
+    rcDrawGauge($('rcPistDial'), RC_DIAL_PIST, NaN);
     return () => {
       hudHome.parent.insertBefore(hud, hudHome.next);
       joyHome.parent.insertBefore(joy, joyHome.next);
@@ -1977,29 +1983,15 @@ body{
     sys('rcSysYolo', yolo.toFixed(1) + ' Hz', yolo >= 30 ? 'rc-ok' : yolo >= 15 ? 'rc-dim' : 'rc-bad');
     sys('rcSysEsp', esp.toFixed(1) + ' Hz', esp >= 80 ? 'rc-ok' : esp >= 30 ? 'rc-dim' : 'rc-bad');
     sys('rcSysHb', d.esp32_heartbeat_age < 0 ? '--' : d.esp32_heartbeat_age + ' s', d.esp32_heartbeat ? 'rc-ok' : 'rc-bad');
-    // pneumatics: tank dial (green safe band) + piston bar (rises when braking)
+    // pneumatics: tank dial (green safe band) + piston dial (rises when braking)
     const tank = d.pneu_tank_bar, pist = d.pneu_piston_bar;
     const haveTank = tank != null && !isNaN(tank);
+    const havePist = pist != null && !isNaN(pist);
     const tankOk = haveTank && tank >= PNEU_TANK_MIN && tank <= PNEU_TANK_MAX;
     rcDrawGauge($('rcPneuDial'), RC_DIAL_TANK, haveTank ? tank : NaN);
-    const pf = $('rcPneuPistFill'), pv = $('rcPneuPistVal');
-    if (pf) pf.style.width = (pist != null ? Math.max(0, Math.min(100, pist / PNEU_MAX_BAR * 100)) : 0) + '%';
-    if (pv) pv.textContent = (pist != null ? pist.toFixed(1) + ' bar' : '-- bar');
-    // compressor: fill tracks the soft-start duty (0-255), label shows ON/off.
-    // State 2 is the forced 15 s cooldown after a full-length burst — it must read
-    // differently from a plain "off", because at duty 0 the two look identical and
-    // "off" would suggest the tank is full when the motor is actually resting.
+    rcDrawGauge($('rcPistDial'), RC_DIAL_PIST, havePist ? pist : NaN);
     const compDuty = d.esp32_compressor_duty, compOn = d.esp32_compressor_on;
     const compState = d.esp32_compressor_state;
-    const cf = $('rcPneuCompFill'), cv = $('rcPneuCompVal');
-    if (cf) cf.style.width = (compDuty != null ? Math.max(0, Math.min(100, compDuty / 255 * 100)) : 0) + '%';
-    // Drive the label from state first, duty second. During the 1 s soft-start the motor is
-    // running but duty is still near 0, and keying off duty alone printed "off" for over a
-    // second while it was actually spinning up. Falling back to compOn keeps pre-2026-07-25
-    // firmware working, which sends no state and leaves it 0.
-    if (cv) cv.textContent = compState === 2 ? 'COOLDOWN'
-                          : (compState === 1 || compOn) ? 'ON ' + Math.round((compDuty || 0) / 255 * 100) + '%'
-                          : 'off';
     document.querySelector('.rc-ebstank')?.classList.toggle('rc-danger', haveTank && !tankOk);
     // any unhealthy item → the System tab pulses red. Tank pressure is judged on the EBS
     // tab now, so it is not counted here — otherwise one fault pulses two tabs.
@@ -2048,7 +2040,12 @@ body{
     const ecEl = $('rcEbsComp');
     if (ecEl) {
       const [txt, cls] = COMP_TEXT[compState] || (compOn ? ['RUNNING', 'rc-ok'] : ['IDLE', 'rc-dim']);
-      ecEl.textContent = txt;
+      // Duty rides along on the RUNNING state, which is where the old COMP bar's number went.
+      // Read the state first and the duty second: during the 1 s soft-start the motor is
+      // spinning but duty is still near 0, so a duty-driven label printed "off" for over a
+      // second while the compressor was audibly running.
+      const running = compState === 1 || (compState == null && compOn);
+      ecEl.textContent = running ? txt + ' · ' + Math.round((compDuty || 0) / 255 * 100) + '%' : txt;
       ecEl.className = 'v ' + cls;
     }
     // Shutdown circuit, read back off the ESP32's pin. null means the firmware predates the
