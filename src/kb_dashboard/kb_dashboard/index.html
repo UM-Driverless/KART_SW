@@ -86,6 +86,17 @@ body {
 <body>
 <div id="topbar">
   <div id="topbarTitle">UM Driverless</div>
+  <!-- Always-visible kart state. These used to live only on the Mission page, which is the
+       one page you are not looking at while the kart moves — state, mission and heartbeat
+       belong wherever you happen to be. SYS collapses the seven health readouts into one
+       worst-case chip; the detail is a tap away rather than permanently eating a column. -->
+  <div id="topbarStatus">
+    <div class="spill" id="pillState">IDLE</div>
+    <div class="spill" id="pillMission">MANUAL</div>
+    <div class="spill" id="pillHb">HB --</div>
+    <button class="spill sys-chip" id="pillSys" onclick="toggleHealthInfo()"
+            title="ESP32 and perception health — tap for the full breakdown">SYS --</button>
+  </div>
   <div style="display:flex;align-items:center;gap:8px">
     <button id="netInfoBtn" onclick="toggleNetInfo()"
             title="Dashboard connection info (local IPs for offline access)"
@@ -104,17 +115,19 @@ body {
             style="background:transparent;border:1px solid rgba(127,29,29,0.6);color:#ff6b6b;border-radius:100px;font-size:9px;font-weight:600;letter-spacing:1.5px;padding:5px 10px;cursor:pointer;font-family:'Inter',-apple-system,sans-serif">POWER OFF</button>
   </div>
 </div>
-<div id="healthBar" style="max-width:480px;margin:0 auto;padding:0 12px 4px;display:flex;gap:6px;font-size:10px;font-family:monospace;opacity:0.7">
-  <span id="hMag">STEER --</span>
-  <span id="hI2c">I2C --</span>
-  <span id="hHeap">HEAP --</span>
-  <span id="hAgc">AGC --</span>
-  <span id="hStk">STK --</span>
-  <span id="hFps">YOLO --</span>
-  <span id="hEspFps">ESP --</span>
-  <span id="hInfo" style="cursor:pointer;color:#888;user-select:none" onclick="toggleHealthInfo()">ⓘ</span>
-</div>
-<div id="healthInfo" style="display:none;max-width:480px;margin:0 auto;padding:4px 12px 6px;font-size:9px;font-family:monospace;color:#aaa;line-height:1.5">
+<!-- Health detail, opened from the SYS chip in the topbar. The seven readouts keep their
+     original ids so updateHealth() writes to them unchanged; only where they render moved. -->
+<div id="healthInfo" style="display:none">
+  <div class="health-vals">
+    <span id="hMag">STEER --</span>
+    <span id="hI2c">I2C --</span>
+    <span id="hHeap">HEAP --</span>
+    <span id="hAgc">AGC --</span>
+    <span id="hStk">STK --</span>
+    <span id="hFps">YOLO --</span>
+    <span id="hEspFps">ESP --</span>
+  </div>
+  <div class="health-legend">
   <b>STEER</b> Steering sensor (MT6701 read over PWM). OK, NO SIGNAL, or TRIPPED = latched fault, EBS fired, throttle refused until the ESP32 reboots<br>
   <b>I2C</b> Legacy AS5600-over-I2C bus. N/A on this board — the ESP32-S3 firmware does not poll an AS5600<br>
   <b>HEAP</b> Free heap memory on ESP32 (KB)<br>
@@ -122,6 +135,7 @@ body {
   <b>STK</b> Min free stack bytes: comms / control / heartbeat / health. Red if &lt;200<br>
   <b>YOLO</b> YOLO inference rate (Hz). Green &gt;30, yellow 15-30, red &lt;15<br>
   <b>ESP</b> ESP32 steering-frame rate over USB serial (Hz). Firmware target 100. Green &ge;80, yellow 30-80, red &lt;30
+  </div>
 </div>
 
 <!-- Touch Joystick Widget (Hidden unless mission is remote_control) -->
@@ -356,7 +370,9 @@ function rcPop(id) {
 
 function updateMissionUI() {
   const isAuto = AUTONOMOUS_MISSIONS.has(currentMission);
-  document.querySelectorAll('.act-grid, .ctrl-row, .ctrl-grouplbl, .t-ctrl-row, .h-ctrl-row').forEach(
+  // .ctrl-row is the only one of these left. The old .act-grid / .ctrl-grouplbl / .t-ctrl-row /
+  // .h-ctrl-row belonged to the skins that were dropped in 2d6f169 and matched nothing.
+  document.querySelectorAll('.ctrl-row').forEach(
     el => el.style.display = isAuto ? '' : 'none'
   );
   document.querySelectorAll('.algo-select').forEach(el => {
@@ -373,6 +389,13 @@ function updateMissionUI() {
   if (algoPane) algoPane.style.display = (isAuto || currentMission === 'inspection') ? '' : 'none';
   const joyPane = $('rcJoyPane');
   if (joyPane) joyPane.style.display = currentMission === 'remote_control' ? '' : 'none';
+  // Controls pane holds only .ctrl-row, which the loop above hides outside autonomous
+  // missions — so in manual/remote it was a full grid column framing nothing. Hide the pane
+  // itself on the same condition and the grid gives that width to the joystick instead.
+  // State/mission/heartbeat used to live here too; they are in the topbar now, visible on
+  // every page rather than only this one.
+  const ctrlPane = $('rcCtrlPane');
+  if (ctrlPane) ctrlPane.style.display = isAuto ? '' : 'none';
   updateAlgoButtons();
 }
 
@@ -791,6 +814,16 @@ function toggleHealthInfo() {
   el.style.display = el.style.display === 'none' ? 'block' : 'none';
 }
 
+// Close the health popover on any click outside it, so it cannot be left covering a dial
+// on a phone where there is no obvious place to dismiss it. Capture phase, because some
+// race-skin controls stop propagation.
+document.addEventListener('click', (e) => {
+  const el = $('healthInfo');
+  if (!el || el.style.display !== 'block') return;
+  if (el.contains(e.target) || e.target.closest('#pillSys')) return;
+  el.style.display = 'none';
+}, true);
+
 async function toggleNetInfo() {
   const panel = $('netInfoPanel');
   if (panel.style.display === 'block') { panel.style.display = 'none'; return; }
@@ -863,6 +896,31 @@ function updateHealth(d) {
     he.textContent = 'ESP '+d.esp_fps.toFixed(1)+'Hz';
     he.style.color = d.esp_fps >= 80 ? ok : d.esp_fps >= 30 ? '#f39c12' : bad;
   }
+  updateSysChip(d);
+}
+
+// Collapse the seven health readouts into the topbar's one-word verdict. Worst case wins, and
+// the chip names the worst thing rather than just colouring — "SYS" going red tells you to look,
+// "SYS STEER" tells you where. The AS5600 I2C/AGC pair is excluded on purpose: it is never
+// populated on this board, so folding it in would peg the chip to a permanent false alarm.
+function updateSysChip(d) {
+  const chip = $('pillSys');
+  if (!chip || d.health_agc === undefined) return;
+  let cls = 'sys-ok', label = 'SYS OK';
+  const warn = (l) => { if (cls === 'sys-ok') { cls = 'sys-warn'; label = 'SYS ' + l; } };
+  const fail = (l) => { if (cls !== 'sys-bad') { cls = 'sys-bad'; label = 'SYS ' + l; } };
+
+  if (d.health_steer_trip) fail('STEER TRIP');
+  else if (!d.health_steer_ok) fail('STEER');
+  if (!d.health_heap_ok) fail('HEAP');
+  const stacks = [d.stack_comms, d.stack_control, d.stack_heartbeat, d.stack_health];
+  if (stacks.every(v => v !== undefined) && stacks.some(v => v < 200)) fail('STACK');
+  if (d.esp32_heartbeat === false) fail('NO ESP32');
+  if (d.yolo_fps !== undefined && d.yolo_fps < 15) warn('YOLO');
+  if (d.esp_fps !== undefined && d.esp_fps < 30) warn('ESP');
+
+  chip.textContent = label;
+  chip.className = 'spill sys-chip ' + cls;
 }
 
 // Control XY pad (Default skin) — steering vs accel, target (orange) vs actual (blue)
@@ -1352,7 +1410,9 @@ body{
 }
 .num{ font-family:'Orbitron',sans-serif; font-weight:700; }
 /* global widgets this skin replaces or relocates */
-#healthBar,#healthInfo,#dbgConsole,#manualWidget{ display:none !important; }
+/* #healthInfo is deliberately NOT hidden here any more — it is the topbar's SYS popover and
+   toggles on its own inline display. #healthBar is gone; its readouts live inside that popover. */
+#dbgConsole,#manualWidget{ display:none !important; }
 #manualWidget + div{ display:none !important; } /* empty home of the relocated #hudStream */
 
 /* topbar restyled as the mockup's, hazard stripe below */
@@ -1366,6 +1426,31 @@ body{
 #topbarTitle{ font-family:'Orbitron',sans-serif; font-weight:700; font-size:15px; letter-spacing:.04em;
   color:var(--rc-red); text-shadow:0 0 12px rgba(226,0,26,.4); }
 #topbarTitle{ display:flex; align-items:center; gap:10px; }
+
+/* Always-visible status group in the topbar. margin-right:auto parks it just after the
+   logo instead of centring it, so its width changing (HB LOST 12.4s is far wider than
+   HB 0.2s) cannot shove the power button around. */
+#topbarStatus{ display:flex; align-items:center; gap:5px; margin-left:14px; margin-right:auto; }
+#topbarStatus .spill{ flex:none; font:600 9px/1 'Titillium Web',sans-serif; letter-spacing:.1em;
+  padding:5px 8px; border-radius:100px; border:1px solid var(--rc-line);
+  background:#00000040; color:var(--rc-label); white-space:nowrap; }
+#topbarStatus .spill.act{ color:#e8e8ea; border-color:#ffffff2e; }
+#topbarStatus .spill.hb-ok{ color:#33d17a; border-color:#33d17a4d; }
+#topbarStatus .spill.hb-bad{ color:var(--rc-red); border-color:var(--rc-red); }
+.sys-chip{ cursor:pointer; font-family:'Titillium Web',sans-serif; }
+.sys-chip.sys-ok{ color:#33d17a; border-color:#33d17a4d; }
+.sys-chip.sys-warn{ color:#f0a030; border-color:#f0a03066; }
+.sys-chip.sys-bad{ color:var(--rc-red); border-color:var(--rc-red); box-shadow:0 0 8px var(--rc-red-glow); }
+
+/* Health detail popover, anchored under the topbar like the connection ⓘ panel. */
+#healthInfo{ position:absolute; top:52px; left:12px; z-index:1000; max-width:min(460px, calc(100vw - 24px));
+  background:var(--rc-panel); border:1px solid var(--rc-line); border-radius:12px;
+  padding:12px 14px; box-shadow:0 8px 24px #000000a6; }
+#healthInfo .health-vals{ display:flex; flex-wrap:wrap; gap:5px 10px; margin-bottom:10px;
+  font:12px ui-monospace,monospace; }
+#healthInfo .health-legend{ font-size:10px; line-height:1.55; color:var(--rc-label);
+  border-top:1px solid var(--rc-line); padding-top:9px; }
+#healthInfo .health-legend b{ color:#e8e8ea; font-weight:700; }
 .rc-blogo{ width:34px; height:34px; object-fit:contain; filter:drop-shadow(0 0 5px rgba(226,0,26,.55)); }
 .rc-bname{ display:flex; flex-direction:column; line-height:1.1; }
 .rc-bsub{ font-size:9px; color:var(--rc-label); letter-spacing:.18em; text-transform:uppercase; margin-top:2px;
@@ -1514,7 +1599,6 @@ body{
 .mis-btn.sel{ background:linear-gradient(180deg,#8a0012,#5c000c); color:#fff; border-color:var(--rc-red); text-shadow:0 0 8px rgba(255,36,56,.6); }
 /* Read-only status readouts: rounded, flat, with a glowing LED dot — deliberately
    NOT button-shaped so they are never mistaken for the controls below. */
-.sbar{ display:flex; gap:6px; }
 .spill{ flex:1; display:flex; align-items:center; justify-content:center; gap:5px; padding:5px 6px; cursor:default;
   font-size:9px; font-weight:700; letter-spacing:.1em; text-transform:uppercase;
   background:rgba(255,255,255,.03); border:1px solid var(--rc-line); border-radius:999px; color:var(--rc-label);
@@ -1526,8 +1610,6 @@ body{
 .spill.hb-bad{ color:var(--rc-red); border-color:rgba(226,0,26,.35); background:rgba(226,0,26,.08); }
 /* Clickable controls: chamfered, raised (gradient + top highlight), hover-brighten,
    press-down — reads as a physical button, distinct from the status pills above. */
-.ctrl-grouplbl{ font-size:8px; font-weight:700; letter-spacing:.2em; text-transform:uppercase;
-  color:var(--rc-label-dim); margin-top:2px; }
 .ctrl-row{ display:flex; gap:6px; }
 .ctrl-btn{ flex:1; padding:11px 6px; border:1px solid var(--rc-line-hard); font-size:10px; font-weight:700;
   letter-spacing:.12em; cursor:pointer; text-transform:uppercase; font-family:'Rajdhani',sans-serif; color:var(--rc-white);
@@ -1813,11 +1895,9 @@ body{
           <div class="algo-select"><div class="algo-label">Steering</div><select class="algo-dropdown" onchange="onAlgoChange(this)"><option value="geometric">Geometric</option><option value="pure_pursuit">Pure Pursuit</option><option value="stanley">Stanley</option><option value="neural_v2">Neural V2</option><option value="mpc">MPC</option></select></div>
           <div class="algo-select"><div class="algo-label">Speed</div><select class="algo-dropdown speed-algo-dropdown" onchange="onSpeedAlgoChange(this)"><option value="curve_factor">Curve Factor</option><option value="constant">Constant</option><option value="constant_stop">Constant + Stop</option><option value="neural_v2">Neural V2</option><option value="zero">Zero</option></select></div>
         </div>
-        <div class="rc-panel rc-mpanel">
+        <div class="rc-panel rc-mpanel" id="rcCtrlPane">
           <div class="rc-corner"></div><div class="rc-rivet tl"></div><div class="rc-rivet bl"></div>
-          <span class="rc-label">Status</span>
-          <div class="sbar"><div class="spill" id="pillState">IDLE</div><div class="spill" id="pillMission">MANUAL</div><div class="spill" id="pillHb">HB --</div></div>
-          <div class="ctrl-grouplbl">Controls</div>
+          <span class="rc-label">Controls</span>
           <div class="ctrl-row"><button class="ctrl-btn go" data-st="running" onclick="wsSend({action:'set_state',state:'running'})">Start</button><button class="ctrl-btn stop" data-st="idle" onclick="wsSend({action:'set_state',state:'idle'})">Stop</button><button class="ctrl-btn ebs" data-st="ebs" onclick="wsSend({action:'set_state',state:'ebs'})">EBS</button><button class="ctrl-btn restart" onclick="if(confirm('Restart kart-brain service?'))wsSend({action:'restart'})">Restart</button></div>
         </div>
         <div class="rc-panel rc-mpanel rc-joypane" id="rcJoyPane" style="display:none">
@@ -2522,6 +2602,7 @@ if (new URLSearchParams(location.search).has('demo')) {
     // before acting (the compressor toggle) are dead in demo mode without this.
     lastData = d;
     try { skinRace.update(d); } catch (e) {}
+    try { updateHealth(d); } catch (e) {}
     try { updatePidReadback(d); } catch (e) {}
   }, 100);
   dbgLog('DEMO MODE — simulated telemetry');

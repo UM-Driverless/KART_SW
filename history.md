@@ -1457,3 +1457,47 @@ and in `git show "$c:src/kb_dashboard/..."` zsh parses `$c:s/...` as a *paramete
 `'<sha>d/index.html'`. Writing `git show "$c":"src/..."` (closing the quote before the colon) fixes
 it. A history scan that silently reports "never present" is indistinguishable from a real answer, so
 always sanity-check such a scan against one known-good commit before believing it.
+
+## 2026-07-30 — Kart state moved into the topbar; the Mission page got its column back
+
+Follow-on from the Status-panel investigation above. Once it was established that nothing had been
+lost, the actual problem was the one worth fixing: on the Mission page the **Status** panel held a
+full grid column to display three pills, because `updateMissionUI` hides its Controls row outside
+autonomous missions. In `remote_control` that meant an empty framed column beside a cramped joystick.
+
+**What moved.** State, mission and heartbeat pills now live in the topbar, plus a new **SYS** chip.
+The panel keeps only the Start/Stop/EBS/Restart row, is renamed **Controls**, and hides itself on the
+same condition that hides its contents — so the `.rc-mission` grid redistributes the width. Remote
+now renders two panes (Mission grid, Remote control) instead of three.
+
+**Why the topbar rather than a smaller panel.** State, mission and heartbeat are what you want while
+the kart is moving, and Mission is precisely the page you are *not* looking at then. They were
+reachable on exactly one page; now they are on all of them.
+
+**The SYS chip is the resurrection of `#healthBar`.** That bar and its ⓘ legend had been hidden by
+`#healthBar,#healthInfo,... { display:none !important }` since the race skin landed, so the seven
+health readouts — steering sensor, I2C, heap, AGC, stack, YOLO rate, ESP32 frame rate — rendered
+nowhere. They were nearly deleted as dead code; Rubén asked for them in the header instead, which was
+the right call. `updateHealth()` is untouched and the seven spans keep their original ids: only where
+they render changed, from a hidden bar to a popover under the chip.
+
+`updateSysChip()` collapses them into one worst-case verdict that **names the fault rather than only
+colouring**: SYS OK / SYS STEER TRIP / SYS STEER / SYS HEAP / SYS STACK / SYS NO ESP32 / SYS YOLO /
+SYS ESP. All eight were exercised in the browser by feeding crafted health payloads. The AS5600
+I2C/AGC pair is deliberately excluded from the verdict — it is never populated on this board, so
+including it would peg the chip to a permanent false alarm, which is the failure `cc59be4` already
+fixed once on the System tab.
+
+**Dead CSS removed on the way**, all orphaned by the skin drop in `2d6f169` and confirmed to match
+zero elements first: `.sbar`, `.ctrl-grouplbl`, and the `.act-grid` / `.t-ctrl-row` / `.h-ctrl-row`
+selectors in `updateMissionUI`'s query. `#manualWidget` was NOT removed — see below.
+
+**Still hidden and still live, deliberately left alone:** `#manualWidget` carries
+`display:none !important` but `updateGamepadUI()` polls at 10 Hz and sends `manual_control`, so a USB
+gamepad steers the kart today with no visible UI, and the Angle/PWM steer-mode toggle
+(`btnSteerAngle` / `btnSteerPWM`, which sends `ORIN_STEER_MODE`) has no reachable button at all.
+Filed in `tasks.md` rather than fixed here, because giving them a home in the Remote control pane is
+a UI addition, not a cleanup.
+
+Verified in demo mode: pane visibility across manual / remote_control / inspection / autocross, the
+popover opening and closing, all eight SYS states, and zero JS errors.
