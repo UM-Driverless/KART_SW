@@ -35,6 +35,7 @@ class KB_coms_micro : public rclcpp::Node {
       ESP_DIAG_STEERING       = 0x0A,
       ESP_HEALTH_STATUS       = 0x0B,
       ESP_PNEUMATIC           = 0x0C,
+      ESP_STEER_PID           = 0x0D,
 
       // ==========================
       // Orin --> ESP32 (0x20 - 0x3F)
@@ -50,6 +51,7 @@ class KB_coms_micro : public rclcpp::Node {
       ORIN_CALIBRATE_STEERING = 0x28,
       ORIN_STEER_MODE         = 0x29,
       ORIN_COMPRESSOR_DISABLE = 0x2A,
+      ORIN_STEER_PID          = 0x2B,
 
       // ==========================
       // Others (0x40 - 0xFF)
@@ -86,6 +88,7 @@ class KB_coms_micro : public rclcpp::Node {
     rclcpp::Publisher<kb_interfaces::msg::Frame>::SharedPtr esp_health_flags_pub_;
     rclcpp::Publisher<kb_interfaces::msg::Frame>::SharedPtr esp_health_data_pub_;
     rclcpp::Publisher<kb_interfaces::msg::Frame>::SharedPtr esp_pneumatic_pub_;
+    rclcpp::Publisher<kb_interfaces::msg::Frame>::SharedPtr esp_steer_pid_pub_;
 
     // Declaration of all subscribers
     rclcpp::Subscription<kb_interfaces::msg::Frame>::SharedPtr orin_throttle_sub_;
@@ -97,6 +100,7 @@ class KB_coms_micro : public rclcpp::Node {
     rclcpp::Subscription<kb_interfaces::msg::Frame>::SharedPtr orin_shutdown_sub_;
     rclcpp::Subscription<kb_interfaces::msg::Frame>::SharedPtr orin_steer_mode_sub_;
     rclcpp::Subscription<kb_interfaces::msg::Frame>::SharedPtr orin_compressor_disable_sub_;
+    rclcpp::Subscription<kb_interfaces::msg::Frame>::SharedPtr orin_steer_pid_sub_;
 };
 
 #endif // KB_COMS_MICRO_HPP_

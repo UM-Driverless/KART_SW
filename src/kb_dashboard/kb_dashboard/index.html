@@ -181,6 +181,7 @@ body {
       </div>
     </div>
   </div>
+
 </div>
 <div style="max-width:480px;margin:4px auto;text-align:center">
   <img id="hudStream" style="width:100%;border-radius:6px" alt="HUD">
@@ -222,6 +223,9 @@ let currentMission = 'manual'; // Track mission state locally to show/hide widge
 // Demo mode (?demo=1): no backend, so mission/state changes are simulated locally.
 const DEMO = new URLSearchParams(location.search).has('demo');
 let demoMission = 'manual', demoState = 'idle', demoCompDisabled = false;
+// Demo stand-in for the gains the ESP32 reports back. Starts on the firmware
+// defaults, which is what a freshly booted kart reports.
+let demoPid = { override: false, kp: 1.5, ki: 0, kd: 0.03, limit: 0.5 };
 let currentControllerType = 'geometric';
 let currentSpeedControllerType = 'curve_factor';
 let currentSvoFile = 'live';
@@ -487,6 +491,51 @@ window.addEventListener('DOMContentLoaded', () => {
   startGamepadLoop();
 });
 
+// Steering PID controls. Wired from skinRace.init() rather than DOMContentLoaded because
+// the pane they live in is built by skinRace.render() into #app, so these elements do not
+// exist until the skin has rendered.
+function wirePidControls() {
+  $('btnPidApply').onclick = () => {
+    wsSend({
+      action: 'set_steer_pid',
+      kp: parseFloat($('pidKp').value) || 0,
+      ki: parseFloat($('pidKi').value) || 0,
+      kd: parseFloat($('pidKd').value) || 0,
+      pwm_limit: parseFloat($('pidLimit').value) || 0,
+    });
+  };
+  $('btnPidDefaults').onclick = () => {
+    // The four boxes are deliberately left alone. What the firmware falls back to is
+    // compiled into it, and echoing a guess into the inputs would invent a number this
+    // page does not know. "In force" fills in from the ESP32 within a second — read that.
+    wsSend({ action: 'set_steer_pid', restore_defaults: true });
+  };
+}
+
+// Steering PID readback. Renders the ESP32's report, never the input boxes — the two
+// disagreeing is the useful signal (firmware clamped the request, or reset and dropped
+// the override), so overwriting one with the other would hide exactly what this shows.
+function updatePidReadback(d) {
+  const inForce = $('pidInForce'), src = $('pidSource');
+  if (!inForce || !src) return;
+  if (d.pid_kp === null || d.pid_kp === undefined) {
+    inForce.textContent = '--';
+    src.textContent = 'no report yet';
+    src.style.color = '#6a6a7a';
+    return;
+  }
+  inForce.textContent =
+    `kp ${d.pid_kp.toFixed(3)}  ki ${d.pid_ki.toFixed(3)}  ` +
+    `kd ${d.pid_kd.toFixed(3)}  limit ${d.pid_pwm_limit.toFixed(2)}`;
+  if (d.pid_override) {
+    src.textContent = 'dashboard override';
+    src.style.color = '#4a9eff';
+  } else {
+    src.textContent = 'firmware defaults';
+    src.style.color = '#2ecc71';
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Power off the Orin
 //
@@ -620,6 +669,7 @@ function connect() {
       try { skinRace.update(lastData); } catch {}
       try { updateHealth(lastData); } catch {}
       try { updateControllerStatus(lastData); } catch {}
+      try { updatePidReadback(lastData); } catch {}
     } catch {}
   };
 }
@@ -658,6 +708,21 @@ function wsSend(obj) {
     else if (obj.action === 'set_compressor') {
       demoCompDisabled = obj.disabled;
       if (obj.disabled) demoState = 'ebs';   // mirrors what the server does
+    }
+    else if (obj.action === 'set_steer_pid') {
+      // Stand in for the firmware, clamps included, so the demo shows the case that
+      // matters: type 99 into Kp and watch "In force" come back 20. A demo that
+      // echoed the request unchanged would hide the one behaviour worth seeing.
+      if (obj.restore_defaults) {
+        demoPid = { override: false, kp: 1.5, ki: 0, kd: 0.03, limit: 0.5 };
+      } else {
+        const clamp = (v, hi) => Math.max(0, Math.min(hi, Number(v) || 0));
+        demoPid = {
+          override: true,
+          kp: clamp(obj.kp, 20), ki: clamp(obj.ki, 10),
+          kd: clamp(obj.kd, 5), limit: clamp(obj.pwm_limit, 0.6),
+        };
+      }
     }
     return;
   }
@@ -1422,6 +1487,22 @@ body{
 /* joystick gets its own pane on the right — centred, never scrollable (was cramped inside Status) */
 .rc-joypane{ overflow:hidden; align-items:center; }
 .rc-joypane #rcJoySlot{ flex:1; min-height:0; width:100%; display:flex; align-items:center; justify-content:center; }
+/* Steering PID tuning, below the joystick on the Remote control pane. flex:0 0 auto so it
+   keeps its natural height and the joystick above it absorbs the slack instead. */
+.rc-pid{ flex:0 0 auto; width:100%; padding-top:8px; border-top:1px solid #ffffff14; }
+.rc-pid-hdr{ display:flex; justify-content:space-between; align-items:baseline; margin-bottom:6px; }
+.rc-pid-hdr #pidSource{ font-size:9px; letter-spacing:.06em; color:#84848a; }
+.rc-pid-grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:6px; }
+.rc-pid-grid label{ display:flex; flex-direction:column; gap:3px;
+  font-size:8px; letter-spacing:.14em; text-transform:uppercase; color:#84848a; }
+.rc-pid-grid input{ width:100%; padding:4px; background:#0000004d; border:1px solid #ffffff1f;
+  border-radius:3px; color:#e8e8ea; font:12px ui-monospace,monospace; }
+.rc-pid-grid input:focus{ outline:none; border-color:#e2001a; }
+.rc-pid-btns{ display:flex; gap:6px; margin-top:8px; }
+.rc-pid-btns .ctrl-btn{ flex:1; }
+.rc-pid-force{ margin-top:8px; font:11px ui-monospace,monospace; color:#84848a; }
+.rc-pid-force #pidInForce{ color:#e8e8ea; }
+.rc-pid-note{ margin-top:5px; font-size:9px; line-height:1.45; color:#6a6a70; }
 .mis-grid{ display:grid; grid-template-columns:1fr 1fr; gap:5px; flex:1; }
 .mis-btn{ border:1px solid var(--rc-line-hard); background:linear-gradient(180deg,#1f1f25,#131317); color:var(--rc-label);
   font-family:'Rajdhani',sans-serif; font-weight:700; font-size:10px; letter-spacing:.1em; text-transform:uppercase;
@@ -1743,6 +1824,28 @@ body{
           <div class="rc-corner"></div><div class="rc-rivet tl"></div><div class="rc-rivet bl"></div>
           <span class="rc-label">Remote control</span>
           <div id="rcJoySlot"></div>
+          <!-- Live steering PID tuning, so a gain can be tried without reflashing the ESP32.
+               "In force" is the firmware's own report of what it is running, never a copy of
+               the boxes above: it clamps what it receives, and a reset drops the override and
+               returns to the gains compiled into it. Reading the two against each other is
+               how either case becomes visible. -->
+          <div class="rc-pid">
+            <div class="rc-pid-hdr"><span class="rc-label">Steering PID</span><span id="pidSource">no report yet</span></div>
+            <div class="rc-pid-grid">
+              <label>Kp<input id="pidKp" type="number" step="0.05" min="0" max="20" value="1.50"></label>
+              <label>Ki<input id="pidKi" type="number" step="0.01" min="0" max="10" value="0.00"></label>
+              <label>Kd<input id="pidKd" type="number" step="0.005" min="0" max="5" value="0.030"></label>
+              <label>PWM limit<input id="pidLimit" type="number" step="0.05" min="0" max="0.6" value="0.50"></label>
+            </div>
+            <div class="rc-pid-btns">
+              <button class="ctrl-btn go" id="btnPidApply">Apply</button>
+              <button class="ctrl-btn" id="btnPidDefaults">Firmware defaults</button>
+            </div>
+            <div class="rc-pid-force">In force: <span id="pidInForce">--</span></div>
+            <div class="rc-pid-note">Applies immediately and resets the integral term. PWM limit is
+              capped at 0.60 remotely — raising it further needs a flash. Not saved: an ESP32 reset
+              returns to the flashed gains.</div>
+          </div>
         </div>
       </div>
 
@@ -2005,6 +2108,7 @@ body{
     };
     $('rcFsBtnTop').addEventListener('click', rcToggleFs);
     $('misGrid').addEventListener('click', missionClick);
+    wirePidControls();
     // relocate the global HUD stream + remote-control joystick into this skin's
     // pages (keeps their listeners/stream alive); restored on skin switch
     const hud = $('hudStream'), joy = $('manualWidgetJoystick'), dbg = $('dbgConsole');
@@ -2407,6 +2511,8 @@ if (new URLSearchParams(location.search).has('demo')) {
       battery_current: batCur, battery_temp: batTemp, battery_temps: [batTemp, batTemp - 1.5],
       battery_charge: 42 * batSoc / 100, battery_cells_mv: batCells,
       cones_3d_ground: cones,
+      pid_override: demoPid.override, pid_kp: demoPid.kp, pid_ki: demoPid.ki,
+      pid_kd: demoPid.kd, pid_pwm_limit: demoPid.limit,
       mission: demoMission, state: demoState,
       as_state: demoState === 'running' ? 'AS_DRIVING' : (demoState === 'ebs' ? 'AS_EMERGENCY_BRAKE' : 'AS_READY'),
     };
@@ -2416,6 +2522,7 @@ if (new URLSearchParams(location.search).has('demo')) {
     // before acting (the compressor toggle) are dead in demo mode without this.
     lastData = d;
     try { skinRace.update(d); } catch (e) {}
+    try { updatePidReadback(d); } catch (e) {}
   }, 100);
   dbgLog('DEMO MODE — simulated telemetry');
 }

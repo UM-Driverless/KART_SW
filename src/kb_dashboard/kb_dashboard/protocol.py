@@ -19,11 +19,26 @@ ESP_ACT_BRAKING = 0x03
 ESP_ACT_STEERING = 0x04
 ESP_HEARTBEAT = 0x08
 ESP_HEALTH_STATUS = 0x0B
+ESP_STEER_PID = 0x0D
 ORIN_TARG_THROTTLE = 0x20
 ORIN_TARG_BRAKING = 0x21
 ORIN_TARG_STEERING = 0x22
 ORIN_STEER_MODE = 0x29
 ORIN_COMPRESSOR_DISABLE = 0x2A
+ORIN_STEER_PID = 0x2B
+
+# Steering-PID tuning bounds, mirroring PID_REMOTE_MAX_* in kart-medulla's main.c.
+# The firmware clamps independently and its clamp is the one that matters — these
+# exist so the dashboard can reject a typo before it travels, and so the input
+# fields can show the range. If the firmware constants change, change these too;
+# the two drifting apart shows up as a value that is accepted here and silently
+# reduced there, which the ESP_STEER_PID echo will reveal but only if someone looks.
+PID_MAX_KP = 20.0
+PID_MAX_KI = 10.0
+PID_MAX_KD = 5.0
+# Deliberately below the actuator's own 1.0 ceiling: this caps steering PWM that
+# can be set remotely, and the steering gear teeth have been stripped once already.
+PID_MAX_PWM_LIMIT = 0.60
 
 MISSIONS = {
     "manual": 0,
@@ -408,6 +423,71 @@ def encode_compressor_disable(disabled: bool) -> list:
     return [1 if disabled else 0]
 
 
+def encode_steer_pid(kp: float, ki: float, kd: float, pwm_limit: float,
+                     override: bool = True) -> list:
+    """@brief Encode a live steering-PID tuning request.
+
+    Gains travel as integers scaled x1000, matching the ESP32's object store.
+    Values are clamped to the PID_MAX_* bounds before sending; the firmware
+    clamps again on arrival and its clamp is the authoritative one. Clamping
+    rather than raising keeps a fat-fingered "150" from becoming a dropped
+    command that looks identical to a dead link.
+
+    @param kp Proportional gain, clamped to [0, PID_MAX_KP].
+    @param ki Integral gain, clamped to [0, PID_MAX_KI].
+    @param kd Derivative gain, clamped to [0, PID_MAX_KD].
+    @param pwm_limit Steering actuator output ceiling, clamped to [0, PID_MAX_PWM_LIMIT].
+    @param override False restores the gains compiled into the firmware and makes
+           the other four values irrelevant.
+    @return List of five int32 elements: [override, kp, ki, kd, pwm_limit] x1000.
+    """
+    def _clamp(v, hi):
+        try:
+            v = float(v)
+        except (TypeError, ValueError):
+            return 0.0
+        if v != v:  # NaN
+            return 0.0
+        return max(0.0, min(hi, v))
+
+    return [
+        1 if override else 0,
+        int(round(_clamp(kp, PID_MAX_KP) * 1000)),
+        int(round(_clamp(ki, PID_MAX_KI) * 1000)),
+        int(round(_clamp(kd, PID_MAX_KD) * 1000)),
+        int(round(_clamp(pwm_limit, PID_MAX_PWM_LIMIT) * 1000)),
+    ]
+
+
+def decode_steer_pid(payload) -> dict:
+    """@brief Decode the ESP32's report of the steering gains it is running.
+
+    This is the firmware's own read-back after its clamping, not an echo of what
+    was requested — so it is what the dashboard should display. A short or empty
+    payload yields None values rather than zeros: a gain of 0.0 is a real setting
+    the firmware can be running, so it must not double as "no answer yet".
+
+    @param payload List of int32 values: [override, kp, ki, kd, pwm_limit] x1000.
+    @return Dict with keys pid_override (bool|None), pid_kp, pid_ki, pid_kd,
+            pid_pwm_limit (float|None each).
+    """
+    if len(payload) < 5:
+        return {
+            "pid_override": None,
+            "pid_kp": None,
+            "pid_ki": None,
+            "pid_kd": None,
+            "pid_pwm_limit": None,
+        }
+    return {
+        "pid_override": bool(payload[0]),
+        "pid_kp": payload[1] / 1000.0,
+        "pid_ki": payload[2] / 1000.0,
+        "pid_kd": payload[3] / 1000.0,
+        "pid_pwm_limit": payload[4] / 1000.0,
+    }
+
+
 # ── Encoders (ESP32 → Orin, used by sim node) ───────────────────────
 
 def encode_act_steering(angle_rad: float, raw_encoder: int = 0) -> list:
@@ -540,6 +620,16 @@ class DashboardState:
             "mission": "manual",
             "state": "idle",  # idle | running | ebs
             "steer_mode": "pid",  # "pid" or "pwm"
+            # Steering PID gains as last reported by the ESP32 over ESP_STEER_PID.
+            # None means the firmware has not reported yet — either it predates the
+            # frame or nothing is connected. The UI shows "--" for None rather than
+            # a plausible-looking 0.0, because 0.0 is a gain the firmware can really
+            # be running and the two must not look the same.
+            "pid_override": None,     # None | bool — False = running the flashed defaults
+            "pid_kp": None,
+            "pid_ki": None,
+            "pid_kd": None,
+            "pid_pwm_limit": None,
             "controller_type": "geometric",  # geometric | pure_pursuit | neural_v2 | mpc
             "speed_controller_type": "curve_factor",  # curve_factor | constant | neural_v2
         }

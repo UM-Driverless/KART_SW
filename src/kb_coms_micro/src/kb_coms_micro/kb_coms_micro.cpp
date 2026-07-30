@@ -37,6 +37,8 @@ KB_coms_micro::KB_coms_micro() : Node("kb_coms_micro_node") {
 
     esp_pneumatic_pub_ = create_publisher<kb_interfaces::msg::Frame>("/esp32/pneumatic", 10);
 
+    esp_steer_pid_pub_ = create_publisher<kb_interfaces::msg::Frame>("/esp32/steer_pid", 10);
+
     esp_fps_pub_ = create_publisher<std_msgs::msg::Float32>("/esp32/fps", 10);
 
     // Create Subscriptors
@@ -66,6 +68,9 @@ KB_coms_micro::KB_coms_micro() : Node("kb_coms_micro_node") {
 
     orin_compressor_disable_sub_ = create_subscription<kb_interfaces::msg::Frame>(
         "/orin/compressor_disable", 10, std::bind(&KB_coms_micro::kb_coms_TXcallback, this, std::placeholders::_1));
+
+    orin_steer_pid_sub_ = create_subscription<kb_interfaces::msg::Frame>(
+        "/orin/steer_pid", 10, std::bind(&KB_coms_micro::kb_coms_TXcallback, this, std::placeholders::_1));
 
     // Inicializa la librería serial
     serial_ = std::make_unique<SerialDriver>(
@@ -247,6 +252,18 @@ void KB_coms_micro::kb_coms_RXcallback(const SerialDriver::Frame &frame_esp) {
         pneumatic_msg.type = frame_esp.type;
         pneumatic_msg.payload = frame_esp.payload;
         esp_pneumatic_pub_->publish(pneumatic_msg);
+
+        break;
+    }
+
+    case kb_interfaces::msg::Frame::ESP_STEER_PID: {
+        // ESP32 reports the steering gains it is actually running, once per second:
+        // [override, kp x1000, ki x1000, kd x1000, pwm_limit x1000]. Forwarded as-is;
+        // the dashboard node does the scaling.
+        kb_interfaces::msg::Frame steer_pid_msg;
+        steer_pid_msg.type = frame_esp.type;
+        steer_pid_msg.payload = frame_esp.payload;
+        esp_steer_pid_pub_->publish(steer_pid_msg);
 
         break;
     }

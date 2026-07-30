@@ -30,6 +30,7 @@ class FakeNode:
         self.published_missions = []
         self.manual_control_calls = []
         self.state_cmd_calls = []
+        self.steer_pid_calls = []
 
     def publish_mission(self, mission):
         self.published_missions.append(mission)
@@ -41,6 +42,11 @@ class FakeNode:
 
     def publish_state_cmd(self, cmd):
         self.state_cmd_calls.append(cmd)
+
+    def publish_steer_pid(self, *, kp, ki, kd, pwm_limit, override):
+        self.steer_pid_calls.append(
+            {"kp": kp, "ki": ki, "kd": kd, "pwm_limit": pwm_limit, "override": override}
+        )
 
     def get_logger(self):
         return self
@@ -467,10 +473,13 @@ class TestControllerInBroadcast:
         client_id_b = welcome_b["your_id"]
 
         _ws_send_text(b, json.dumps({"action": "take_control"}))
-        time.sleep(0.2)
 
-        # Read a broadcast from B's connection
-        snap = _ws_read_text(b)
+        # Wait for a broadcast that actually names a controller rather than asserting on
+        # whichever frame arrives first. Telemetry is broadcast continuously, so a snapshot
+        # queued just before the token changed hands can still be in flight — reading one
+        # frame and demanding it be the updated one fails intermittently. The sibling test
+        # above already uses this helper; this one was asserting on a race.
+        snap = _ws_read_until(b, lambda m: m.get("controller") is not None)
         assert snap is not None
         assert snap["controller"] == client_id_b
 
@@ -527,3 +536,75 @@ class TestReleaseControl:
 
         _ws_close(a)
         _ws_close(b)
+
+
+class TestSteerPidRequiresToken:
+    """Live PID tuning moves the column of whoever holds the joystick."""
+
+    def _send_pid(self, sock, **kw):
+        _ws_send_text(sock, json.dumps({"action": "set_steer_pid", **kw}))
+
+    def test_non_holder_cannot_tune(self, srv):
+        a = _blocking_ws_connect(srv.port)
+        _ws_read_text(a)
+        _send_manual_control(a, steering=0.1)  # A auto-acquires the token
+        time.sleep(0.2)
+
+        b = _blocking_ws_connect(srv.port)
+        _ws_read_text(b)
+        self._send_pid(b, kp=9.0, ki=0.0, kd=0.0, pwm_limit=0.5)
+        time.sleep(0.3)
+
+        assert srv.node.steer_pid_calls == []
+
+        _ws_close(a)
+        _ws_close(b)
+
+    def test_holder_can_tune(self, srv):
+        a = _blocking_ws_connect(srv.port)
+        _ws_read_text(a)
+        _send_manual_control(a, steering=0.1)
+        time.sleep(0.2)
+
+        self._send_pid(a, kp=2.5, ki=0.1, kd=0.04, pwm_limit=0.55)
+        time.sleep(0.3)
+
+        assert len(srv.node.steer_pid_calls) == 1
+        call = srv.node.steer_pid_calls[0]
+        assert call["kp"] == 2.5
+        assert call["pwm_limit"] == 0.55
+        assert call["override"] is True
+
+        _ws_close(a)
+
+    def test_restore_defaults_sends_override_false(self, srv):
+        a = _blocking_ws_connect(srv.port)
+        _ws_read_text(a)
+        _send_manual_control(a, steering=0.1)
+        time.sleep(0.2)
+
+        self._send_pid(a, restore_defaults=True)
+        time.sleep(0.3)
+
+        assert len(srv.node.steer_pid_calls) == 1
+        assert srv.node.steer_pid_calls[0]["override"] is False
+
+        _ws_close(a)
+
+    def test_malformed_values_are_dropped_not_crashed(self, srv):
+        a = _blocking_ws_connect(srv.port)
+        _ws_read_text(a)
+        _send_manual_control(a, steering=0.1)
+        time.sleep(0.2)
+
+        self._send_pid(a, kp="not-a-number", ki=0.0, kd=0.0, pwm_limit=0.5)
+        time.sleep(0.3)
+        assert srv.node.steer_pid_calls == []
+
+        # The connection must survive it — a bad number should not drop the socket
+        # that also carries the joystick.
+        self._send_pid(a, kp=1.5, ki=0.0, kd=0.03, pwm_limit=0.5)
+        time.sleep(0.3)
+        assert len(srv.node.steer_pid_calls) == 1
+
+        _ws_close(a)

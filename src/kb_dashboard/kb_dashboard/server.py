@@ -367,6 +367,33 @@ async def run_websocket_server(
             mode = cmd.get("mode", "pid")  # "pid" or "pwm"
             if hasattr(node, "publish_steer_mode"):
                 node.publish_steer_mode(1 if mode == "pwm" else 0)
+        elif action == "set_steer_pid":
+            # Live steering PID tuning, so a gain can be tried without reflashing the
+            # ESP32. Gated on the controller token: this moves the steering column of
+            # whoever currently has the joystick, and two browsers pushing different
+            # gains at each other would be untraceable from either one.
+            #
+            # No validation here beyond the float conversion. encode_steer_pid clamps
+            # to the PID_MAX_* bounds, and the firmware clamps again on arrival — that
+            # second clamp is the one that protects the gears, because it is the only
+            # one that still applies when the command comes from something other than
+            # this dashboard.
+            if controller["holder"] is not writer:
+                node.get_logger().warn(
+                    f"PID tuning from {client_id} ignored — does not hold control"
+                )
+            elif hasattr(node, "publish_steer_pid"):
+                restore = bool(cmd.get("restore_defaults", False))
+                try:
+                    node.publish_steer_pid(
+                        kp=float(cmd.get("kp", 0.0)),
+                        ki=float(cmd.get("ki", 0.0)),
+                        kd=float(cmd.get("kd", 0.0)),
+                        pwm_limit=float(cmd.get("pwm_limit", 0.0)),
+                        override=not restore,
+                    )
+                except (TypeError, ValueError):
+                    node.get_logger().warn(f"Malformed PID tuning from {client_id} ignored")
         elif action == "set_compressor":
             # Stops the EBS compressor so the kart is quiet to work on. Disabling it
             # also forces emergency, because a kart that cannot refill its air

@@ -29,6 +29,7 @@ from kb_dashboard.protocol import (
     DashboardState,
     ORIN_COMPRESSOR_DISABLE,
     ORIN_STEER_MODE,
+    ORIN_STEER_PID,
     decode_steering,
     decode_steering_raw,
     decode_speed,
@@ -38,8 +39,10 @@ from kb_dashboard.protocol import (
     decode_health_flags,
     decode_health_data,
     decode_pneumatic,
+    decode_steer_pid,
     encode_compressor_disable,
     encode_steer_mode,
+    encode_steer_pid,
 )
 from kb_dashboard.server import run_websocket_server
 
@@ -102,6 +105,9 @@ class DashboardNode(Node):
         )
         self.create_subscription(
             Frame, "/esp32/pneumatic", self._on_esp_pneumatic, qos_reliable
+        )
+        self.create_subscription(
+            Frame, "/esp32/steer_pid", self._on_esp_steer_pid, qos_reliable
         )
 
         # ZED2 IMU — uses BEST_EFFORT to match the ZED ROS2 wrapper's default QoS
@@ -189,6 +195,10 @@ class DashboardNode(Node):
         self._pending_state_cmd_count = 0
         self._pending_steer_mode = None
         self._pending_steer_mode_count = 0
+        # Live steering-PID tuning (Frame to ESP32 via kb_coms_micro)
+        self.steer_pid_pub = self.create_publisher(Frame, "/orin/steer_pid", 10)
+        self._pending_steer_pid = None
+        self._pending_steer_pid_count = 0
         # EBS compressor operator latch (Frame to ESP32 via kb_coms_micro)
         self.compressor_disable_pub = self.create_publisher(Frame, "/orin/compressor_disable", 10)
         self._pending_compressor_disable = None
@@ -320,6 +330,19 @@ class DashboardNode(Node):
     def _on_esp_health_data(self, msg: Frame):
         """@brief Callback for the numeric half of the ESP32 health frame."""
         for k, v in decode_health_data(list(msg.payload)).items():
+            self.state.update(k, v)
+
+    def _on_esp_steer_pid(self, msg: Frame):
+        """@brief Callback for the ESP32's 1 Hz report of the steering gains in force.
+
+        Purely a display path — nothing here re-sends or corrects anything. If the
+        ESP32 reboots it comes back on the gains compiled into its firmware, and
+        this node deliberately lets that stand rather than re-pushing the tuning
+        (unlike the compressor latch, where the re-assert is what keeps the kart
+        quiet). Reverting to the flashed gains is the safe direction, so the right
+        behaviour is to show the operator it happened and let them decide.
+        """
+        for k, v in decode_steer_pid(list(msg.payload)).items():
             self.state.update(k, v)
 
     def _on_esp_pneumatic(self, msg: Frame):
@@ -454,6 +477,9 @@ class DashboardNode(Node):
         if self._pending_steer_mode is not None and self._pending_steer_mode_count > 0:
             self.steer_mode_pub.publish(self._pending_steer_mode)
             self._pending_steer_mode_count -= 1
+        if self._pending_steer_pid is not None and self._pending_steer_pid_count > 0:
+            self.steer_pid_pub.publish(self._pending_steer_pid)
+            self._pending_steer_pid_count -= 1
         if self._pending_compressor_disable is not None and self._pending_compressor_disable_count > 0:
             self.compressor_disable_pub.publish(self._pending_compressor_disable)
             self._pending_compressor_disable_count -= 1
@@ -491,6 +517,34 @@ class DashboardNode(Node):
         self._pending_steer_mode = frame
         self._pending_steer_mode_count = 100  # publish for 1s to ensure delivery
         self.get_logger().info(f"Steer mode: {'PWM' if mode else 'PID'}")
+
+    def publish_steer_pid(self, kp: float, ki: float, kd: float, pwm_limit: float,
+                          override: bool = True):
+        """@brief Push steering PID gains to the ESP32 so a tune needs no reflash.
+
+        Repeated for 1 s like the other one-shot commands, because a single frame
+        can be lost and there is no acknowledgement. That is a repeat of one
+        request, not a standing re-assert: once the burst ends nothing keeps
+        sending, so an ESP32 that reboots later comes back on its flashed gains
+        and stays there. The dashboard finds out from the ESP_STEER_PID echo.
+
+        @param kp Proportional gain.
+        @param ki Integral gain.
+        @param kd Derivative gain.
+        @param pwm_limit Steering actuator output ceiling, 0.0-1.0.
+        @param override False restores the gains compiled into the firmware.
+        """
+        frame = Frame()
+        frame.type = ORIN_STEER_PID
+        frame.payload = encode_steer_pid(kp, ki, kd, pwm_limit, override)
+        self._pending_steer_pid = frame
+        self._pending_steer_pid_count = 100  # publish for 1s to ensure delivery
+        if override:
+            self.get_logger().info(
+                f"Steering PID: kp={kp:.3f} ki={ki:.3f} kd={kd:.3f} limit={pwm_limit:.2f}"
+            )
+        else:
+            self.get_logger().info("Steering PID: restoring firmware defaults")
 
     def publish_compressor_disable(self, disabled: bool):
         """@brief Publish the EBS compressor operator latch to the ESP32.

@@ -23,6 +23,12 @@ from kb_dashboard.protocol import (
     encode_braking,
     encode_health,
     encode_compressor_disable,
+    encode_steer_pid,
+    decode_steer_pid,
+    PID_MAX_KP,
+    PID_MAX_KI,
+    PID_MAX_KD,
+    PID_MAX_PWM_LIMIT,
     DashboardState,
     MISSIONS,
 )
@@ -326,3 +332,63 @@ class TestMissions:
     def test_expected_missions(self):
         expected = {"manual", "remote_control", "autonomous", "acceleration", "skidpad", "autocross", "trackdrive", "ebs_test", "inspection"}
         assert set(MISSIONS.keys()) == expected
+
+
+# ── Steering PID tuning ───────────────────────────────────────────────
+
+class TestEncodeSteerPid:
+    def test_scales_by_1000_with_override_first(self):
+        assert encode_steer_pid(1.5, 0.0, 0.03, 0.5) == [1, 1500, 0, 30, 500]
+
+    def test_restore_defaults_clears_override_flag(self):
+        assert encode_steer_pid(1.5, 0.2, 0.03, 0.5, override=False)[0] == 0
+
+    def test_clamps_each_gain_to_its_own_maximum(self):
+        payload = encode_steer_pid(999.0, 999.0, 999.0, 999.0)
+        assert payload[1] == int(PID_MAX_KP * 1000)
+        assert payload[2] == int(PID_MAX_KI * 1000)
+        assert payload[3] == int(PID_MAX_KD * 1000)
+        assert payload[4] == int(PID_MAX_PWM_LIMIT * 1000)
+
+    def test_pwm_limit_cannot_reach_full_power(self):
+        """The remote cap is below the actuator's own 1.0 — the gears broke once."""
+        assert encode_steer_pid(1.5, 0.0, 0.03, 1.0)[4] < 1000
+
+    def test_negative_gains_clamp_to_zero(self):
+        """A negative gain is positive feedback: it drives away from the target."""
+        assert encode_steer_pid(-5.0, -1.0, -0.5, -0.2)[1:] == [0, 0, 0, 0]
+
+    def test_non_numeric_becomes_zero_rather_than_raising(self):
+        assert encode_steer_pid("oops", None, 0.03, 0.5)[1:3] == [0, 0]
+
+    def test_nan_becomes_zero(self):
+        assert encode_steer_pid(float("nan"), 0.0, 0.03, 0.5)[1] == 0
+
+
+class TestDecodeSteerPid:
+    def test_round_trip_through_encode(self):
+        got = decode_steer_pid(encode_steer_pid(1.5, 0.25, 0.03, 0.45))
+        assert got["pid_override"] is True
+        assert abs(got["pid_kp"] - 1.5) < 1e-9
+        assert abs(got["pid_ki"] - 0.25) < 1e-9
+        assert abs(got["pid_kd"] - 0.03) < 1e-9
+        assert abs(got["pid_pwm_limit"] - 0.45) < 1e-9
+
+    def test_override_false_decodes_as_firmware_defaults(self):
+        assert decode_steer_pid([0, 1500, 0, 30, 500])["pid_override"] is False
+
+    def test_short_payload_yields_none_not_zero(self):
+        """0.0 is a gain the firmware can really run, so it must not mean 'no answer'."""
+        got = decode_steer_pid([])
+        assert all(v is None for v in got.values())
+        assert set(got) == {"pid_override", "pid_kp", "pid_ki", "pid_kd", "pid_pwm_limit"}
+
+    def test_truncated_payload_yields_none(self):
+        assert decode_steer_pid([1, 1500, 0])["pid_kp"] is None
+
+
+class TestDashboardStatePidDefaults:
+    def test_pid_fields_start_as_none(self):
+        snap = DashboardState().snapshot()
+        for key in ("pid_override", "pid_kp", "pid_ki", "pid_kd", "pid_pwm_limit"):
+            assert snap[key] is None, f"{key} must start unknown, not 0.0"

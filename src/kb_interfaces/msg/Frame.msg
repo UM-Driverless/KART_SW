@@ -13,6 +13,7 @@ uint8 ESP_COMPLETE          = 0x09
 uint8 ESP_DIAG_STEERING     = 0x0A
 uint8 ESP_HEALTH_STATUS     = 0x0B
 uint8 ESP_PNEUMATIC         = 0x0C
+uint8 ESP_STEER_PID         = 0x0D
 
 
 # ==========================
@@ -29,6 +30,7 @@ uint8 ORIN_COMPLETE         = 0x27
 uint8 ORIN_CALIBRATE_STEERING = 0x28
 uint8 ORIN_STEER_MODE       = 0x29
 uint8 ORIN_COMPRESSOR_DISABLE = 0x2A
+uint8 ORIN_STEER_PID        = 0x2B
 
 # ==========================
 # Others (0x40 - 0xFF)

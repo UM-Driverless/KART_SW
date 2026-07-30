@@ -1362,3 +1362,41 @@ real command would have powered off the developer's machine.
 All five browser states were checked in a headless Chrome against a local server with a
 stubbed command — including the one where the stub kills the server to imitate the power
 actually going.
+
+## 2026-07-30 — Steering PID tunable from the dashboard, no reflash
+
+The Remote control pane on the Mission page now has four number boxes (Kp, Ki, Kd, PWM limit),
+an Apply button and a "Firmware defaults" button, plus an "In force" row. New frames:
+`ORIN_STEER_PID` (0x2B) out and `ESP_STEER_PID` (0x0D) back, both `[override, kp, ki, kd,
+pwm_limit]` as 5 int32s with the gains scaled x1000. Firmware half is in kart-medulla `367655f`;
+see that repo's `history.md` for why the override flag and the no-NVS/no-re-send decisions went
+the way they did.
+
+**"In force" is the ESP32's own report, never a copy of the input boxes.** The firmware clamps
+what it receives, so typing 99 into Kp and reading 20.000 back is the system working. If the two
+rows ever agreed unconditionally the clamp would be invisible, which is the whole reason the echo
+frame exists rather than the browser just displaying what it sent.
+
+Gated on the controller token, unlike the compressor button. The compressor is a safety control
+and is deliberately ungated — a safety button that silently did nothing until you pressed "Take
+Control" would be indistinguishable from a broken one. PID tuning is the opposite case: it moves
+the column of whoever currently holds the joystick, and two browsers pushing different gains at
+each other would be untraceable from either.
+
+Demo mode (`?demo=1`) stands in for the firmware including its clamps, so the panel can be
+exercised with no kart attached. It starts on the firmware defaults, which is what a freshly
+booted ESP32 reports.
+
+**Where the panel had to go.** It was first built into `#manualWidget`, which turned out to be
+dead: `.race-tab` CSS carries `#manualWidget{ display:none !important }`, so it renders nowhere.
+The race skin is the only skin — `applySkin()` has no branch and there is no UI to switch — and
+it picks up `#manualWidgetJoystick`, `#hudStream` and `#dbgConsole` by relocating them into its
+own panes. Everything else in the legacy markup is unreachable. Caught by screenshotting the
+page rather than by reading the code.
+
+Also fixed a pre-existing race in `test_broadcast_updates_after_take_control`: it slept 200 ms
+and asserted on the next single frame, so a telemetry snapshot queued just before the token
+changed hands failed it. Now uses `_ws_read_until`, as the sibling test two lines above already
+did. It failed once in six full-suite runs before the fix and has not failed in twelve since.
+
+NOT yet run against real hardware — the ESP32 has not been flashed with the firmware half.
