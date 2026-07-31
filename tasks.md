@@ -67,21 +67,7 @@ as the single task board — do NOT create `.agents/tasks.md`.
 
 - [ ] **Audit the dashboard for other sensors that can render a false reading when absent** — Two were found and fixed on 2026-07-25, both discovered only by looking at the screen with the hardware unplugged: the steering gauge showed a confident **90 LEFT** (firmware reports 3.451 rad with nothing on I2C; the gauge clamped it to its -90 limit) and the PISTON readout showed **9.9 bar** (floating ADC input at full scale; it was a bar widget then and is a dial since 2026-07-30). The standing rule is that an absent or out-of-range sensor must read as no-data — `--`, `NO SENSOR`, `NaN` — and must never produce a plausible number, because a false reading is indistinguishable from a real one and will be trusted. Sweep the rest of the panels the same way: speed, the accelerometer/G-G dial, pedal positions, battery, YOLO Hz, and anything else that defaults a missing value to 0 or clamps an out-of-range one into scale. The EBS tab's existing `NOT WIRED` treatment is the pattern to copy. Check by disconnecting or stubbing each source, not by reading the code.
 
-- [ ] **When the USB tether is gone, does `kart.rubenayla.xyz` come back over Wi-Fi?** — `wifi-watchdog` switches the radio to a known Wi-Fi network ~7 s after the tether goes, so the Orin has internet again. Unknown: whether `cloudflared` reconnects the tunnel over the new interface. If it does not, the fallback is useless for remote access.
-    - **Still never tested.** A 2026-07-31 attempt produced only 530s, but that run is void and proves nothing: the kart and the Orin were powered off the whole time, so the commands that were supposed to drop the tether never ran. **Before running this, confirm the Orin is actually up** — `ssh orin-remote 'uptime'` returning real output, not just an absence of errors. When Ruben is at home the kart is off and every symptom of this test looks identical to success-then-lockout.
-    - **Read `journalctl -t wifi-watchdog` first.** No "releasing the kart-ap AP" line = the radio never switched, and the usual reason is a phone or laptop sitting on the `kart` Wi-Fi, which the watchdog refuses to kick off. A "joined '<network>'" line = the radio switched fine and `cloudflared` is the one at fault; the fix is then one line in `tools/wifi-watchdog.sh` — `systemctl restart cloudflared` in `try_client`, just after the "joined" log.
-    - **To run it, nobody needs to be at the kart or touch the cable.** Switch the tether off over SSH. Schedule it to switch back on *first*, in the same command, because turning it off drops the SSH session you would need to turn it back on:
-
-      ```bash
-      ssh orin-remote 'echo 0 | sudo -S bash -c "setsid nohup bash -c \"sleep 240; nmcli connection up \\\"Wired connection 2\\\"; systemctl restart cloudflared\" >/tmp/tether-restore.log 2>&1 &"
-      echo 0 | sudo -S nmcli connection down "Wired connection 2"'
-      ```
-
-    - **Put a `sleep` between polls.** Cloudflare answers 530 instantly instead of hanging, so a plain loop of 20 curls finishes in one second and tests nothing — that wasted a run. 200 means it works.
-
-      ```bash
-      for i in $(seq 1 20); do curl -sS --max-time 8 -o /dev/null -w "%{http_code}\n" https://kart.rubenayla.xyz/; sleep 10; done
-      ```
+- [x 2026-07-31] **Does the Cloudflare tunnel work when the Orin's internet comes from Wi-Fi rather than the USB tether?** — Yes. Confirmed by Rubén from experience: this was the normal arrangement for months before the `kart` access point became the default operating mode on 2026-07-06, when the Orin simply joined a Wi-Fi network as a client and `cloudflared` ran over it. No test needed, and none should be scheduled. Note this answers only the tunnel question — whether the radio *switches* from AP to client when the tether disappears is separate, and is what `tools/wifi-watchdog.sh` handles.
 
 **Result of the 2026-07-31 run, using the procedure above: still 530 after 3.2 minutes** (18 polls, 21:52:11 to 21:55:05, every 10 s). Which of the two failure modes that was had not yet been read off the Orin's journal when the run ended. Start there rather than re-running the test.
 
