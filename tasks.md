@@ -67,6 +67,22 @@ as the single task board — do NOT create `.agents/tasks.md`.
 
 - [ ] **Audit the dashboard for other sensors that can render a false reading when absent** — Two were found and fixed on 2026-07-25, both discovered only by looking at the screen with the hardware unplugged: the steering gauge showed a confident **90 LEFT** (firmware reports 3.451 rad with nothing on I2C; the gauge clamped it to its -90 limit) and the PISTON readout showed **9.9 bar** (floating ADC input at full scale; it was a bar widget then and is a dial since 2026-07-30). The standing rule is that an absent or out-of-range sensor must read as no-data — `--`, `NO SENSOR`, `NaN` — and must never produce a plausible number, because a false reading is indistinguishable from a real one and will be trusted. Sweep the rest of the panels the same way: speed, the accelerometer/G-G dial, pedal positions, battery, YOLO Hz, and anything else that defaults a missing value to 0 or clamps an out-of-range one into scale. The EBS tab's existing `NOT WIRED` treatment is the pattern to copy. Check by disconnecting or stubbing each source, not by reading the code.
 
+- [ ] **Two things about the Wi-Fi fallback are still untested. Both need someone at the kart.**
+
+    Background in one line: when the phone is plugged in over USB the Orin runs the `kart` Wi-Fi; when the phone is gone it drops `kart` and joins a known Wi-Fi instead, so you can still reach it remotely. Done by `tools/wifi-watchdog.sh`.
+
+    **Test A — no known Wi-Fi in range.** This is the one that matters, because if it fails the kart is left with no `kart` network *and* no internet, which is worse than before.
+    - Go somewhere with no known Wi-Fi, or turn off every phone hotspot and be out of range of `Robots_urjc`.
+    - Unplug the USB phone from the Orin.
+    - Wait 40 seconds.
+    - **Pass:** the `kart` Wi-Fi is back and `http://10.42.0.1/` loads. **Fail:** no `kart` network appears at all.
+
+    **Test B — the tether self-heal.** Not deployed yet; deploy first with `scp tools/wifi-watchdog.sh orin-remote:/tmp/ && ssh orin-remote 'sudo install -m755 /tmp/wifi-watchdog.sh /usr/local/bin/ && sudo systemctl restart wifi-watchdog'`.
+    - With the phone plugged in and working, run `sudo nmcli connection down "Wired connection 2"` on the Orin. This kills its internet.
+    - **Pass:** within about 2 minutes the Orin brings the phone connection back by itself and `kart.rubenayla.xyz` works again. **Fail:** it stays dead until you replug the cable.
+
+    **Before either test, check the Orin is actually on:** `ssh orin-remote 'uptime'` must print real output. When Rubén is at home the kart is off, and a powered-off Orin looks exactly like a failed test.
+
 - [x 2026-07-31] **Does the Cloudflare tunnel work when the Orin's internet comes from Wi-Fi rather than the USB tether?** — Yes. Confirmed by Rubén from experience: this was the normal arrangement for months before the `kart` access point became the default operating mode on 2026-07-06, when the Orin simply joined a Wi-Fi network as a client and `cloudflared` ran over it. No test needed, and none should be scheduled. Note this answers only the tunnel question — whether the radio *switches* from AP to client when the tether disappears is separate, and is what `tools/wifi-watchdog.sh` handles.
 
 **Result of the 2026-07-31 run, using the procedure above: still 530 after 3.2 minutes** (18 polls, 21:52:11 to 21:55:05, every 10 s). Which of the two failure modes that was had not yet been read off the Orin's journal when the run ended. Start there rather than re-running the test.
