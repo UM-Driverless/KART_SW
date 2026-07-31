@@ -1542,3 +1542,26 @@ Measured with Playwright against `python3 -m http.server` in the dashboard direc
 page pulls its fonts from Google Fonts, so with no internet the numbers render as tofu boxes — that is
 the sandbox, not the layout. Also: the browser caches the page hard, so add `?v=N` when re-checking a
 CSS edit or you will screenshot the old layout and conclude nothing changed.
+
+## 2026-07-31 — Which PCB this code runs against (first record of the hardware pairing)
+
+Nothing in this repo has ever named the hardware revision it targets, which makes "does this branch
+match the board on the kart?" unanswerable. First data point, so later ones have something to append
+to. This is a record, not yet a convention — the identifier scheme is still being decided; see
+kart-medulla's `tasks.md`.
+
+- **kart-brain `main`:** `c200e56` ("Revert Merge pull request #3 from
+  UM-Driverless/feature/stanley-controller"), the current tip of main.
+- **The PCB it runs against:** built from the `dv-hardware` repo
+  (`~/repos/dv-hardware/projects/kart-medulla/`) at commit **`84d6dd0`**, "medulla: add fabrication
+  gerbers + drill files (zip for fab)". That is the last commit touching
+  `projects/kart-medulla/fabrication/`, so it is the best available evidence of what the fab house
+  received — it is inferred from the repo, not read off a purchase order or a board.
+
+**dv-hardware has moved on since the boards were made.** HEAD is `f68cc1f` (2026-07-30), one
+schematic commit later, and it changed the brake output path: CN10 pin 2's label went from
+`CMD_BRAKE__0_5V` to `CMD_BRAKE__0_10V`, CN10.2 was routed to the amplified net, and the
+U13.10 -> U1.3 copper (DAC to amplifier) was restored after six of its seven segments had been
+deleted in KiCad. So the physical board carries the *unamplified* 0-5 V brake output on CN10.2 and
+may have no connection into the amplifier at all. A netlist exported from dv-hardware HEAD describes
+the design, not the board on the kart.
