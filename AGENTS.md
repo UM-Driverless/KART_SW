@@ -18,6 +18,7 @@
 
 **Reference** (read when relevant):
 - **`architecture.md`** — System architecture, packages, topic map, message types.
+- **`dashboard-testing.md`** — How to run and test the dashboard with no hardware, and the traps in it. Read before editing `src/kb_dashboard/kb_dashboard/index.html`.
 - **`orin-environment.md`** — Jetson Orin hardware setup and versions.
 - **`vm-environment.md`** — UTM VM setup.
 - **`simulation.md`** — Gazebo Fortress simulation details.

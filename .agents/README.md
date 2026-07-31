@@ -15,6 +15,7 @@ LLMs have no persistent memory between sessions. Every conversation starts fresh
 |---|---|
 | `architecture.md` | Package structure, node graph, message types, topic map, ESP32 UART routing & protocol |
 | `simulation.md` | Gazebo setup, known issues, rendering quirks, how to test |
+| `dashboard-testing.md` | Running the dashboard offline (`?demo=1`), driving its UI from a harness, and its layout/stylesheet traps |
 | `vm-environment.md` | UTM VM specifics: SSH, sudo, installed packages, limitations |
 | `orin-environment.md` | Jetson Orin specifics: hardware, ZED camera, live pipeline, known issues |
 | `orin-flash-guide.md` | Step-by-step guide for flashing Orin to NVMe with JetPack 6.2.2 |
