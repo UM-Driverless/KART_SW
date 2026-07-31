@@ -55,6 +55,7 @@ WIFI_DEV=wlP1p1s0
 AP_CON=kart-ap
 POLL_SECONDS=5
 CLIENT_WAIT_SECONDS=30
+INTERNET_GRACE_SECONDS=120
 FORCE_FILE=/run/kart-wifi-try-client
 
 log() { logger -t wifi-watchdog "$*"; }
@@ -80,6 +81,17 @@ tether_present() {
 
 ap_client_count() {
     iw dev "$WIFI_DEV" station dump 2>/dev/null | grep -c '^Station'
+}
+
+have_internet() {
+    [ "$(nmcli -t -f CONNECTIVITY general 2>/dev/null)" = full ]
+}
+
+# Name of the USB tether's ethernet device if the hardware is plugged in at all,
+# whether or not a connection is currently active on it. Empty if unplugged.
+tether_device() {
+    nmcli -t -f DEVICE,TYPE device status \
+        | awk -F: '$2 == "ethernet" && $1 ~ /^enx/ { print $1; exit }'
 }
 
 start_ap() {
@@ -115,6 +127,9 @@ log "started (radio=$WIFI_DEV, ap=$AP_CON)"
 # Starts used, so a boot with no tether keeps the AP -- see the header.
 client_attempt_spent=1
 
+# When the Orin last had working internet, used by the last-resort block below.
+no_internet_since=0
+
 while true; do
     if [ -e "$FORCE_FILE" ]; then
         rm -f "$FORCE_FILE"
@@ -146,6 +161,28 @@ while true; do
         # default, and this is the original purpose of this watchdog.
         log "radio is '$state' with no connection -- falling back to the $AP_CON AP"
         start_ap
+    fi
+
+    # Last resort: never sit with no internet at all while the tether hardware is
+    # plugged in. `nmcli connection down` on the tether marks it manually deactivated
+    # and NetworkManager will not autoconnect it again, and nothing else on the Orin
+    # brings it back -- so one `down`, deliberate or accidental, locked out every
+    # remote route until somebody was physically at the kart. That happened on
+    # 2026-07-31 while testing this very script. The grace period matters: during a
+    # genuine fallback test the Wi-Fi does provide internet, so this block sees
+    # connectivity and leaves the tether alone rather than fighting the test.
+    if have_internet; then
+        no_internet_since=0
+    else
+        [ "$no_internet_since" -eq 0 ] && no_internet_since=$SECONDS
+        if [ $((SECONDS - no_internet_since)) -ge "$INTERNET_GRACE_SECONDS" ]; then
+            dev=$(tether_device)
+            if [ -n "$dev" ]; then
+                log "no internet for ${INTERNET_GRACE_SECONDS}s and tether hardware is present on $dev -- bringing it back up"
+                nmcli device connect "$dev" >/dev/null 2>&1
+            fi
+            no_internet_since=$SECONDS
+        fi
     fi
 
     sleep "$POLL_SECONDS"
