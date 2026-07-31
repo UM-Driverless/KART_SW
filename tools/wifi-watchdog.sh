@@ -166,11 +166,10 @@ while true; do
     # Last resort: never sit with no internet at all while the tether hardware is
     # plugged in. `nmcli connection down` on the tether marks it manually deactivated
     # and NetworkManager will not autoconnect it again, and nothing else on the Orin
-    # brings it back -- so one `down`, deliberate or accidental, locked out every
-    # remote route until somebody was physically at the kart. That happened on
-    # 2026-07-31 while testing this very script. The grace period matters: during a
-    # genuine fallback test the Wi-Fi does provide internet, so this block sees
-    # connectivity and leaves the tether alone rather than fighting the test.
+    # brings it back -- so one `down`, deliberate or accidental, would cut every
+    # remote route until somebody could be physically at the kart. The grace period
+    # matters: during a genuine fallback test the Wi-Fi does provide internet, so this
+    # block sees connectivity and leaves the tether alone rather than fighting the test.
     if have_internet; then
         no_internet_since=0
     else
