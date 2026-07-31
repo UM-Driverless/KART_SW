@@ -1026,15 +1026,18 @@ function drawCenital(canvas, cones) {
   }
 }
 
-// G-G (friction-circle) diagram — shared by the Legacy, Artemis and Race
-// skins (all draw into a 140x140 #ggCanvas). Rings are labelled in g,
-// axes carry half-g ticks and direction cues (ACC/BRK vertical = longitudinal,
+// G-G (friction-circle) diagram. The body below is written against a 140x140 design grid;
+// the transform scales that grid to whatever size #ggCanvas actually is, so the canvas can be
+// enlarged for a bigger/sharper dial by changing only its width/height attributes. Rings are
+// labelled in g, axes carry half-g ticks and direction cues (ACC/BRK vertical = longitudinal,
 // L/R horizontal = lateral) so the live dot has a readable scale.
 function drawGG(latG, lonG, borderC, dimC, accentC, blur) {
   const canvas = $('ggCanvas'); if (!canvas) return;
   const ctx = canvas.getContext('2d');
   const R=50, CX=70, CY=70, MAX=2;   // R leaves a margin for the edge labels
-  ctx.clearRect(0,0,140,140);
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  const s = canvas.width/140; ctx.setTransform(s,0,0,s,0,0);
   ctx.lineWidth=1;
   // concentric g-rings, each labelled on the upper-right diagonal
   ctx.textAlign='center'; ctx.textBaseline='middle';
@@ -1546,7 +1549,12 @@ body{
 .rc-label{ font-size:10.5px; letter-spacing:.2em; color:var(--rc-label); text-transform:uppercase; font-weight:700; }
 
 /* ---- page 1: TELE ---- */
-.rc-drive{ display:grid; grid-template-columns:1.2fr 1.25fr 1fr; gap:8px; height:100%; min-height:0; }
+/* The minis column holds FOUR dials in a 2x2 grid, so each one only gets half of that column's
+   width, while Speed and Steering get a whole column each. An equal 1fr/1fr/1.25fr split still
+   leaves the minis the smallest instruments on the page — but Speed and Steering are capped at
+   54%/60% of their panel height and were already sitting in empty space, so the width handed to
+   the minis costs those two nothing. */
+.rc-drive{ display:grid; grid-template-columns:1fr 1fr 1.25fr; gap:8px; height:100%; min-height:0; }
 .rc-drive > *{ min-height:0; min-width:0; }
 .rc-steer{ display:flex; flex-direction:column; align-items:center; justify-content:center; padding:10px 6px 6px; }
 .rc-steer svg{ width:96%; height:auto; max-height:60%; }
@@ -1588,10 +1596,13 @@ body{
    the string's width changed as the values dithered across zero and dragged the column
    divider with it — a visible twitch on the telemetry page. min-width:0 lets the tracks stay
    at a fixed 50/50 regardless of what the caption currently says. */
-.rc-mini{ display:flex; align-items:center; justify-content:center; padding:5px; min-height:0; min-width:0; }
-.rc-mini canvas{ max-height:94%; max-width:94%; width:auto; height:auto; }
+.rc-mini{ display:flex; align-items:center; justify-content:center; padding:4px; min-height:0; min-width:0; }
+/* These four cells are much taller than they are wide, so max-WIDTH is what actually sizes the
+   dials — every percent here is a percent of dial diameter. max-height stays lower than 100% in
+   the -col variants because the caption under the dial needs room and must not squash it. */
+.rc-mini canvas{ max-height:98%; max-width:98%; width:auto; height:auto; }
 .rc-mini-col{ flex-direction:column; gap:3px; }
-.rc-mini-col canvas{ max-height:80%; }
+.rc-mini-col canvas{ max-height:82%; }
 .rc-mini-col #rcPedalsDial{ max-height:96%; }
 .rc-gcap{ font-size:8px; color:var(--rc-label-dim); letter-spacing:.06em; text-transform:uppercase;
   font-weight:700; font-variant-numeric:tabular-nums; white-space:nowrap;
@@ -1920,10 +1931,15 @@ body{
           <div class="rc-legend"><span><span class="lg-dot lg-a"></span>actual</span><span><span class="lg-dot lg-t"></span>target</span></div>
         </div>
         <div class="rc-minis">
-          <div class="rc-panel rc-mini"><canvas id="rcDialYolo" width="150" height="150"></canvas></div>
-          <div class="rc-panel rc-mini rc-mini-col"><span class="rc-mini-lbl">G</span><canvas id="ggCanvas" width="140" height="140"></canvas><div class="rc-gcap" id="rcGCap"><span id="rcGCapLon">LON 0.00 g</span><span id="rcGCapLat">LAT 0.00 g</span></div></div>
-          <div class="rc-panel rc-mini rc-mini-col"><canvas id="rcBatDial" width="150" height="150"></canvas><div class="rc-gcap" id="rcBatCap">-- V</div></div>
-          <div class="rc-panel rc-mini rc-mini-col"><canvas id="rcPedalsDial" width="120" height="200"></canvas></div>
+          <!-- The width/height attributes are the canvas BACKING-STORE size and, with CSS
+               width:auto, also the largest size the element will ever lay out at: max-width/
+               max-height only shrink it. They are set well above the cell so the CSS cap is
+               what binds, and every draw routine derives its geometry from canvas.width, so a
+               bigger backing store means a bigger AND sharper dial with no code change. -->
+          <div class="rc-panel rc-mini"><canvas id="rcDialYolo" width="300" height="300"></canvas></div>
+          <div class="rc-panel rc-mini rc-mini-col"><span class="rc-mini-lbl">G</span><canvas id="ggCanvas" width="280" height="280"></canvas><div class="rc-gcap" id="rcGCap"><span id="rcGCapLon">LON 0.00 g</span><span id="rcGCapLat">LAT 0.00 g</span></div></div>
+          <div class="rc-panel rc-mini rc-mini-col"><canvas id="rcBatDial" width="300" height="300"></canvas><div class="rc-gcap" id="rcBatCap">-- V</div></div>
+          <div class="rc-panel rc-mini rc-mini-col"><canvas id="rcPedalsDial" width="240" height="400"></canvas></div>
         </div>
       </div>
 

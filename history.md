@@ -1523,3 +1523,22 @@ The firmware bug the on-kart test caught (gains silently dropped in manual missi
 kart-medulla's `history.md` under the same date — it matters to this repo mainly as a reminder that
 the demo mode is a *stand-in*, not a test: it happily clamped and echoed values the real firmware had
 never received.
+
+## 2026-07-31 — The telemetry page's four small dials were capped by their canvas attributes
+
+The YOLO / G-G / battery / pedals dials on the Telemetry page (right-hand 2x2 block) were stuck at
+about 150 px however wide the browser window got. The cause was not the CSS grid: a `<canvas>` with
+CSS `width:auto` lays out at its `width`/`height` *attributes*, and `max-width`/`max-height` can only
+shrink that. Both were 150, so the percentage caps never bound and extra column width did nothing.
+
+Fix: raise the attributes well above the cell (300, 280, 300, 240x400), so the CSS cap is what binds.
+Every draw routine already derives its geometry from `canvas.width`, so this makes the dials larger
+*and* sharper with no drawing changes — except `drawGG`, which was written against a hardcoded 140x140
+grid and now scales that grid with `ctx.setTransform`. The Telemetry column split also went from
+`1.2fr 1.25fr 1fr` to `1fr 1fr 1.25fr`, which costs Speed nothing (it is height-capped at 54%) and
+costs Steering some width it was not using. At 1400x820 the round dials went 150 -> 228 px.
+
+Measured with Playwright against `python3 -m http.server` in the dashboard directory. Note the served
+page pulls its fonts from Google Fonts, so with no internet the numbers render as tofu boxes — that is
+the sandbox, not the layout. Also: the browser caches the page hard, so add `?v=N` when re-checking a
+CSS edit or you will screenshot the old layout and conclude nothing changed.
