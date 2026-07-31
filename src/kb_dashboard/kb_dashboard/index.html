@@ -107,7 +107,7 @@ body {
     <button id="netInfoBtn" onclick="toggleNetInfo()"
             title="Dashboard connection info (local IPs for offline access)"
             style="background:transparent;border:1px solid #2a2a3a;color:#888;border-radius:100px;width:22px;height:22px;font-size:11px;cursor:pointer;font-family:sans-serif;line-height:1;padding:0">ⓘ</button>
-    <div id="netInfoPanel" style="display:none;position:absolute;top:44px;right:12px;background:#14141f;border:1px solid #2a2a3a;border-radius:12px;padding:14px 16px;font-size:11px;color:#e0e0e8;font-family:monospace;max-width:320px;z-index:1000;box-shadow:0 8px 24px rgba(0,0,0,0.5)">
+    <div id="netInfoPanel" style="display:none;position:absolute;top:44px;right:12px;background:#14141f;border:1px solid #2a2a3a;border-radius:12px;padding:14px 16px;font-size:11px;color:#e0e0e8;font-family:monospace;max-width:320px;max-height:calc(100dvh - 56px);overflow-y:auto;overscroll-behavior:contain;z-index:1000;box-shadow:0 8px 24px rgba(0,0,0,0.5)">
       <div style="font-size:9px;color:#6a6a7a;text-transform:uppercase;letter-spacing:2px;margin-bottom:10px">Connection</div>
       <div id="netInfoContent" style="line-height:1.8"><i style="color:#6a6a7a">loading…</i></div>
       <div style="margin-top:10px;padding-top:10px;border-top:1px solid #2a2a3a;font-size:10px;color:#6a6a7a;line-height:1.5">
@@ -151,23 +151,44 @@ body {
   </div>
 </div>
 
-<!-- Touch Joystick Widget (Hidden unless mission is remote_control) -->
-<div id="manualWidgetJoystick" style="display:none;max-width:480px;margin:8px auto;padding:20px;background:#14141f;border:1px solid #2a2a3a;border-radius:12px;text-align:center;">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-      <div style="font-size:11px;font-weight:600;text-transform:uppercase;color:#888;letter-spacing:1px;">Touch Joystick</div>
-      <div id="controlStatus" style="font-size:10px;font-weight:600;padding:4px 10px;border-radius:6px;background:#1a1a2e;color:#888;">--</div>
+<!-- Remote driving pad (hidden unless mission is remote_control).
+     One square two-axis pad under one thumb: X = steering, Y = throttle above centre and brake
+     below. Square matters — the pad used to be 220x170, which made a given finger travel worth
+     29% more command vertically than horizontally for no reason.
+     Markup only — every rule lives in the skin stylesheet under "remote driving". -->
+<div id="manualWidgetJoystick" class="js-widget">
+    <div class="js-hdr">
+      <span class="js-title">Remote driving</span>
+      <span id="controlStatus" class="js-ctl">--</span>
     </div>
-    <button id="takeControlBtn" onclick="wsSend({action:'take_control'})" style="display:none;width:100%;padding:8px;margin-bottom:12px;background:#e74c3c;color:#fff;border:none;border-radius:6px;font-weight:600;cursor:pointer;font-size:12px;">Take Control</button>
-    <div id="joystickZone" style="width:220px;height:170px;background:rgba(0,0,0,0.2);border-radius:12px;border:2px solid #2a2a3a;margin:0 auto;position:relative;touch-action:none;"></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:20px;font-family:monospace;">
-        <div>
-            <div style="font-size:9px;color:#6a6a7a;text-transform:uppercase;">Steering</div>
-            <div id="jsSteerVal" style="font-size:16px;color:#4a9eff">0.00</div>
-        </div>
-        <div>
-            <div style="font-size:9px;color:#6a6a7a;text-transform:uppercase;">Throttle/Brake</div>
-            <div id="jsThrottleVal" style="font-size:16px;color:#2ecc71">0.00</div>
-        </div>
+    <button id="takeControlBtn" class="ctrl-btn js-take" onclick="wsSend({action:'take_control'})">Take Control</button>
+    <div class="js-padwrap">
+      <div id="joystickZone" class="js-pad">
+        <div class="js-cross js-cross-h"></div>
+        <div class="js-cross js-cross-v"></div>
+        <div class="js-detent"></div>
+        <!-- travel bars: each runs from the centre out to the thumb, so its length is that
+             axis's command and its side is the sign, readable without the numbers -->
+        <div class="js-fill js-fill-x" id="jsFillX"></div>
+        <div class="js-fill js-fill-y" id="jsFillY"></div>
+        <div class="js-thumb" id="jsThumb"></div>
+        <span class="js-edge js-edge-t">Accel</span>
+        <span class="js-edge js-edge-b">Brake</span>
+        <span class="js-edge js-edge-l">Left</span>
+        <span class="js-edge js-edge-r">Right</span>
+      </div>
+    </div>
+    <div class="js-readout">
+      <div class="js-ro">
+        <span class="js-ro-lbl">Steering</span>
+        <span class="js-val" id="jsSteerVal">0.00</span>
+        <span class="js-dir" id="jsSteerDir">centred</span>
+      </div>
+      <div class="js-ro">
+        <span class="js-ro-lbl">Drive</span>
+        <span class="js-val" id="jsThrottleVal">0.00</span>
+        <span class="js-dir" id="jsThrottleDir">coasting</span>
+      </div>
     </div>
 </div>
 
@@ -236,7 +257,6 @@ body {
   </div>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/nipplejs/0.10.1/nipplejs.min.js"></script>
 <script>
 // ═══════════════════════════════════════════════════════
 // SHARED INFRASTRUCTURE
@@ -261,55 +281,65 @@ const AUTONOMOUS_MISSIONS = new Set([
   'ebs_test','inspection','autonomous','throttle_test'
 ]);
 
-// Touch joystick (rectangular, no nipplejs)
+// Remote driving pad. One square two-axis pad: X = steering (positive = left, the kart's
+// convention), Y = throttle above centre and brake below. Springs back to centre on release.
 let jsLastCmd = null;
 let jsResendTimer = null;
 let jsActive = false;
+let jsInited = false;   // the listeners below must never be bound twice
+
+// Paint the pad for an axis pair in [-1,1], x right-positive and y up-positive on screen.
+// Kept out of initJoystick so the drag path and the release path cannot drift apart.
+function jsPaint(x, y) {
+  const thumb = $('jsThumb'), fx = $('jsFillX'), fy = $('jsFillY');
+  if (!thumb) return;
+  thumb.style.left = (x + 1) * 50 + '%';
+  thumb.style.top = (1 - y) * 50 + '%';
+  if (fx) {
+    fx.style.left = (x >= 0 ? 50 : (x + 1) * 50) + '%';
+    fx.style.width = Math.abs(x) * 50 + '%';
+  }
+  if (fy) {
+    fy.style.top = (y >= 0 ? (1 - y) * 50 : 50) + '%';
+    fy.style.height = Math.abs(y) * 50 + '%';
+    fy.classList.toggle('braking', y < 0);
+  }
+}
+
+// Numbers under the pad. Both arguments arrive signed, in kart convention (steering positive =
+// left), and both are shown as MAGNITUDE + the word for the direction — never the sign as well.
+// "-0.50 RIGHT" reads as a contradiction: the minus says one thing and the word says the other,
+// and a driver has to stop and work out which of the two the kart will believe. The steering
+// dial on the telemetry page already resolves it the same way, as "23 ° RIGHT".
+function jsReadout(steer, drive) {
+  $('jsSteerVal').textContent = Math.abs(steer).toFixed(2);
+  $('jsThrottleVal').textContent = Math.abs(drive).toFixed(2);
+  const sd = $('jsSteerDir'), td = $('jsThrottleDir');
+  if (sd) sd.textContent = Math.abs(steer) < 0.005 ? 'centred' : (steer > 0 ? 'left' : 'right');
+  if (td) {
+    td.textContent = Math.abs(drive) < 0.005 ? 'coasting' : (drive > 0 ? 'throttle' : 'brake');
+    td.classList.toggle('brake', drive < -0.005);
+  }
+}
 
 function initJoystick() {
   const zone = $('joystickZone');
-  if (!zone) return;
-  if (jsResendTimer) { clearInterval(jsResendTimer); jsResendTimer = null; }
+  if (!zone || jsInited) return;
+  jsInited = true;
 
-  // Create thumb indicator if not present
-  if (!zone.querySelector('.js-thumb')) {
-    const thumb = document.createElement('div');
-    thumb.className = 'js-thumb';
-    thumb.style.cssText = 'width:28px;height:28px;border-radius:50%;background:#4a9eff;border:2px solid #fff;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;opacity:0.7;transition:opacity 0.1s;';
-    zone.appendChild(thumb);
-    // Crosshair lines
-    const ch = document.createElement('div');
-    ch.style.cssText = 'position:absolute;top:50%;left:10px;right:10px;height:1px;background:rgba(255,255,255,0.1);pointer-events:none;';
-    zone.appendChild(ch);
-    const cv = document.createElement('div');
-    cv.style.cssText = 'position:absolute;left:50%;top:10px;bottom:10px;width:1px;background:rgba(255,255,255,0.1);pointer-events:none;';
-    zone.appendChild(cv);
-  }
-
-  function getAxes(e, rect) {
-    const touch = e.touches ? e.touches[0] : e;
-    const x = (touch.clientX - rect.left) / rect.width * 2 - 1;   // -1 to 1
-    const y = -((touch.clientY - rect.top) / rect.height * 2 - 1); // -1 to 1, inverted (up=positive)
+  function getAxes(e) {
+    const r = zone.getBoundingClientRect();
+    if (!r.width || !r.height) return { x: 0, y: 0 };
+    const t = e.touches ? e.touches[0] : e;
+    const x = (t.clientX - r.left) / r.width * 2 - 1;    // -1 to 1
+    const y = -((t.clientY - r.top) / r.height * 2 - 1);  // -1 to 1, up is positive
     return { x: Math.max(-1, Math.min(1, x)), y: Math.max(-1, Math.min(1, y)) };
   }
 
-  function updateThumb(zone, x, y) {
-    const thumb = zone.querySelector('.js-thumb');
-    if (thumb) {
-      thumb.style.left = ((x + 1) / 2 * 100) + '%';
-      thumb.style.top = ((-y + 1) / 2 * 100) + '%';
-      thumb.style.opacity = '1';
-    }
-  }
-
-  function resetThumb(zone) {
-    const thumb = zone.querySelector('.js-thumb');
-    if (thumb) { thumb.style.left = '50%'; thumb.style.top = '50%'; thumb.style.opacity = '0.7'; }
-  }
-
+  // Repeated at 5 Hz while the pad is held, so a dropped packet cannot leave the kart running
+  // whatever value it last happened to receive.
   function sendAxes(steer, drive) {
-    $('jsSteerVal').textContent = steer.toFixed(2);
-    $('jsThrottleVal').textContent = drive.toFixed(2);
+    jsReadout(steer, drive);
     jsLastCmd = {
       action: 'manual_control',
       steering: steer,
@@ -323,32 +353,29 @@ function initJoystick() {
   function onStart(e) {
     e.preventDefault();
     jsActive = true;
-    const rect = zone.getBoundingClientRect();
-    const a = getAxes(e, rect);
-    updateThumb(zone, a.x, a.y);
-    sendAxes(-a.x, a.y);  // negate x: our positive=left
-    if (!jsResendTimer) {
-      jsResendTimer = setInterval(() => { if (jsLastCmd) wsSend(jsLastCmd); }, 200);
-    }
+    zone.classList.add('live');
+    const a = getAxes(e);
+    jsPaint(a.x, a.y);
+    sendAxes(-a.x, a.y);   // negate x: screen-right is a right turn, which is negative
+    if (!jsResendTimer) jsResendTimer = setInterval(() => { if (jsLastCmd) wsSend(jsLastCmd); }, 200);
   }
 
   function onMove(e) {
     if (!jsActive) return;
     e.preventDefault();
-    const rect = zone.getBoundingClientRect();
-    const a = getAxes(e, rect);
-    updateThumb(zone, a.x, a.y);
+    const a = getAxes(e);
+    jsPaint(a.x, a.y);
     sendAxes(-a.x, a.y);
   }
 
-  function onEnd(e) {
+  function onEnd() {
     if (!jsActive) return;
     jsActive = false;
     jsLastCmd = null;
+    zone.classList.remove('live');
     if (jsResendTimer) { clearInterval(jsResendTimer); jsResendTimer = null; }
-    resetThumb(zone);
-    $('jsSteerVal').textContent = '0.00';
-    $('jsThrottleVal').textContent = '0.00';
+    jsPaint(0, 0);
+    jsReadout(0, 0);
     wsSend({ action: 'manual_control', steering: 0, steer_type: manualSteerType, throttle: 0, brake: 0 });
   }
 
@@ -359,19 +386,14 @@ function initJoystick() {
   zone.addEventListener('mousedown', onStart);
   window.addEventListener('mousemove', onMove);
   window.addEventListener('mouseup', onEnd);
+  jsPaint(0, 0);
 }
 
 function updateJoystickWidget() {
   const w = $('manualWidgetJoystick');
   if (!w) return;
-  if (currentMission === 'remote_control') {
-    if (w.style.display === 'none') {
-      w.style.display = 'block';
-      setTimeout(initJoystick, 50);
-    }
-  } else {
-    w.style.display = 'none';
-  }
+  w.classList.toggle('on', currentMission === 'remote_control');
+  if (currentMission === 'remote_control') initJoystick();
 }
 
 // Show/hide a panel's (i) popover. Global because the skin templates are strings with inline
@@ -530,7 +552,16 @@ window.addEventListener('DOMContentLoaded', () => {
 // Steering PID controls. Wired from skinRace.init() rather than DOMContentLoaded because
 // the pane they live in is built by skinRace.render() into #app, so these elements do not
 // exist until the skin has rendered.
+// Open or close the Steering PID panel. It covers the driving pane, so nothing can be driven
+// while it is up — deliberate: a gain change lands mid-corner otherwise.
+function togglePidPanel(open) {
+  const box = $('rcPidBox');
+  if (box) box.classList.toggle('on', open);
+}
+
 function wirePidControls() {
+  $('btnPidOpen').onclick = () => togglePidPanel(true);
+  $('btnPidClose').onclick = () => togglePidPanel(false);
   $('btnPidApply').onclick = () => {
     wsSend({
       action: 'set_steer_pid',
@@ -539,11 +570,13 @@ function wirePidControls() {
       kd: parseFloat($('pidKd').value) || 0,
       pwm_limit: parseFloat($('pidLimit').value) || 0,
     });
+    togglePidPanel(false);   // straight back to the pad, which is what the pane is for
   };
   $('btnPidDefaults').onclick = () => {
     // The four boxes are deliberately left alone. What the firmware falls back to is
     // compiled into it, and echoing a guess into the inputs would invent a number this
-    // page does not know. "In force" fills in from the ESP32 within a second — read that.
+    // page does not know. "In force" fills in from the ESP32 within a second — read that,
+    // which is also why this one does NOT close the panel.
     wsSend({ action: 'set_steer_pid', restore_defaults: true });
   };
 }
@@ -554,6 +587,9 @@ let pidErrTimer = null, pidErrShowing = false;
 function showPidError(msg) {
   const src = $('pidSource');
   if (!src) return;
+  // Reopen the panel: Apply closes it, and this message lives inside it. Without this a
+  // refused tuning would be reported to a panel nobody is looking at.
+  togglePidPanel(true);
   src.textContent = msg;
   src.style.color = '#e2001a';
   pidErrShowing = true;
@@ -744,22 +780,21 @@ function updateControllerStatus(d) {
   const btn = $('takeControlBtn');
   if (!el) return;
   // Detect our own ID: if we sent take_control and now controller matches, we know it's us
+  el.classList.remove('mine', 'theirs');
   if (ctrl && ctrl === myClientId) {
-    el.textContent = 'YOU CONTROL';
-    el.style.color = '#2ecc71';
-    el.style.background = '#0a2a0a';
-    if (btn) btn.style.display = 'none';
+    el.textContent = 'You control';
+    el.classList.add('mine');
   } else if (ctrl) {
     el.textContent = ctrl + ' controls';
-    el.style.color = '#e74c3c';
-    el.style.background = '#2a0a0a';
-    if (btn) btn.style.display = 'block';
+    el.classList.add('theirs');
   } else {
     el.textContent = 'No controller';
-    el.style.color = '#888';
-    el.style.background = '#1a1a2e';
-    if (btn) btn.style.display = 'none';
   }
+  // The button only means anything while someone else holds control; the tracks are inert to
+  // everyone but the holder, so grey them out then rather than leaving them looking live.
+  const theirs = !!ctrl && ctrl !== myClientId;
+  if (btn) btn.classList.toggle('on', theirs);
+  $('manualWidgetJoystick')?.classList.toggle('locked', theirs);
 }
 
 function wsSend(obj) {
@@ -1184,6 +1219,13 @@ function rcZoneColor(cfg, v) {
   }
   return null;
 }
+// Dial type scale, as fractions of the dial radius — the canvas counterpart of the --fs-*
+// tokens, and here for the same reason: these were four unrelated hand-picked numbers, and
+// everything but the centre value came out too small to read at arm's length. Ratios rather
+// than pixels because the dial is drawn at a fixed 300px bitmap and scaled by CSS, so a fixed
+// px size would mean something different on every screen.
+const RC_DIAL_FS = { ticks: 0.135, top: 0.145, value: 0.34, label: 0.15 };
+
 // Ferrari-Luce-style hybrid gauge: analog tick scale + coloured zone arcs + a short needle
 // marker on the rim, with the big DIGITAL value in the centre. Merges analog (position/rate,
 // danger zones at a glance) and digital (exact number) in one compact dial. The centre number
@@ -1210,7 +1252,7 @@ function rcDrawGauge(canvas, cfg, value) {
     ctx.strokeStyle = maj ? '#9a9a9f' : '#3f3f43'; ctx.lineWidth = maj ? 2 : 1; ctx.stroke();
     if (maj && cfg.numbers) {
       ctx.fillStyle = '#5c5c62';
-      ctx.font = '700 ' + Math.round(R * 0.11) + 'px Rajdhani, sans-serif';
+      ctx.font = '700 ' + Math.round(R * RC_DIAL_FS.ticks) + 'px Rajdhani, sans-serif';
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillText(String(Math.round(v0)), CX + c * (R - R * 0.27), CY + sn * (R - R * 0.27));
     }
@@ -1223,17 +1265,17 @@ function rcDrawGauge(canvas, cfg, value) {
   // static top label (e.g. scope/unit "PACK AMPS") — sits inside the tick ring
   if (cfg.topLabel) {
     ctx.fillStyle = '#6a6a70';
-    ctx.font = '700 ' + Math.round(R * 0.10) + 'px Rajdhani, sans-serif';
+    ctx.font = '700 ' + Math.round(R * RC_DIAL_FS.top) + 'px Rajdhani, sans-serif';
     ctx.fillText(cfg.topLabel, CX, CY - R * 0.35);
   }
   ctx.fillStyle = !have ? '#5c5c62' : (tint || '#f2f2f0');
-  ctx.font = '700 ' + Math.round(R * 0.32) + 'px Orbitron, sans-serif';
+  ctx.font = '700 ' + Math.round(R * RC_DIAL_FS.value) + 'px Orbitron, sans-serif';
   ctx.fillText(have ? cfg.fmt(value) : '--', CX, CY - R * 0.02);
   // bottom label — static string, or a function(value) for a dynamic caption (e.g. CHARGE/DISCHARGE)
   const lbl = typeof cfg.label === 'function' ? cfg.label(value) : cfg.label;
   if (lbl) {
     ctx.fillStyle = tint || '#8a8a90';
-    ctx.font = '700 ' + Math.round(R * 0.115) + 'px Rajdhani, sans-serif';
+    ctx.font = '700 ' + Math.round(R * RC_DIAL_FS.label) + 'px Rajdhani, sans-serif';
     ctx.fillText(lbl, CX, CY + R * 0.29);
   }
   if (have) {   // short bright needle marker on the rim (keeps the centre clear for the number)
@@ -1440,6 +1482,37 @@ const skinRace = {
   --rc-red:#e2001a; --rc-red-glow:#ff2438; --rc-red-dark:#5c0009;
   --rc-white:#f2f2f0; --rc-label:#84848a; --rc-label-dim:#54545a;
   --rc-amber:#ffb020; --rc-green:#33d17a; --rc-cyan:#2bb8d0;
+
+  /* Type scale. Colours were tokenised here from the start and type was not, so sizes drifted
+     to ten distinct values — 8, 8.5, 9, 10, 10.5, 11, 12, 13, 15, 22px — for what is really
+     five roles. These are those five. Reach for the nearest one rather than typing a px value;
+     if none fits, the right move is usually to question the layout, not add a sixth step.
+       xs  captions under a value, axis end labels, legends, dial units
+       sm  small-caps section labels, buttons, status chips, input labels
+       md  running prose: notes, warnings, legend paragraphs
+       lg  secondary numeric readouts
+       xl  the numeric value on a card
+     The bottom of the scale is 10px, not 8px: this is read at arm's length, outdoors, from a
+     phone clamped to a kart. Two deliberate exceptions stay off the scale and say so where
+     they are defined — the speed hero and the sysgrid value, both of which scale with the
+     viewport rather than sitting at a fixed step. */
+  --fs-xs:10px; --fs-sm:12px; --fs-md:14px; --fs-lg:17px; --fs-xl:24px;
+
+  /* Spacing scale, for gap and padding. Same story as the type scale: ten different gap values
+     (2, 3, 4, 5, 6, 7, 8, 9, 10, 12px) had accumulated for what is four amounts of breathing
+     room, and a 5px gap next to a 6px gap is drift nobody chose, not a design. Use the nearest
+     step. Genuine one-offs — asymmetric padding tuned to a specific dial, say — stay literal and
+     are worth a comment saying why. */
+  --sp-1:4px; --sp-2:6px; --sp-3:8px; --sp-4:12px; --sp-5:16px;
+
+  /* The chamfer: the diagonal cut across two opposite corners that gives this skin its panels.
+     It was written at 6, 8, 12 and 16px in different places. Three sizes are plenty — small for
+     controls, medium for cards, large for full panels — and a shared name keeps a new panel from
+     inventing a fifth. */
+  --cut-sm:8px; --cut-md:12px; --cut-lg:16px;
+
+  /* Fully rounded ends. Was spelled both 100px and 999px; both mean "pill", so say it once. */
+  --r-pill:999px;
 }
 html,body{ height:100%; }
 body{
@@ -1462,25 +1535,25 @@ body{
 /* Fixed height, so the bar is NOT driven by its tallest child. Without this a 48px power
    button pushes the bar to 64px and every page loses 10px of dial height — and the dials
    here are height-limited, so that comes straight off them. */
-#topbar{ max-width:none; width:100%; margin:0; flex:none; height:46px; padding:0 0 0 16px;
+#topbar{ max-width:none; width:100%; margin:0; flex:none; height:46px; padding:0 0 0 var(--sp-5);
   background:var(--rc-panel); border-bottom:1px solid var(--rc-line); position:relative; z-index:10; }
 #topbar::after{ content:''; position:absolute; left:0; right:0; top:100%; height:5px;
   background:repeating-linear-gradient(-45deg, var(--rc-red) 0 8px, #0d0d0e 8px 16px); opacity:.9; }
-#topbarTitle{ font-family:'Orbitron',sans-serif; font-weight:700; font-size:15px; letter-spacing:.04em;
+#topbarTitle{ font-family:'Orbitron',sans-serif; font-weight:700; font-size:var(--fs-lg); letter-spacing:.04em;
   color:var(--rc-red); text-shadow:0 0 12px rgba(226,0,26,.4); }
-#topbarTitle{ display:flex; align-items:center; gap:10px; }
+#topbarTitle{ display:flex; align-items:center; gap:var(--sp-3); }
 
 /* Always-visible status group in the topbar. margin-right:auto parks it just after the
    logo instead of centring it, so its width changing (HB LOST 12.4s is far wider than
    HB 0.2s) cannot shove the power button around. */
-#topbarStatus{ display:flex; align-items:center; gap:5px; margin-left:14px; margin-right:auto;
-  cursor:pointer; padding:3px; margin-top:-3px; margin-bottom:-3px; border-radius:100px;
+#topbarStatus{ display:flex; align-items:center; gap:var(--sp-2); margin-left:14px; margin-right:auto;
+  cursor:pointer; padding:var(--sp-1); margin-top:-3px; margin-bottom:-3px; border-radius:var(--r-pill);
   border:1px solid transparent; }
 /* The group is tappable, so give it a hover cue — the chips alone look inert. The negative
    margins above cancel this padding so adding the hit area does not move the chips. */
 #topbarStatus:hover{ border-color:#ffffff1f; background:#ffffff08; }
-#topbarStatus .spill{ flex:none; font:600 9px/1 'Titillium Web',sans-serif; letter-spacing:.1em;
-  padding:5px 8px; border-radius:100px; border:1px solid var(--rc-line);
+#topbarStatus .spill{ flex:none; font:600 var(--fs-xs)/1 'Titillium Web',sans-serif; letter-spacing:.1em;
+  padding:var(--sp-2) var(--sp-3); border-radius:var(--r-pill); border:1px solid var(--rc-line);
   background:#00000040; color:var(--rc-label); white-space:nowrap; }
 #topbarStatus .spill.act{ color:#e8e8ea; border-color:#ffffff2e; }
 #topbarStatus .spill.hb-ok{ color:#33d17a; border-color:#33d17a4d; }
@@ -1491,36 +1564,46 @@ body{
 .sys-chip.sys-bad{ color:var(--rc-red); border-color:var(--rc-red); box-shadow:0 0 8px var(--rc-red-glow); }
 
 /* Health detail popover, anchored under the topbar like the connection ⓘ panel. */
+/* Bounded by the viewport and scrollable. These popovers open from a fixed offset below the
+   topbar and are as tall as their content, so on a phone in landscape the legend simply ran off
+   the bottom of the screen with no way to reach the rest of it. overscroll-behavior:contain
+   stops a scroll that reaches the end of the popover from continuing into the page behind. */
 #healthInfo{ position:absolute; top:52px; left:12px; z-index:1000; max-width:min(460px, calc(100vw - 24px));
+  max-height:calc(100dvh - 64px); overflow-y:auto; overscroll-behavior:contain;
   background:var(--rc-panel); border:1px solid var(--rc-line); border-radius:12px;
-  padding:12px 14px; box-shadow:0 8px 24px #000000a6; }
-#healthInfo .health-vals{ display:flex; flex-wrap:wrap; gap:5px 10px; margin-bottom:10px;
-  font:12px ui-monospace,monospace; }
-#healthInfo .health-legend{ font-size:10px; line-height:1.55; color:var(--rc-label);
+  padding:var(--sp-4) var(--sp-5); box-shadow:0 8px 24px #000000a6; }
+#healthInfo .health-vals{ display:flex; flex-wrap:wrap; gap:var(--sp-2) var(--sp-3); margin-bottom:10px;
+  font:var(--fs-md) ui-monospace,monospace; }
+#healthInfo .health-legend{ font-size:var(--fs-sm); line-height:1.55; color:var(--rc-label);
   border-top:1px solid var(--rc-line); padding-top:9px; }
 #healthInfo .health-legend b{ color:#e8e8ea; font-weight:700; }
 .rc-blogo{ width:34px; height:34px; object-fit:contain; filter:drop-shadow(0 0 5px rgba(226,0,26,.55)); }
 .rc-bname{ display:flex; flex-direction:column; line-height:1.1; }
-.rc-bsub{ font-size:9px; color:var(--rc-label); letter-spacing:.18em; text-transform:uppercase; margin-top:2px;
+.rc-bsub{ font-size:var(--fs-xs); color:var(--rc-label); letter-spacing:.18em; text-transform:uppercase; margin-top:2px;
   font-weight:700; font-family:'Titillium Web',sans-serif; text-shadow:none; }
 .conn-dot{ background:var(--rc-label-dim); }
 .conn-dot.ok{ background:var(--rc-red); box-shadow:0 0 8px var(--rc-red-glow); animation:rcPulse 1.4s ease-in-out infinite; }
 @keyframes rcPulse{ 0%,100%{opacity:1;} 50%{opacity:.25;} }
-/* Danger glow — a panel whose gauge is in its RED (act-now) zone pulses red. Reserve for real
-   danger (battery <15%, tank out of range), never amber and never the pedals' brake-red. */
-.rc-panel.rc-danger{ border-color:var(--rc-red) !important; animation:rcDangerPulse 1.15s ease-out infinite; }
-/* Heartbeat: two sharp red flashes then a low glow "rest" between beats — reads as an alarm. */
-@keyframes rcDangerPulse{
-  0%       { box-shadow:0 0 2px rgba(226,0,26,.2),  inset 0 0 3px rgba(226,0,26,.06); border-color:var(--rc-red-dark); }
-  9%       { box-shadow:0 0 26px 3px rgba(255,48,66,.98), inset 0 0 22px rgba(226,0,26,.5); border-color:#ff5566; }
-  22%      { box-shadow:0 0 6px rgba(226,0,26,.3),  inset 0 0 6px rgba(226,0,26,.12); border-color:var(--rc-red); }
-  33%      { box-shadow:0 0 26px 3px rgba(255,48,66,.98), inset 0 0 22px rgba(226,0,26,.5); border-color:#ff5566; }
-  55%,100% { box-shadow:0 0 3px rgba(226,0,26,.2),  inset 0 0 3px rgba(226,0,26,.06); border-color:var(--rc-red-dark); }
+/* Danger — a gauge in its RED (act-now) zone pulses. Reserve for real danger (battery <15%,
+   tank out of range), never amber and never the pedals' brake-red.
+   The DIAL pulses, not a box around it: a glowing rectangle says "this rectangle is angry", a
+   glowing dial says which reading is. The canvas is transparent outside the dial's circle, so a
+   drop-shadow filter follows that circle rather than the element's bounding box — the alarm halo
+   comes out round for free, with nothing extra drawn. */
+.rc-danger #rcBatDial, .rc-danger #rcBatRing,
+.rc-danger #rcPneuDial{ animation:rcDialDanger 1.15s ease-out infinite; }
+/* Heartbeat: two sharp flashes then a low glow "rest" between beats — reads as an alarm. */
+@keyframes rcDialDanger{
+  0%       { filter:drop-shadow(0 0 3px rgba(226,0,26,.35)); }
+  9%       { filter:drop-shadow(0 0 18px rgba(255,48,66,.95)); }
+  22%      { filter:drop-shadow(0 0 6px rgba(226,0,26,.5)); }
+  33%      { filter:drop-shadow(0 0 18px rgba(255,48,66,.95)); }
+  55%,100% { filter:drop-shadow(0 0 3px rgba(226,0,26,.35)); }
 }
 
 #app{ flex:1; min-height:0; display:flex; flex-direction:column; margin-top:5px; }
-.race-rotate{ display:none; flex:1; align-items:center; justify-content:center; flex-direction:column; gap:12px;
-  text-align:center; padding:24px; color:var(--rc-label); font-size:13px; letter-spacing:.08em;
+.race-rotate{ display:none; flex:1; align-items:center; justify-content:center; flex-direction:column; gap:var(--sp-4);
+  text-align:center; padding:24px; color:var(--rc-label); font-size:var(--fs-md); letter-spacing:.08em;
   text-transform:uppercase; font-weight:700; }
 @media (orientation: portrait){ .race-rotate{ display:flex; } .race-stage{ display:none !important; } }
 
@@ -1535,18 +1618,18 @@ body{
    including across the seam from the last page back to the first. A linear track cannot do
    that; it has to jump when it wraps, which is what made some moves animate and others not. */
 .race-track{ position:absolute; inset:0; }
-.race-page{ position:absolute; inset:0; padding:8px 10px; overflow:hidden; will-change:transform; }
+.race-page{ position:absolute; inset:0; padding:var(--sp-3) var(--sp-3); overflow:hidden; will-change:transform; }
 
-/* chamfered panel with rivets, straight from the mockup */
-.rc-panel{ background:var(--rc-panel); border:1px solid var(--rc-line); position:relative;
-  clip-path:polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 16px 100%, 0 calc(100% - 16px));
-  box-shadow:inset 0 0 0 1px rgba(0,0,0,.4), inset 0 2px 10px rgba(0,0,0,.5); }
-.rc-corner{ position:absolute; top:0; right:0; width:16px; height:16px;
-  background:linear-gradient(135deg, transparent 49%, var(--rc-red) 50%); }
-.rc-rivet{ position:absolute; width:5px; height:5px; border-radius:50%;
-  background:radial-gradient(circle at 35% 35%, #4a4a4d, #0c0c0d 70%); box-shadow:0 0 0 1px rgba(0,0,0,.6); }
-.rc-rivet.tl{ top:6px; left:6px; } .rc-rivet.bl{ bottom:6px; left:6px; }
-.rc-label{ font-size:10.5px; letter-spacing:.2em; color:var(--rc-label); text-transform:uppercase; font-weight:700; }
+/* A panel is layout only — no background, border, chamfer or shadow. The dials it holds are
+   already self-contained circular objects, so a rectangle around each was containment for
+   something that did not need containing; without them the page reads as instruments on a
+   surface rather than instruments in boxes. position:relative stays: the (i) popovers and the
+   danger glow are positioned against it.
+   The chamfer, corner flash and rivets that decorated these were removed on 2026-07-31, markup
+   included. Cards (.rc-card) keep their box on purpose — dense label/value/caption text needs a
+   frame to bind it together, a dial does not. */
+.rc-panel{ position:relative; }
+.rc-label{ font-size:var(--fs-sm); letter-spacing:.2em; color:var(--rc-label); text-transform:uppercase; font-weight:700; }
 
 /* ---- page 1: TELE ---- */
 /* The minis column holds FOUR dials in a 2x2 grid, so each one only gets half of that column's
@@ -1554,41 +1637,44 @@ body{
    leaves the minis the smallest instruments on the page — but Speed and Steering are capped at
    54%/60% of their panel height and were already sitting in empty space, so the width handed to
    the minis costs those two nothing. */
-.rc-drive{ display:grid; grid-template-columns:1fr 1fr 1.25fr; gap:8px; height:100%; min-height:0; }
+.rc-drive{ display:grid; grid-template-columns:1fr 1fr 1.25fr; gap:var(--sp-3); height:100%; min-height:0; }
 .rc-drive > *{ min-height:0; min-width:0; }
-.rc-steer{ display:flex; flex-direction:column; align-items:center; justify-content:center; padding:10px 6px 6px; }
+.rc-steer{ display:flex; flex-direction:column; align-items:center; justify-content:center; padding:var(--sp-3) var(--sp-2) var(--sp-2); }
 .rc-steer svg{ width:96%; height:auto; max-height:60%; }
-.rc-angle{ font-size:clamp(26px,5.5vh,42px); line-height:1; margin-top:-6px; display:flex; align-items:baseline; gap:6px; }
-.rc-angle .unit{ font-size:13px; color:var(--rc-label); font-weight:700; letter-spacing:.06em; }
+/* off the type scale on purpose: sized by the viewport so the angle fills its panel */
+.rc-angle{ font-size:clamp(26px,5.5vh,42px); line-height:1; margin-top:-6px; display:flex; align-items:baseline; gap:var(--sp-2); }
+.rc-angle .unit{ font-size:var(--fs-md); color:var(--rc-label); font-weight:700; letter-spacing:.06em; }
 .rc-dirbar{ width:82%; height:6px; background:var(--rc-raised); position:relative; margin-top:8px; overflow:hidden; border:1px solid var(--rc-line); }
 .rc-dirbar .mid{ position:absolute; left:50%; top:0; bottom:0; width:2px; background:var(--rc-line-hard); }
 .rc-dirbar .fill{ position:absolute; top:0; bottom:0; background:var(--rc-red); box-shadow:0 0 8px var(--rc-red-glow); }
-.rc-lr{ width:82%; display:flex; justify-content:space-between; font-size:9px; color:var(--rc-label-dim); letter-spacing:.14em; margin-top:5px; font-weight:700; }
+.rc-lr{ width:82%; display:flex; justify-content:space-between; font-size:var(--fs-xs); color:var(--rc-label-dim); letter-spacing:.14em; margin-top:5px; font-weight:700; }
 .rc-speedhero{ display:flex; flex-direction:column; align-items:center; justify-content:center; overflow:hidden; }
 .rc-speedhero::before{ content:""; position:absolute; inset:0; pointer-events:none;
   background:linear-gradient(115deg, transparent 40%, rgba(226,0,26,.09) 50%, transparent 60%); }
 .rc-speedhero .rc-label{ position:absolute; top:12px; left:16px; }
-.rc-speed{ font-size:clamp(60px,17vh,140px); line-height:.88; display:flex; align-items:flex-end; gap:10px;
+/* off the type scale on purpose: the speed hero is sized by the viewport, not by a step */
+.rc-speed{ font-size:clamp(60px,17vh,140px); line-height:.88; display:flex; align-items:flex-end; gap:var(--sp-3);
   text-shadow:0 0 30px rgba(226,0,26,.35); letter-spacing:.02em; }
 .rc-speed .unit{ font-size:clamp(14px,2.4vh,20px); font-family:'Rajdhani',sans-serif; color:var(--rc-label);
   font-weight:700; padding-bottom:.6em; letter-spacing:.08em; }
-.rc-stack{ display:flex; flex-direction:column; gap:6px; height:100%; }
+.rc-stack{ display:flex; flex-direction:column; gap:var(--sp-2); height:100%; }
 .rc-card{ background:var(--rc-panel); border:1px solid var(--rc-line); flex:1; display:flex; flex-direction:column;
-  justify-content:center; padding:10px 16px; position:relative;
-  clip-path:polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px));
+  justify-content:center; padding:var(--sp-3) var(--sp-5); position:relative;
+  clip-path:polygon(0 0, calc(100% - var(--cut-md)) 0, 100% var(--cut-md), 100% 100%, var(--cut-md) 100%, 0 calc(100% - var(--cut-md)));
   box-shadow:inset 0 0 0 1px rgba(0,0,0,.4), inset 0 2px 8px rgba(0,0,0,.5); }
-/* wraps to a stacked label/value layout instead of clipping or overlapping when a long
-   label and a long value can't both fit on one line (narrow card, long telemetry string) */
-.rc-card .row1{ display:flex; flex-wrap:wrap; justify-content:space-between; align-items:baseline;
-  column-gap:8px; row-gap:2px; }
+/* Always stacked, never wrapped. These values are live telemetry whose width changes as they
+   count (90.6 Hz vs 9.6 Hz, 1 s vs 12 s), and a wrapping row put the value beside the label at
+   one width and under it at the next — so the card twitched between two layouts several times
+   a second. A fixed stack costs one line and never moves. */
+.rc-card .row1{ display:flex; flex-direction:column; align-items:flex-start; gap:var(--sp-1); }
 .rc-card .row1 .rc-label, .rc-card .row1 .val{ white-space:nowrap; }
-.rc-card .val{ font-size:22px; display:flex; align-items:baseline; gap:5px; }
-.rc-card .val .u{ font-size:11px; color:var(--rc-label); font-weight:600; font-family:'Titillium Web',sans-serif; }
+.rc-card .val{ font-size:var(--fs-xl); display:flex; align-items:baseline; gap:var(--sp-2); }
+.rc-card .val .u{ font-size:var(--fs-sm); color:var(--rc-label); font-weight:600; font-family:'Titillium Web',sans-serif; }
 .rc-card .bar{ width:100%; height:5px; background:var(--rc-raised); margin-top:8px; overflow:hidden; border:1px solid var(--rc-line); }
 .rc-card .bar .fill{ height:100%; width:0%; transition:width .3s ease; background:var(--rc-green); }
-.rc-speeddial{ display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; padding:8px 6px 6px; }
+.rc-speeddial{ display:flex; flex-direction:column; align-items:center; justify-content:center; gap:var(--sp-1); padding:var(--sp-3) var(--sp-2) var(--sp-2); }
 #rcSpeedDial{ max-height:54%; max-width:82%; width:auto; height:auto; }
-.rc-minis{ display:grid; grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr; gap:6px; height:100%; min-height:0; }
+.rc-minis{ display:grid; grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr; gap:var(--sp-2); height:100%; min-height:0; }
 /* min-width:0 is load-bearing, not symmetry with min-height. A grid item defaults to
    min-width:auto, so a 1fr track refuses to shrink below its content's min-content width.
    The g-force caption under the G-G dial is white-space:nowrap and is rewritten every frame
@@ -1596,26 +1682,33 @@ body{
    the string's width changed as the values dithered across zero and dragged the column
    divider with it — a visible twitch on the telemetry page. min-width:0 lets the tracks stay
    at a fixed 50/50 regardless of what the caption currently says. */
-.rc-mini{ display:flex; align-items:center; justify-content:center; padding:4px; min-height:0; min-width:0; }
+.rc-mini{ display:flex; align-items:center; justify-content:center; padding:var(--sp-1); min-height:0; min-width:0; }
 /* These four cells are much taller than they are wide, so max-WIDTH is what actually sizes the
-   dials — every percent here is a percent of dial diameter. max-height stays lower than 100% in
-   the -col variants because the caption under the dial needs room and must not squash it. */
+   dials — every percent here is a percent of dial diameter. */
 .rc-mini canvas{ max-height:98%; max-width:98%; width:auto; height:auto; }
-.rc-mini-col{ flex-direction:column; gap:3px; }
-.rc-mini-col canvas{ max-height:82%; }
-.rc-mini-col #rcPedalsDial{ max-height:96%; }
-.rc-gcap{ font-size:8px; color:var(--rc-label-dim); letter-spacing:.06em; text-transform:uppercase;
+/* One of the four minis (the G-G) carries a numeric caption under its dial. Grid rather than a
+   hand-picked percentage: the caption row takes its natural height and the canvas row takes
+   exactly what is left. The percentages this replaces were 82% for a captioned dial against 98%
+   for an uncaptioned one, which is why two dials sitting side by side came out visibly different
+   sizes for a reason nobody looking at them could see. */
+/* align-content, not align-items: both rows are content-sized and the PAIR is centred in the
+   cell, so the caption stays tucked under its dial. Giving the canvas row the slack instead
+   (1fr) centres the dial but strands the caption at the bottom of the cell, reading as a label
+   for the panel below it. */
+.rc-mini-col{ display:grid; grid-template-rows:auto auto; gap:var(--sp-1); justify-items:center; align-content:center; }
+.rc-mini-col canvas{ max-height:100%; }
+.rc-gcap{ font-size:var(--fs-xs); color:var(--rc-label-dim); letter-spacing:.06em; text-transform:uppercase;
   font-weight:700; font-variant-numeric:tabular-nums; white-space:nowrap;
   display:flex; flex-direction:column; align-items:center; line-height:1.35; }
 
 #ggCanvas{ background:#0a0a0c; border:1px solid var(--rc-line); border-radius:50%; }
 .rc-mini{ position:relative; }
-.rc-mini-lbl{ position:absolute; top:6px; left:10px; font-size:9px; letter-spacing:.18em;
+.rc-mini-lbl{ position:absolute; top:6px; left:10px; font-size:var(--fs-xs); letter-spacing:.18em;
   color:var(--rc-label-dim); text-transform:uppercase; font-weight:700; }
-.rc-pwm{ font-size:9px; color:var(--rc-label-dim); letter-spacing:.14em; margin-top:5px; font-weight:700; text-transform:uppercase; }
-.rc-legend{ display:flex; gap:12px; align-items:center; margin-top:5px; font-size:9px; font-weight:700;
+.rc-pwm{ font-size:var(--fs-xs); color:var(--rc-label-dim); letter-spacing:.14em; margin-top:5px; font-weight:700; text-transform:uppercase; }
+.rc-legend{ display:flex; gap:var(--sp-4); align-items:center; margin-top:5px; font-size:var(--fs-xs); font-weight:700;
   letter-spacing:.12em; text-transform:uppercase; color:var(--rc-label-dim); }
-.rc-legend span{ display:flex; align-items:center; gap:4px; }
+.rc-legend span{ display:flex; align-items:center; gap:var(--sp-1); }
 .rc-legend .lg-dot{ width:8px; height:8px; border-radius:50%; display:inline-block; }
 .rc-legend .lg-a{ background:#e2001a; box-shadow:0 0 4px rgba(226,0,26,.7); }
 .rc-legend .lg-t{ background:#ffb020; }
@@ -1623,41 +1716,55 @@ body{
 /* ---- page 2: MISSION ---- */
 /* auto-flow columns so only the *visible* panes share the width: [Mission | Algorithms | Status]
    for autonomous, [Mission | Status | Joystick] for remote, [Mission | Status] for manual. */
-.rc-mission{ display:grid; grid-auto-flow:column; grid-auto-columns:1fr; gap:8px; height:100%; min-height:0; }
-.rc-mpanel{ padding:10px 12px; display:flex; flex-direction:column; gap:8px; min-height:0; overflow-y:auto; }
-/* joystick gets its own pane on the right — centred, never scrollable (was cramped inside Status) */
-.rc-joypane{ overflow:hidden; align-items:center; }
-.rc-joypane #rcJoySlot{ flex:1; min-height:0; width:100%; display:flex; align-items:center; justify-content:center; }
-/* Steering PID tuning, below the joystick on the Remote control pane. flex:0 0 auto so it
-   keeps its natural height and the joystick above it absorbs the slack instead. */
-.rc-pid{ flex:0 0 auto; width:100%; padding-top:8px; border-top:1px solid #ffffff14; }
-.rc-pid-hdr{ display:flex; justify-content:space-between; align-items:baseline; margin-bottom:6px; }
-.rc-pid-hdr #pidSource{ font-size:9px; letter-spacing:.06em; color:#84848a; }
-.rc-pid-grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:6px; }
-.rc-pid-grid label{ display:flex; flex-direction:column; gap:3px;
-  font-size:8px; letter-spacing:.14em; text-transform:uppercase; color:#84848a; }
-.rc-pid-grid input{ width:100%; padding:4px; background:#0000004d; border:1px solid #ffffff1f;
-  border-radius:3px; color:#e8e8ea; font:12px ui-monospace,monospace; }
+.rc-mission{ display:grid; grid-auto-flow:column; grid-auto-columns:1fr; gap:var(--sp-3); height:100%; min-height:0; }
+.rc-mpanel{ padding:var(--sp-3) var(--sp-4); display:flex; flex-direction:column; gap:var(--sp-3); min-height:0; overflow-y:auto; }
+/* the driving pad gets its own pane on the right — never scrollable (was cramped inside Status).
+   position:relative so the PID panel can cover exactly this pane and nothing else. */
+.rc-joypane{ overflow:hidden; align-items:center; position:relative; }
+/* stretch, not centre: the widget fills the slot and centres the pad itself, so the pad grows
+   into whatever height the pane has. min-height:min-content, not 0, so the slot is never handed
+   less than the widget needs, which is what let the pad render at zero height on a phone. */
+.rc-joypane #rcJoySlot{ flex:1 1 auto; min-height:min-content; width:100%; display:flex; align-items:stretch; justify-content:center; }
+/* Steering PID. The four gains are set once a session while the pad is wanted the whole time,
+   so they live behind a button in a panel that covers the pane, and Apply closes it again. */
+/* Two classes, so this beats the flex:1 on .ctrl-btn regardless of source order. That flex:1
+   is written for .ctrl-row, which is a ROW — in this pane, a column, it made the button grow
+   to 225px and swallow the space the pad wanted. Any .ctrl-btn dropped into a column pane
+   needs the same override. (No backticks anywhere in this stylesheet: it is a JS template
+   literal, and one would end it mid-rule.) */
+.rc-joypane .pid-open{ flex:0 0 auto; width:100%; margin-top:8px; }
+.rc-pid{ display:none; position:absolute; inset:0; z-index:20; padding:var(--sp-5) var(--sp-5);
+  background:#0b0b0d;   /* fully opaque: the pad and its button showed through a translucent one */
+  border:1px solid var(--rc-line-hard); flex-direction:column; gap:var(--sp-3); overflow-y:auto; }
+.rc-pid.on{ display:flex; }
+.rc-pid-hdr{ display:flex; justify-content:space-between; align-items:baseline; }
+.rc-pid-hdr #pidSource{ font-size:var(--fs-xs); letter-spacing:.06em; color:#84848a; }
+.rc-pid-grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:var(--sp-2); }
+.rc-pid-grid label{ display:flex; flex-direction:column; gap:var(--sp-1);
+  font-size:var(--fs-xs); letter-spacing:.14em; text-transform:uppercase; color:#84848a; }
+.rc-pid-grid input{ width:100%; padding:var(--sp-2) var(--sp-2); background:#0000004d; border:1px solid #ffffff1f;
+  border-radius:3px; color:#e8e8ea; font:var(--fs-md) ui-monospace,monospace; }
 .rc-pid-grid input:focus{ outline:none; border-color:#e2001a; }
-.rc-pid-btns{ display:flex; gap:6px; margin-top:8px; }
+/* pushed to the bottom of the panel, so Apply is always in the same place whatever is above it */
+.rc-pid-btns{ display:flex; gap:var(--sp-2); margin-top:auto; }
 .rc-pid-btns .ctrl-btn{ flex:1; }
-.rc-pid-force{ margin-top:8px; font:11px ui-monospace,monospace; color:#84848a; }
+.rc-pid-force{ font:var(--fs-sm) ui-monospace,monospace; color:#84848a; }
 .rc-pid-force #pidInForce{ color:#e8e8ea; }
-.rc-pid-note{ margin-top:5px; font-size:9px; line-height:1.45; color:#6a6a70; }
-.mis-grid{ display:grid; grid-template-columns:1fr 1fr; gap:5px; flex:1; }
+.rc-pid-note{ font-size:var(--fs-xs); line-height:1.45; color:#6a6a70; }
+.mis-grid{ display:grid; grid-template-columns:1fr 1fr; gap:var(--sp-2); flex:1; }
 .mis-btn{ border:1px solid var(--rc-line-hard); background:linear-gradient(180deg,#1f1f25,#131317); color:var(--rc-label);
-  font-family:'Rajdhani',sans-serif; font-weight:700; font-size:10px; letter-spacing:.1em; text-transform:uppercase;
-  cursor:pointer; padding:8px 4px; -webkit-user-select:none; user-select:none;
+  font-family:'Rajdhani',sans-serif; font-weight:700; font-size:var(--fs-sm); letter-spacing:.1em; text-transform:uppercase;
+  cursor:pointer; padding:var(--sp-3) var(--sp-1); -webkit-user-select:none; user-select:none;
   box-shadow:inset 0 1px 0 rgba(255,255,255,.05); transition:filter .12s ease, border-color .12s ease;
-  clip-path:polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px)); }
+  clip-path:polygon(0 0, calc(100% - var(--cut-sm)) 0, 100% var(--cut-sm), 100% 100%, var(--cut-sm) 100%, 0 calc(100% - var(--cut-sm))); }
 .mis-btn:hover{ filter:brightness(1.3); border-color:var(--rc-label); }
 .mis-btn:active{ transform:scale(0.97); }
 .mis-btn.sel{ background:linear-gradient(180deg,#8a0012,#5c000c); color:#fff; border-color:var(--rc-red); text-shadow:0 0 8px rgba(255,36,56,.6); }
 /* Read-only status readouts: rounded, flat, with a glowing LED dot — deliberately
    NOT button-shaped so they are never mistaken for the controls below. */
-.spill{ flex:1; display:flex; align-items:center; justify-content:center; gap:5px; padding:5px 6px; cursor:default;
-  font-size:9px; font-weight:700; letter-spacing:.1em; text-transform:uppercase;
-  background:rgba(255,255,255,.03); border:1px solid var(--rc-line); border-radius:999px; color:var(--rc-label);
+.spill{ flex:1; display:flex; align-items:center; justify-content:center; gap:var(--sp-2); padding:var(--sp-2) var(--sp-2); cursor:default;
+  font-size:var(--fs-xs); font-weight:700; letter-spacing:.1em; text-transform:uppercase;
+  background:rgba(255,255,255,.03); border:1px solid var(--rc-line); border-radius:var(--r-pill); color:var(--rc-label);
   font-family:'Rajdhani',sans-serif; }
 .spill::before{ content:''; width:6px; height:6px; border-radius:50%; background:currentColor; flex:none;
   box-shadow:0 0 5px currentColor; opacity:.9; }
@@ -1666,13 +1773,13 @@ body{
 .spill.hb-bad{ color:var(--rc-red); border-color:rgba(226,0,26,.35); background:rgba(226,0,26,.08); }
 /* Clickable controls: chamfered, raised (gradient + top highlight), hover-brighten,
    press-down — reads as a physical button, distinct from the status pills above. */
-.ctrl-row{ display:flex; gap:6px; }
-.ctrl-btn{ flex:1; padding:11px 6px; border:1px solid var(--rc-line-hard); font-size:10px; font-weight:700;
+.ctrl-row{ display:flex; gap:var(--sp-2); }
+.ctrl-btn{ flex:1; padding:var(--sp-4) var(--sp-2); border:1px solid var(--rc-line-hard); font-size:var(--fs-sm); font-weight:700;
   letter-spacing:.12em; cursor:pointer; text-transform:uppercase; font-family:'Rajdhani',sans-serif; color:var(--rc-white);
   background:linear-gradient(180deg,#2a2a30,#151519);
   box-shadow:inset 0 1px 0 rgba(255,255,255,.08), 0 2px 3px rgba(0,0,0,.45);
   transition:filter .12s ease, transform .06s ease; -webkit-user-select:none; user-select:none;
-  clip-path:polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px)); }
+  clip-path:polygon(0 0, calc(100% - var(--cut-sm)) 0, 100% var(--cut-sm), 100% 100%, var(--cut-sm) 100%, 0 calc(100% - var(--cut-sm))); }
 .ctrl-btn:hover{ filter:brightness(1.3); }
 .ctrl-btn:active{ transform:translateY(1px); box-shadow:inset 0 2px 5px rgba(0,0,0,.55); }
 .ctrl-btn.go{ color:var(--rc-green); }
@@ -1681,20 +1788,98 @@ body{
 .ctrl-btn.stop.on{ background:linear-gradient(180deg,#ff3b4e,#c8071a); border-color:var(--rc-red); color:#fff; }
 .ctrl-btn.ebs{ color:var(--rc-amber); border-color:rgba(255,176,32,.5); }
 .ctrl-btn.ebs.on{ background:linear-gradient(180deg,#ffc247,#e0920a); border-color:var(--rc-amber); color:#08080a; }
-.ctrl-btn.restart{ color:var(--rc-label); font-size:8px; }
+.ctrl-btn.restart{ color:var(--rc-label); font-size:var(--fs-xs); }
 .algo-label{ color:var(--rc-label-dim); }
 .algo-dropdown{ background-color:var(--rc-raised); border:1px solid var(--rc-line-hard); border-radius:0;
   color:var(--rc-white); font-family:'Rajdhani',sans-serif; font-weight:600; letter-spacing:1px; }
 .algo-dropdown option{ background:var(--rc-panel); color:var(--rc-white); }
-#manualWidgetJoystick{ max-width:none !important; margin:4px 0 0 !important; padding:8px !important;
-  background:var(--rc-raised) !important; border:1px solid var(--rc-line) !important; border-radius:0 !important; }
+/* ---- remote driving ----
+   Shown only in remote_control; updateJoystickWidget() toggles .on. Hidden by default here
+   rather than by an inline style so nothing has to remember to put the display value back. */
+.js-widget{ display:none; }
+.js-widget.on{ display:flex; flex-direction:column; gap:var(--sp-3); width:100%; height:100%; min-height:0;
+  font-family:'Rajdhani',sans-serif; }
+.js-hdr{ display:flex; justify-content:space-between; align-items:center; gap:var(--sp-3); flex:0 0 auto; }
+.js-title{ font-size:var(--fs-xs); font-weight:700; letter-spacing:.18em; text-transform:uppercase; color:var(--rc-label-dim); }
+.js-ctl{ font-size:var(--fs-xs); font-weight:700; letter-spacing:.1em; text-transform:uppercase; white-space:nowrap;
+  padding:var(--sp-1) var(--sp-3); border-radius:var(--r-pill); border:1px solid var(--rc-line); color:var(--rc-label);
+  background:rgba(255,255,255,.03); }
+.js-ctl.mine{ color:var(--rc-green); border-color:rgba(51,209,122,.4); background:rgba(51,209,122,.10); }
+.js-ctl.theirs{ color:var(--rc-red); border-color:rgba(226,0,26,.4); background:rgba(226,0,26,.10); }
+.js-take{ display:none; flex:0 0 auto; }
+.js-take.on{ display:block; color:var(--rc-red); border-color:rgba(226,0,26,.5); }
+
+/* Takes the space the panel has left, down to a 150px floor — the pad rendered at ZERO height
+   on a phone in landscape before the PID block below it was made collapsible, because it was
+   handed only what was left over and there was nothing left. The floor plus that collapse is
+   what stops it happening again. The pad is square inside the wrapper: height is definite, so
+   aspect-ratio derives the width and both axes are worth the same finger travel. */
+.js-padwrap{ flex:1 1 auto; min-height:150px; display:flex; }
+.js-pad{ aspect-ratio:1; height:100%; width:auto; max-width:100%; margin:auto;
+  position:relative; touch-action:none; -webkit-user-select:none; user-select:none; cursor:crosshair;
+  /* eighth-of-travel grid, so how far the bars have run is legible at a glance */
+  background:
+    repeating-linear-gradient(90deg, rgba(255,255,255,.045) 0 1px, transparent 1px 12.5%),
+    repeating-linear-gradient(0deg, rgba(255,255,255,.045) 0 1px, transparent 1px 12.5%),
+    radial-gradient(circle at 50% 50%, #17171a 0%, #0c0c0e 78%);
+  border:1px solid var(--rc-line-hard);
+  box-shadow:inset 0 0 0 1px rgba(0,0,0,.5), inset 0 2px 14px rgba(0,0,0,.6);
+  clip-path:polygon(0 0, calc(100% - var(--cut-md)) 0, 100% var(--cut-md), 100% 100%, var(--cut-md) 100%, 0 calc(100% - var(--cut-md)));
+  transition:border-color .15s ease, box-shadow .15s ease; }
+.js-pad.live{ border-color:var(--rc-red); box-shadow:inset 0 0 0 1px rgba(0,0,0,.5), 0 0 18px rgba(226,0,26,.28); }
+/* someone else holds the control token, so input here goes nowhere — say so rather than
+   leaving a live-looking pad that silently does nothing */
+.js-widget.locked .js-pad{ opacity:.35; cursor:not-allowed; }
+
+.js-cross{ position:absolute; background:rgba(255,255,255,.09); pointer-events:none; }
+.js-cross-h{ left:8%; right:8%; top:50%; height:1px; }
+.js-cross-v{ top:8%; bottom:8%; left:50%; width:1px; }
+/* centre mark: the neutral position the pad springs back to on release. Wider than the thumb
+   on purpose — a ring the thumb sits inside, not one it hides. */
+.js-detent{ position:absolute; left:50%; top:50%; width:26%; height:26%; transform:translate(-50%,-50%);
+  border:1px dashed rgba(255,255,255,.16); border-radius:50%; pointer-events:none; }
+
+.js-fill{ position:absolute; pointer-events:none; }
+.js-fill-x{ top:50%; height:8px; transform:translateY(-50%); left:50%; width:0;
+  background:linear-gradient(180deg, var(--rc-amber), #c07d08); box-shadow:0 0 10px rgba(255,176,32,.35); }
+.js-fill-y{ left:50%; width:8px; transform:translateX(-50%); top:50%; height:0;
+  background:linear-gradient(90deg, var(--rc-green), #1d9b56); box-shadow:0 0 10px rgba(51,209,122,.35); }
+.js-fill-y.braking{ background:linear-gradient(90deg, var(--rc-red-glow), var(--rc-red)); box-shadow:0 0 10px rgba(226,0,26,.45); }
+
+/* clamp: big enough for a gloved thumb on a phone, never so big it swallows a small pad */
+.js-thumb{ position:absolute; left:50%; top:50%; width:clamp(30px, 15%, 62px); aspect-ratio:1;
+  transform:translate(-50%,-50%); border-radius:50%; pointer-events:none;
+  background:radial-gradient(circle at 38% 34%, #ffffff 0%, #dcdcda 40%, #8d8d90 100%);
+  border:2px solid rgba(226,0,26,.55); box-shadow:0 2px 8px rgba(0,0,0,.6); opacity:.6;
+  transition:opacity .12s ease, box-shadow .12s ease, border-color .12s ease; }
+.js-pad.live .js-thumb{ opacity:1; border-color:var(--rc-red-glow);
+  box-shadow:0 0 16px rgba(255,36,56,.75), 0 2px 8px rgba(0,0,0,.6); }
+
+/* Each label sits beside its own axis line, not on it, so a bar at full travel runs past the
+   word instead of through it. All four are nudged the same way round for consistency. */
+.js-edge{ position:absolute; font-size:var(--fs-xs); font-weight:700; letter-spacing:.16em; text-transform:uppercase;
+  color:var(--rc-label-dim); pointer-events:none; white-space:nowrap; }
+.js-edge-t{ top:8px; left:calc(50% + 12px); }
+.js-edge-b{ bottom:8px; left:calc(50% + 12px); }
+.js-edge-l{ left:10px; top:calc(50% + 12px); }
+.js-edge-r{ right:10px; top:calc(50% + 12px); }
+
+.js-readout{ flex:0 0 auto; display:grid; grid-template-columns:1fr 1fr; gap:var(--sp-3); }
+.js-ro{ display:flex; align-items:baseline; gap:var(--sp-2); padding:var(--sp-2) var(--sp-3); min-width:0;
+  background:rgba(255,255,255,.03); border:1px solid var(--rc-line); }
+.js-ro-lbl{ font-size:var(--fs-xs); font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:var(--rc-label-dim); }
+.js-val{ font:600 var(--fs-xl)/1 'Titillium Web',sans-serif; color:var(--rc-white); font-variant-numeric:tabular-nums;
+  margin-left:auto; }
+.js-dir{ font-size:var(--fs-xs); font-weight:700; letter-spacing:.14em; text-transform:uppercase;
+  color:var(--rc-label); overflow:hidden; text-overflow:ellipsis; }
+.js-dir.brake{ color:var(--rc-red); }
 
 /* ---- page 3: VISION ---- */
-.rc-vision{ display:grid; grid-template-columns:1.7fr 1fr; gap:8px; height:100%; }
-.rc-vpanel{ padding:10px 12px; display:flex; flex-direction:column; gap:6px; min-height:0; }
+.rc-vision{ display:grid; grid-template-columns:1.7fr 1fr; gap:var(--sp-3); height:100%; }
+.rc-vpanel{ padding:var(--sp-3) var(--sp-4); display:flex; flex-direction:column; gap:var(--sp-2); min-height:0; }
 #rcHudSlot{ flex:1; min-height:0; display:flex; align-items:center; justify-content:center; position:relative; }
 #rcHudSlot::before{ content:'NO SIGNAL'; position:absolute; color:var(--rc-label-dim);
-  font-family:'Rajdhani',sans-serif; font-weight:700; font-size:11px; letter-spacing:.3em; }
+  font-family:'Rajdhani',sans-serif; font-weight:700; font-size:var(--fs-sm); letter-spacing:.3em; }
 #rcHudSlot img{ width:auto !important; max-width:100%; max-height:100%; border-radius:0 !important;
   border:1px solid var(--rc-line); position:relative; }
 #rcHudSlot img:not([src]){ display:none; }
@@ -1702,7 +1887,7 @@ body{
 #rcCenital{ background:#0a0a0c; border:1px solid var(--rc-line); max-width:100%; max-height:100%; }
 
 /* ---- page 4: SYSTEM ---- */
-.rc-system{ display:flex; flex-direction:column; gap:8px; height:100%; min-height:0; }
+.rc-system{ display:flex; flex-direction:column; gap:var(--sp-3); height:100%; min-height:0; }
 /* minmax(min-content,1fr): rows share space equally like before when content fits, but a
    row is never squeezed below what its longest card actually needs (that squeeze was the
    overflow bug — text rendering past the card into the row below). */
@@ -1711,9 +1896,22 @@ body{
    (the debug console) instead of pushing it down. The console (rc-sysbottom) keeps its
    own min-height:0 so IT is the one that shrinks first — it already scrolls internally,
    so giving it less room never hides information, just fewer visible log lines. */
-.rc-sysgrid{ display:grid; grid-template-columns:repeat(4,1fr); grid-auto-rows:minmax(min-content,1fr); gap:8px; flex:1.6; }
-.rc-sysgrid .rc-card{ flex:none; }
-.rc-sysbottom{ display:flex; gap:8px; flex:1.5; min-height:0; }
+/* min-height:0 + overflow-y:auto together. The grid's rows are min-content sized, and raising
+   the type scale pushed that min-content past the height a phone in landscape has: the grid then
+   refused to shrink, squeezed the debug console below it to 13px and still overflowed the page.
+   Letting the grid shrink alone would spill its rows over the console (the reason it was left
+   growable before); shrinking AND scrolling inside itself keeps every card reachable and keeps
+   the page inside its own bounds. It only ever scrolls where the cards genuinely do not fit. */
+.rc-sysgrid{ display:grid; grid-template-columns:repeat(4,1fr); grid-auto-rows:minmax(min-content,1fr); gap:var(--sp-3); flex:1.6; min-height:0; overflow-y:auto; }
+/* tighter than a card elsewhere: eight of these have to stack two-deep above the console on a
+   339px-tall page, and the vertical padding is the cheapest place to find the room */
+.rc-sysgrid .rc-card{ flex:none; padding:var(--sp-2) var(--sp-4); }
+/* Sized as a share of the page rather than by flex weight, with a floor. As a flex sibling it
+   competed with the grid for the same pixels: whichever was allowed to shrink lost everything,
+   so the console was either crushed to one line or greedily took half the page and left the
+   grid scrolling with a card sliced in half. A share plus a floor makes it predictable, and it
+   scrolls internally, so a smaller box costs visible log lines, never information. */
+.rc-sysbottom{ display:flex; gap:var(--sp-3); flex:0 0 auto; height:clamp(56px, 20%, 200px); }
 .rc-sysconsole{ flex:2; min-height:0; display:flex; }
 /* the relocated global debug console fills the console panel while the Race skin is active */
 #rcDbgSlot #dbgConsole{ max-width:none !important; margin:0 !important; width:100%; display:flex !important; flex-direction:column; min-height:0; }
@@ -1725,40 +1923,40 @@ body{
    regardless of source order, so this must be written as .rc-card .rc-sysval to win.
    (Note: this whole block is a JS template literal — no backticks in comments here.) */
 .rc-card .rc-sysval{ font-size:clamp(11px, 2.2vw, 20px); }
-.rc-sysdesc{ font-size:8.5px; color:var(--rc-label-dim); letter-spacing:.08em; text-transform:uppercase; margin-top:6px; font-weight:600; line-height:1.5; overflow-wrap:anywhere; }
+.rc-sysdesc{ font-size:var(--fs-xs); color:var(--rc-label-dim); letter-spacing:.08em; text-transform:uppercase; margin-top:var(--sp-1); font-weight:600; line-height:1.35; overflow-wrap:anywhere; }
 .rc-ok{ color:var(--rc-green); } .rc-bad{ color:var(--rc-red); } .rc-dim{ color:var(--rc-label); }
 
 /* ---- page 5: BATTERY ---- */
-.rc-battery{ display:grid; grid-template-columns:1fr 1.9fr; gap:8px; height:100%; min-height:0; }
+.rc-battery{ display:grid; grid-template-columns:1fr 1.9fr; gap:var(--sp-3); height:100%; min-height:0; }
 .rc-battery > *{ min-height:0; min-width:0; }
-.rc-batsummary{ padding:12px 14px; display:flex; flex-direction:column; align-items:center; gap:10px; }
+.rc-batsummary{ padding:var(--sp-4) var(--sp-5); display:flex; flex-direction:column; align-items:center; gap:var(--sp-3); }
 .rc-batsummary .rc-label{ align-self:flex-start; }
-.bat-gauges{ display:grid; grid-template-columns:1fr 1fr; gap:8px; width:100%; justify-items:center;
+.bat-gauges{ display:grid; grid-template-columns:1fr 1fr; gap:var(--sp-3); width:100%; justify-items:center;
   align-content:center; flex:1; min-height:0; }
 .bat-gauge{ width:100%; max-width:190px; aspect-ratio:1; min-width:0; }
 .bat-gauge canvas{ width:100%; height:100%; display:block; }
-.bat-health{ margin-top:auto; align-self:stretch; display:flex; align-items:center; gap:8px; font-size:10px; font-weight:700;
+.bat-health{ margin-top:auto; align-self:stretch; display:flex; align-items:center; gap:var(--sp-3); font-size:var(--fs-sm); font-weight:700;
   letter-spacing:.12em; text-transform:uppercase; font-family:'Rajdhani',sans-serif; color:var(--rc-green); }
 .bat-health::before{ content:''; width:8px; height:8px; border-radius:50%; background:currentColor;
   box-shadow:0 0 6px currentColor; flex:none; }
 .bat-health.bad{ color:var(--rc-red); }
 
-.rc-batcells{ padding:10px 14px; display:flex; flex-direction:column; gap:8px; }
+.rc-batcells{ padding:var(--sp-3) var(--sp-5); display:flex; flex-direction:column; gap:var(--sp-3); }
 .bat-cellhdr{ display:flex; align-items:baseline; justify-content:space-between; }
-.bat-balance{ display:flex; gap:12px; font-size:10px; font-weight:700; letter-spacing:.08em;
+.bat-balance{ display:flex; gap:var(--sp-4); font-size:var(--fs-sm); font-weight:700; letter-spacing:.08em;
   text-transform:uppercase; color:var(--rc-label); font-family:'Rajdhani',sans-serif; font-variant-numeric:tabular-nums; }
 .bat-balance b{ color:var(--rc-white); font-weight:700; }
 .bat-balance .delta.warn{ color:var(--rc-amber); } .bat-balance .delta.bad{ color:var(--rc-red); }
 /* compact per-cell "battery pill": green level fill with the voltage printed inside it */
-.bat-cellgrid{ flex:1; min-height:0; display:grid; grid-template-columns:repeat(2,1fr); grid-auto-rows:1fr; gap:6px 16px; }
-.bat-cell{ display:flex; align-items:center; gap:9px; min-height:0; }
-.bat-cell-idx{ width:24px; text-align:right; font-size:12px; font-weight:700; color:var(--rc-label);
+.bat-cellgrid{ flex:1; min-height:0; display:grid; grid-template-columns:repeat(2,1fr); grid-auto-rows:1fr; gap:var(--sp-2) var(--sp-5); }
+.bat-cell{ display:flex; align-items:center; gap:var(--sp-3); min-height:0; }
+.bat-cell-idx{ width:24px; text-align:right; font-size:var(--fs-md); font-weight:700; color:var(--rc-label);
   font-family:'Rajdhani',sans-serif; font-variant-numeric:tabular-nums; flex:none; }
 .bat-cell-pill{ flex:1; position:relative; height:100%; min-height:22px; max-height:32px; background:var(--rc-raised);
   border:1.5px solid var(--rc-line-hard); overflow:hidden; display:flex; align-items:center; justify-content:center; }
 .bat-cell-fill{ position:absolute; left:0; top:0; bottom:0; width:0%; background:var(--rc-green);
   transition:width .3s ease, background .3s ease; }
-.bat-cell-mv{ position:relative; z-index:1; font-size:13px; font-weight:700; font-variant-numeric:tabular-nums;
+.bat-cell-mv{ position:relative; z-index:1; font-size:var(--fs-md); font-weight:700; font-variant-numeric:tabular-nums;
   color:#f2f2f0; font-family:'Rajdhani',sans-serif; letter-spacing:.03em; text-shadow:0 1px 2px rgba(0,0,0,.65); }
 .bat-cell::after{ content:''; width:3px; height:36%; background:var(--rc-line-hard); border-radius:1px; flex:none; align-self:center; }
 /* min/max are balance markers (weakest / strongest cell), not alarms — cool→warm,
@@ -1766,12 +1964,12 @@ body{
 .bat-cell.lo .bat-cell-pill{ border-color:var(--rc-amber); box-shadow:0 0 8px rgba(255,176,32,.4); }
 .bat-cell.hi .bat-cell-pill{ border-color:var(--rc-cyan); box-shadow:0 0 8px rgba(43,184,208,.45); }
 .bat-empty{ grid-column:1/-1; display:flex; align-items:center; justify-content:center; color:var(--rc-label-dim);
-  font-family:'Rajdhani',sans-serif; font-weight:700; font-size:11px; letter-spacing:.3em; }
+  font-family:'Rajdhani',sans-serif; font-weight:700; font-size:var(--fs-sm); letter-spacing:.3em; }
 
 /* ---- page 6: EBS (emergency brake system) ---- */
-.rc-ebs{ display:grid; grid-template-columns:1fr 1fr; gap:8px; height:100%; min-height:0; }
+.rc-ebs{ display:grid; grid-template-columns:1fr 1fr; gap:var(--sp-3); height:100%; min-height:0; }
 .rc-ebs > *{ min-height:0; min-width:0; }
-.rc-ebstank{ padding:10px 14px; display:flex; flex-direction:column; align-items:center; gap:8px; }
+.rc-ebstank{ padding:var(--sp-3) var(--sp-5); display:flex; flex-direction:column; align-items:center; gap:var(--sp-3); }
 .rc-ebstank .rc-label{ align-self:flex-start; }
 /* Two dials, tank and piston, side by side. Never size a dial by stretching its box: an
    aspect-ratio box inside a flex column takes its height from the flex line and then has the
@@ -1781,15 +1979,15 @@ body{
    a desktop window from blowing the dial up until the below-6-bar band (60% of the 0-10
    scale) fills the panel with red while the tank is perfectly healthy. */
 .ebs-dials{ flex:1; min-height:0; width:100%; display:flex; align-items:center;
-  justify-content:center; gap:10px; }
+  justify-content:center; gap:var(--sp-3); }
 .ebs-dials canvas{ width:auto; height:auto; max-width:47%; max-height:min(100%, 300px); display:block; }
 
-.rc-ebsstatus{ padding:10px 12px; display:flex; flex-direction:column; gap:7px; overflow:hidden; }
+.rc-ebsstatus{ padding:var(--sp-3) var(--sp-4); display:flex; flex-direction:column; gap:var(--sp-2); overflow:hidden; }
 /* sized to its content — stretching it leaves a large empty box around two words. Spacing is
    tight because the whole column has to fit a 390 px-tall phone in landscape without scrolling. */
 .ebs-state{ flex:none; display:flex; flex-direction:column; align-items:center; justify-content:center;
-  gap:5px; padding:9px 12px; background:var(--rc-raised); border:1px solid var(--rc-line); }
-.ebs-state-val{ font-family:'Orbitron',sans-serif; font-weight:900; font-size:22px; letter-spacing:.05em;
+  gap:var(--sp-2); padding:var(--sp-3) var(--sp-4); background:var(--rc-raised); border:1px solid var(--rc-line); }
+.ebs-state-val{ font-family:'Orbitron',sans-serif; font-weight:900; font-size:var(--fs-xl); letter-spacing:.05em;
   text-align:center; line-height:1.1; }
 /* Unknown must never look like a pass. Grey = no signal, and it is the default. */
 .ebs-state-val.unwired{ color:var(--rc-label-dim); }
@@ -1797,15 +1995,15 @@ body{
 .ebs-state-val.armed{ color:var(--rc-green); text-shadow:0 0 14px rgba(51,209,122,.45); }
 .ebs-state-val.activated{ color:var(--rc-red); text-shadow:0 0 16px rgba(255,36,56,.6);
   animation:rcPulse 1s ease-in-out infinite; }
-.ebs-state-desc{ font-size:9px; font-weight:700; letter-spacing:.09em; text-transform:uppercase;
+.ebs-state-desc{ font-size:var(--fs-xs); font-weight:700; letter-spacing:.09em; text-transform:uppercase;
   color:var(--rc-label-dim); font-family:'Rajdhani',sans-serif; text-align:center; line-height:1.5; }
 /* The rows are the one shrinkable part of this column, and they scroll rather than clip: on a
    shorter phone than the 390 px this is tuned for, losing the bottom of a row list is recoverable,
    losing the compressor button below it is not. */
-.ebs-rows{ flex:0 1 auto; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:5px; }
-.ebs-row{ flex:none; display:flex; align-items:center; justify-content:space-between; gap:10px;
-  padding:6px 9px; background:var(--rc-raised); border:1px solid var(--rc-line);
-  font-family:'Rajdhani',sans-serif; font-size:10px; font-weight:700; letter-spacing:.1em;
+.ebs-rows{ flex:0 1 auto; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:var(--sp-2); }
+.ebs-row{ flex:none; display:flex; align-items:center; justify-content:space-between; gap:var(--sp-3);
+  padding:var(--sp-2) var(--sp-3); background:var(--rc-raised); border:1px solid var(--rc-line);
+  font-family:'Rajdhani',sans-serif; font-size:var(--fs-sm); font-weight:700; letter-spacing:.1em;
   text-transform:uppercase; color:var(--rc-label); }
 .ebs-row .v{ font-variant-numeric:tabular-nums; color:var(--rc-white); }
 .ebs-row .v.unwired{ color:var(--rc-label-dim); }
@@ -1814,13 +2012,16 @@ body{
    read once, in the pit. Sits left of the panel's corner mark so it clears the decoration. */
 .rc-i{ position:absolute; top:7px; right:23px; z-index:5; width:16px; height:16px; padding:0;
   border-radius:50%; border:1px solid var(--rc-line-hard); background:transparent;
-  color:var(--rc-label-dim); font-family:'Rajdhani',sans-serif; font-size:11px; font-weight:700;
+  color:var(--rc-label-dim); font-family:'Rajdhani',sans-serif; font-size:var(--fs-sm); font-weight:700;
   line-height:1; cursor:pointer; display:flex; align-items:center; justify-content:center; }
 .rc-i:hover{ color:var(--rc-white); border-color:var(--rc-label); }
 /* Tapping the popover itself closes it: on a phone in a holder, aiming back at a 16 px target
    is harder than hitting the panel that is already under your thumb. */
+/* max-height is a percentage of the panel this is positioned inside, not the viewport, minus
+   the 26px top offset and a little breathing room at the bottom. */
 .rc-pop{ display:none; position:absolute; top:26px; left:8px; right:8px; z-index:40; cursor:pointer;
-  background:#0d0d10; border:1px solid var(--rc-line-hard); padding:9px 11px;
+  max-height:calc(100% - 34px); overflow-y:auto; overscroll-behavior:contain;
+  background:#0d0d10; border:1px solid var(--rc-line-hard); padding:var(--sp-3) var(--sp-4);
   font-family:'Rajdhani',sans-serif; font-size:9.5px; font-weight:600; letter-spacing:.06em;
   line-height:1.65; text-transform:uppercase; color:var(--rc-label);
   box-shadow:0 10px 26px rgba(0,0,0,.6); }
@@ -1858,15 +2059,15 @@ body{
    DOM nodes serve an infinite wheel with no cloning */
 .race-tab{ position:absolute; left:0; right:0; height:var(--rail-item);
   background:none; border:none; color:var(--rc-label-dim);
-  font-family:'Rajdhani',sans-serif; font-weight:700; letter-spacing:.1em; font-size:10px;
-  padding:0 4px; cursor:inherit; text-transform:uppercase; text-align:center;
+  font-family:'Rajdhani',sans-serif; font-weight:700; letter-spacing:.1em; font-size:var(--fs-sm);
+  padding:0 var(--sp-1); cursor:inherit; text-transform:uppercase; text-align:center;
   display:flex; align-items:center; justify-content:center; will-change:transform;
   transition:color .18s, opacity .18s; }
 .race-tab.on{ color:var(--rc-red); text-shadow:0 0 8px rgba(226,0,26,.5); }
 .race-tab.bad{ color:var(--rc-red); text-shadow:0 0 10px rgba(255,36,56,.8); animation:rcPulse 1.2s ease-in-out infinite; }
 .rc-fs{ background:var(--rc-raised); border:1px solid var(--rc-line-hard); width:28px; height:28px;
   display:flex; align-items:center; justify-content:center; color:var(--rc-label); cursor:pointer; flex:none;
-  clip-path:polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px)); }
+  clip-path:polygon(0 0, calc(100% - var(--cut-sm)) 0, 100% var(--cut-sm), 100% 100%, var(--cut-sm) 100%, 0 calc(100% - var(--cut-sm))); }
 .rc-fs:active{ background:var(--rc-red-dark); color:var(--rc-white); }
 .rc-fs.rc-fs-top{ width:38px; height:38px; margin-right:4px; }
 .rc-fs.rc-fs-top svg{ width:19px; height:19px; }
@@ -1886,7 +2087,7 @@ body{
 #netInfoBtn{ background:var(--rc-raised) !important; border:1px solid var(--rc-line-hard) !important;
   color:var(--rc-white) !important; border-radius:0 !important; width:38px !important; height:38px !important;
   font-size:16px !important; line-height:1 !important;
-  clip-path:polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px)); }
+  clip-path:polygon(0 0, calc(100% - var(--cut-sm)) 0, 100% var(--cut-sm), 100% 100%, var(--cut-sm) 100%, 0 calc(100% - var(--cut-sm))); }
 #netInfoBtn:active{ background:var(--rc-red-dark) !important; }
 #powerOffBtn svg{ width:18px; height:18px; filter:drop-shadow(0 0 4px rgba(226,0,26,.5)); }
 `,
@@ -1903,12 +2104,10 @@ body{
 
       <div class="race-page rc-drive">
         <div class="rc-panel rc-speeddial">
-          <div class="rc-corner"></div><div class="rc-rivet tl"></div><div class="rc-rivet bl"></div>
           <span class="rc-label">Speed</span>
           <canvas id="rcSpeedDial" width="300" height="300"></canvas>
         </div>
         <div class="rc-panel rc-steer">
-          <div class="rc-corner"></div><div class="rc-rivet tl"></div><div class="rc-rivet bl"></div>
           <span class="rc-label">Steering angle</span>
           <svg viewBox="0 0 200 118">
             <path d="M 14 108 A 86 86 0 0 1 186 108" fill="none" stroke="#26262a" stroke-width="10" stroke-linecap="round"/>
@@ -1938,39 +2137,39 @@ body{
                bigger backing store means a bigger AND sharper dial with no code change. -->
           <div class="rc-panel rc-mini"><canvas id="rcDialYolo" width="300" height="300"></canvas></div>
           <div class="rc-panel rc-mini rc-mini-col"><span class="rc-mini-lbl">G</span><canvas id="ggCanvas" width="280" height="280"></canvas><div class="rc-gcap" id="rcGCap"><span id="rcGCapLon">LON 0.00 g</span><span id="rcGCapLat">LAT 0.00 g</span></div></div>
-          <div class="rc-panel rc-mini rc-mini-col"><canvas id="rcBatDial" width="300" height="300"></canvas><div class="rc-gcap" id="rcBatCap">-- V</div></div>
-          <div class="rc-panel rc-mini rc-mini-col"><canvas id="rcPedalsDial" width="240" height="400"></canvas></div>
+          <div class="rc-panel rc-mini"><canvas id="rcBatDial" width="300" height="300"></canvas></div>
+          <div class="rc-panel rc-mini"><canvas id="rcPedalsDial" width="240" height="400"></canvas></div>
         </div>
       </div>
 
       <div class="race-page rc-mission">
         <div class="rc-panel rc-mpanel">
-          <div class="rc-corner"></div><div class="rc-rivet tl"></div><div class="rc-rivet bl"></div>
           <span class="rc-label">Mission</span>
           <div class="mis-grid" id="misGrid"><button class="mis-btn sel" data-m="manual">Manual</button><button class="mis-btn" data-m="remote_control">Remote</button><button class="mis-btn" data-m="inspection">Inspect</button><button class="mis-btn" data-m="autonomous">Auto</button><button class="mis-btn" data-m="acceleration">Accel</button><button class="mis-btn" data-m="skidpad">Skidpad</button><button class="mis-btn" data-m="autocross">Autocross</button><button class="mis-btn" data-m="trackdrive">Trackdrive</button></div>
         </div>
         <div class="rc-panel rc-mpanel" id="rcAlgoPane">
-          <div class="rc-corner"></div><div class="rc-rivet tl"></div><div class="rc-rivet bl"></div>
           <span class="rc-label">Algorithms</span>
           <div class="algo-select svo-select" style="display:none"><div class="algo-label">Video Input</div><select class="algo-dropdown svo-dropdown" onchange="onSvoChange(this)"><option value="live">Live Camera</option></select></div>
           <div class="algo-select"><div class="algo-label">Steering</div><select class="algo-dropdown" onchange="onAlgoChange(this)"><option value="geometric">Geometric</option><option value="pure_pursuit">Pure Pursuit</option><option value="stanley">Stanley</option><option value="neural_v2">Neural V2</option><option value="mpc">MPC</option></select></div>
           <div class="algo-select"><div class="algo-label">Speed</div><select class="algo-dropdown speed-algo-dropdown" onchange="onSpeedAlgoChange(this)"><option value="curve_factor">Curve Factor</option><option value="constant">Constant</option><option value="constant_stop">Constant + Stop</option><option value="neural_v2">Neural V2</option><option value="zero">Zero</option></select></div>
         </div>
         <div class="rc-panel rc-mpanel" id="rcCtrlPane">
-          <div class="rc-corner"></div><div class="rc-rivet tl"></div><div class="rc-rivet bl"></div>
           <span class="rc-label">Controls</span>
           <div class="ctrl-row"><button class="ctrl-btn go" data-st="running" onclick="wsSend({action:'set_state',state:'running'})">Start</button><button class="ctrl-btn stop" data-st="idle" onclick="wsSend({action:'set_state',state:'idle'})">Stop</button><button class="ctrl-btn ebs" data-st="ebs" onclick="wsSend({action:'set_state',state:'ebs'})">EBS</button><button class="ctrl-btn restart" onclick="if(confirm('Restart kart-brain service?'))wsSend({action:'restart'})">Restart</button></div>
         </div>
         <div class="rc-panel rc-mpanel rc-joypane" id="rcJoyPane" style="display:none">
-          <div class="rc-corner"></div><div class="rc-rivet tl"></div><div class="rc-rivet bl"></div>
           <span class="rc-label">Remote control</span>
           <div id="rcJoySlot"></div>
+          <button class="ctrl-btn pid-open" id="btnPidOpen">Steering PID</button>
           <!-- Live steering PID tuning, so a gain can be tried without reflashing the ESP32.
+               A panel over the pad rather than a block under it: the pad wants the whole pane
+               while driving, and these four numbers are touched once a session. Apply closes it
+               and hands the pad straight back.
                "In force" is the firmware's own report of what it is running, never a copy of
                the boxes above: it clamps what it receives, and a reset drops the override and
                returns to the gains compiled into it. Reading the two against each other is
                how either case becomes visible. -->
-          <div class="rc-pid">
+          <div class="rc-pid" id="rcPidBox">
             <div class="rc-pid-hdr"><span class="rc-label">Steering PID</span><span id="pidSource">no report yet</span></div>
             <div class="rc-pid-grid">
               <label>Kp<input id="pidKp" type="number" step="0.05" min="0" max="20" value="1.50"></label>
@@ -1978,26 +2177,29 @@ body{
               <label>Kd<input id="pidKd" type="number" step="0.005" min="0" max="5" value="0.030"></label>
               <label>PWM limit<input id="pidLimit" type="number" step="0.05" min="0" max="0.6" value="0.50"></label>
             </div>
-            <div class="rc-pid-btns">
-              <button class="ctrl-btn go" id="btnPidApply">Apply</button>
-              <button class="ctrl-btn" id="btnPidDefaults">Firmware defaults</button>
-            </div>
             <div class="rc-pid-force">In force: <span id="pidInForce">--</span></div>
             <div class="rc-pid-note">Applies immediately and resets the integral term. PWM limit is
               capped at 0.60 remotely — raising it further needs a flash. Not saved: an ESP32 reset
               returns to the flashed gains.</div>
+            <!-- Cancel left, the action that commits on the right — the platform convention
+                 everywhere this is read from (macOS, iOS, Android). Firmware defaults sits
+                 between them: it also writes to the ESP32, so it belongs on the acting side
+                 of Cancel, but it is not the button you came here to press. -->
+            <div class="rc-pid-btns">
+              <button class="ctrl-btn" id="btnPidClose">Cancel</button>
+              <button class="ctrl-btn" id="btnPidDefaults">Firmware defaults</button>
+              <button class="ctrl-btn go" id="btnPidApply">Apply</button>
+            </div>
           </div>
         </div>
       </div>
 
       <div class="race-page rc-vision">
         <div class="rc-panel rc-vpanel">
-          <div class="rc-corner"></div><div class="rc-rivet tl"></div><div class="rc-rivet bl"></div>
           <span class="rc-label">Camera</span>
           <div id="rcHudSlot"></div>
         </div>
         <div class="rc-panel rc-vpanel">
-          <div class="rc-corner"></div><div class="rc-rivet tl"></div><div class="rc-rivet bl"></div>
           <span class="rc-label">Top-down</span>
           <div class="rc-cenwrap"><canvas id="rcCenital" width="220" height="220"></canvas></div>
         </div>
@@ -2012,7 +2214,7 @@ body{
         <div class="rc-card"><div class="row1"><span class="rc-label">YOLO</span><span class="val num rc-sysval" id="rcSysYolo">--</span></div><div class="rc-sysdesc">cone inference rate · green &gt;30 Hz</div></div>
         <div class="rc-card"><div class="row1"><span class="rc-label">ESP32 link</span><span class="val num rc-sysval" id="rcSysEsp">--</span></div><div class="rc-sysdesc">steering frames over USB serial · firmware target 100 Hz</div></div>
         <div class="rc-card"><div class="row1"><span class="rc-label">Heartbeat</span><span class="val num rc-sysval" id="rcSysHb">--</span></div><div class="rc-sysdesc">time since last ESP32 heartbeat</div></div>
-        <div class="rc-card"><div class="row1"><span class="rc-label">AS state</span><span class="val num rc-sysval" id="rcSysState" style="font-size:14px">--</span></div><div class="rc-sysdesc">autonomous system state machine</div></div>
+        <div class="rc-card"><div class="row1"><span class="rc-label">AS state</span><span class="val num rc-sysval" id="rcSysState" style="font-size:var(--fs-md)">--</span></div><div class="rc-sysdesc">autonomous system state machine</div></div>
         </div>
         <div class="rc-sysbottom">
           <div class="rc-sysconsole" id="rcDbgSlot"></div>
@@ -2021,7 +2223,6 @@ body{
 
       <div class="race-page rc-battery">
         <div class="rc-panel rc-batsummary">
-          <div class="rc-corner"></div><div class="rc-rivet tl"></div><div class="rc-rivet bl"></div>
           <span class="rc-label">Pack</span>
           <div class="bat-gauges">
             <div class="bat-gauge"><canvas id="rcBatRing" width="300" height="300"></canvas></div>
@@ -2032,7 +2233,6 @@ body{
           <div class="bat-health" id="rcBatHealth">— no data</div>
         </div>
         <div class="rc-panel rc-batcells">
-          <div class="rc-corner"></div><div class="rc-rivet tl"></div><div class="rc-rivet bl"></div>
           <div class="bat-cellhdr">
             <span class="rc-label">Cells · <span id="rcBatCount">--</span></span>
             <div class="bat-balance">
@@ -2046,7 +2246,6 @@ body{
 
       <div class="race-page rc-ebs">
         <div class="rc-panel rc-ebstank">
-          <div class="rc-corner"></div><div class="rc-rivet tl"></div><div class="rc-rivet bl"></div>
           <span class="rc-label">Pneumatics</span>
           <button class="rc-i" title="What these readings mean" onclick="rcPop('rcEbsInfo')">i</button>
           <div class="rc-pop" id="rcEbsInfo" onclick="rcPop('rcEbsInfo')">Tank = reservoir.
@@ -2059,7 +2258,6 @@ body{
           </div>
         </div>
         <div class="rc-panel rc-ebsstatus">
-          <div class="rc-corner"></div><div class="rc-rivet tl"></div><div class="rc-rivet bl"></div>
           <span class="rc-label">Emergency brake system</span>
           <div class="ebs-state">
             <div class="ebs-state-val unwired" id="rcEbsState">NOT WIRED</div>
@@ -2227,7 +2425,7 @@ body{
     const pages = $('rcPages');
     pages.addEventListener('touchstart', e => {
       sx = e.touches[0].clientX; sy = e.touches[0].clientY;
-      swipeOk = !e.target.closest('#joystickZone, select, button, input');
+      swipeOk = !e.target.closest('#joystickZone, .rc-pop, select, button, input');
     }, { passive: true });
     pages.addEventListener('touchend', e => {
       if (!swipeOk) return;
@@ -2340,8 +2538,12 @@ body{
     const batV = d.battery_voltage, batSoc = d.battery_soc;
     const haveBat = batV != null && !isNaN(batV);
     const socLow = batSoc != null && batSoc < 15;
+    // Voltage goes in the dial's own bottom-label slot, where the YOLO dial puts "Hz", rather
+    // than a caption div under it — a caption costs the dial height and made this one render
+    // smaller than the dial beside it. Assigned before the draw because the label is a property
+    // of the config the draw reads, and the voltage is not the value being plotted (SOC is).
+    RC_DIAL_SOC.label = haveBat ? batV.toFixed(1) + ' V' : '';
     rcDrawGauge($('rcBatDial'), RC_DIAL_SOC, (batSoc != null && !isNaN(batSoc)) ? batSoc : NaN);
-    $('rcBatCap').textContent = haveBat ? batV.toFixed(1) + ' V' : '-- V';
     $('rcBatDial').closest('.rc-panel')?.classList.toggle('rc-danger', socLow);
     // BATTERY page (per-cell strip + pack readouts); flag the Battery tab if unhealthy
     const batBad = rcUpdateBattery(d);
