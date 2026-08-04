@@ -115,8 +115,8 @@ We use Python. The perception and control nodes are written in Python for faster
 **Why is the microcontroller code in a separate repo?**
 The ESP32 firmware (`kart-medulla`) runs on bare metal with FreeRTOS — it has its own toolchain (PlatformIO/Arduino), its own flashing process, and no ROS dependency. Keeping it separate avoids coupling the embedded build with the ROS workspace.
 
-**Why YOLOv5 and not a newer version?**
-The trained weights (`best_adri.pt`) were produced with YOLOv5 on our custom cone dataset. YOLOv5's PyTorch Hub integration makes it simple to load custom weights, and the model runs well on Jetson via TensorRT export. Migrating to a newer YOLO version is tracked as a future task but not a priority — the current model detects cones reliably.
+**Which YOLO version does cone detection use?**
+**YOLOv11**, trained in-house on our own cone dataset — the weights are `ruben_yolov11n_2026_03.pt` and it runs on the Jetson via TensorRT export. The earlier `adri_yolov5_2025.pt` weights are YOLOv5 and are kept as legacy: the detector node loads through the `ultralytics` package first and falls back to `torch.hub` for the v5 weights, so both formats still load. The legacy pre-ROS `driverless` stack was YOLOv5 throughout.
 
 **What was the old Python repo (`driverless`) used for?**
 That was the 2024 prototype: a monolithic Python script that handled ZED camera capture, YOLO inference, and CAN bus commands all in one process. It proved the concept but wasn't modular or maintainable. The current ROS 2 architecture splits those responsibilities into independent nodes.
@@ -183,8 +183,11 @@ Pulled from https://github.com/UM-Driverless/driverless and stored locally at
 `tests/test_data/driverless_test_media`.
 
 ## YOLO Weights
-Pulled from https://github.com/UM-Driverless/driverless and stored locally at
-`models/perception/yolo/best_adri.pt`.
+Stored locally in `models/perception/yolo/`, one file per trained model — see the README there for
+the full table. The current cone detector is **`ruben_yolov11n_2026_03.pt`** (YOLOv11, trained
+in-house), with ONNX and TensorRT engine exports beside it for the Orin. `adri_yolov5_2025.pt` is
+the legacy YOLOv5 model pulled from https://github.com/UM-Driverless/driverless and is kept so the
+old weights still load.
 
 ## YOLO Quick Test
 Run YOLO on a test image or video and save annotated output.
@@ -192,11 +195,11 @@ Run YOLO on a test image or video and save annotated output.
 ```bash
 python3 tools/run_yolo_on_media.py \
   --source tests/test_data/driverless_test_media/cones_test.png \
-  --weights models/perception/yolo/best_adri.pt \
+  --weights models/perception/yolo/ruben_yolov11n_2026_03.pt \
   --output outputs/yolo
 ```
 
-First run will download the YOLOv5 code via Torch Hub and cache it locally.
+Passing the legacy `adri_yolov5_2025.pt` weights instead downloads the YOLOv5 code via Torch Hub on first run and caches it locally; the YOLOv11 weights load through the `ultralytics` package and need no download.
 
 ## Running ROS Nodes
 Launch the image source and YOLO detector nodes on test media.
@@ -208,5 +211,5 @@ source install/setup.bash
 
 ros2 launch kart_perception perception_test.launch.py \
   source:=tests/test_data/driverless_test_media/cones_test.png \
-  weights:=models/perception/yolo/best_adri.pt
+  weights:=models/perception/yolo/ruben_yolov11n_2026_03.pt
 ```

@@ -6,7 +6,7 @@ import sys
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Run YOLOv5 on a local image/video and save annotated output."
+        description="Run the cone detector (YOLOv11 by default) on a local image/video and save annotated output."
     )
     parser.add_argument(
         "--source",
