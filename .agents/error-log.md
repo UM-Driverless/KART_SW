@@ -422,3 +422,40 @@ makes it worth logging separately.
 **Root cause:** Compressing "the `feature/pedal-telemetry` branch in the kart-medulla repo" into "kart-medulla branch" for brevity. The shorthand collapsed two different git concepts into one phrase.
 
 **Prevention:** When the same branch name exists in more than one repo, always say "branch X in repo Y" — never let a repo name stand in as a branch label.
+
+## 2026-08-08 — Claimed the dashboard fix was deployed after only pulling and restarting (Claude Opus 5)
+
+**What happened:** Fixed the pedals-dial legend, pushed, pulled on the Orin, restarted
+`kart-brain`, verified the service was `active`, and told Ruben it was deployed. He replied that
+the deployed page showed just like before. It did — the served file had not changed.
+
+**Root cause:** `kb_dashboard` serves `index.html` from the installed package copy under
+`install/kb_dashboard/lib/python3.10/site-packages/kb_dashboard/`, because `setup.py` declares it
+in `package_data` and `server.py` resolves `HTML_PATH` relative to its own module directory.
+`colcon build --packages-select kb_dashboard` is what copies it there. I was working from the
+belief that Python packages in this workspace need no build step — true for `.py` files edited in
+place, false for any file shipped as package data. I also never checked the served content: my one
+verification, `curl` against the tunnel, returned 1472 bytes of login page, and I read a `grep -c`
+of 0 against it as meaningful when it could not have been.
+
+**Prevention:** After deploying anything in `kb_dashboard`, run `colcon build --packages-select
+kb_dashboard` before restarting, and verify against the *installed* file, not the source and not
+the tunnel root. Recorded in `history.md` the same day.
+
+## 2026-08-08 — Said stopping kart-brain would prevent the steering swing, without knowing the cause (Claude Opus 5)
+
+**What happened:** After the steering swung to full lock during an ESP32 reflash and broke gear
+teeth, I diagnosed it as the freshly-booted firmware obeying a steering target the Orin was still
+sending, and told Ruben the fix was to stop `kart-brain` before flashing. He pushed back: if the
+cause is the flashing itself, stopping a service on the Orin fixes nothing. He was right.
+
+**Root cause:** Two mechanisms fit the evidence — a stale command obeyed just after reboot, or the
+steering pins floating while the chip sits in the bootloader — and they need opposite fixes. I
+picked the one I had traced through the code and presented its remedy as sufficient without saying
+it rested on an unverified assumption. "During flashing" covers both windows, so the report never
+distinguished them.
+
+**Prevention:** When two causes fit and the remedies differ, name both and say which observation
+would separate them before recommending anything. Here the separating test is a meter on CN9.1
+with the motor unplugged during a flash. The remedy that works under either hypothesis — de-power
+the Cytron before flashing — was the one worth leading with.

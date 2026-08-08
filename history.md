@@ -1586,3 +1586,37 @@ the design, not the board on the kart.
   reflashed, verified clean.
 - The Orin checkout had stale uncommitted index.html WIP duplicating the already-committed topbar
   status-group work; resolved to the committed version (kept as `stash@{0}` on the Orin).
+
+## 2026-08-08 — Pedals dial: brake pedal was invisible, and a deploy that was not a deploy
+
+Three separate things, in the order they were found.
+
+**The legend contradicted the bars.** The pedals dial's REAL swatch was a hardcoded red dot while
+the accelerator bar's real fill is green, so the legend disagreed with the bar it labelled. Fixed
+by splitting the swatch green/red down the middle (`073af6d`).
+
+**`git pull` + restart does not deploy the dashboard.** After pushing that fix, Ruben reported the
+deployed page unchanged. The Orin had not pulled, and after pulling it was still unchanged: the
+dashboard serves `index.html` from the *installed* copy at
+`install/kb_dashboard/lib/python3.10/site-packages/kb_dashboard/index.html`, which only updates on
+`colcon build --packages-select kb_dashboard`, because `setup.py` ships the file via `package_data`
+and `server.py` reads it relative to its own module path. The rule "Python scripts don't need
+colcon build" is true for `.py` files and false for this one. The claim that the fix was deployed
+was made after only pull + restart, which was wrong; see `.agents/error-log.md`.
+
+**The BRAKE bar was reading the wrong channel entirely.** Ruben reported the brake signal was not
+being read and named CN6.1. The signal was arriving fine — a live `/esp32/pedals` frame on the
+Orin read `[419, 381, 42, 38]`, so 381 mV of brake pedal with an effort of 38/255. The dashboard
+was drawing `esp32_braking`, the brake *actuator's* commanded effort, where the accelerator bar
+draws `esp32_throttle` from `ESP_PEDALS`. So the driver's brake-pedal ADC was decoded correctly by
+`protocol.decode_pedals`, stored in state as `esp32_brake_pedal`, and then never displayed
+anywhere. Pointed the bar at `esp32_brake_pedal` (`4b5eb56`), which makes both bars driver pedals.
+
+That change conflicts with an existing plan in `tasks.md` to drive the same bar from the
+piston/brake-line pressure sensor. Pedal position, commanded actuator effort and resulting line
+pressure are three different quantities and the bar shows one; both open items are now written up
+in `tasks.md` rather than one silently overriding the other.
+
+Also confirmed from the same live frame: both pedals rest around 400 mV, so with the provisional
+`PEDAL_MIN_MV 0` / `PEDAL_MAX_MV 2500` span in kart-medulla both bars show ~15 % with nobody
+touching them. Filed as its own task — it now looks like a fault to anyone reading the dashboard.
