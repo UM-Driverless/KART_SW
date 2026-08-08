@@ -1297,7 +1297,8 @@ function rcDrawGauge(canvas, cfg, value) {
 //   • Accel: green fill = real accelerator pedal (ESP_PEDALS ADC on GPIO 4,
 //     esp32_throttle); an amber tick marks the commanded target
 //     (orin_cmd_throttle). Same target-vs-real split as the brake.
-//   • Brake: red fill = real (brake-pressure channel, esp32_braking); an amber
+//   • Brake: red fill = real brake pedal (ESP_PEDALS ADC on GPIO 5 / CN6.1,
+//     esp32_brake_pedal); an amber
 //     tick marks the commanded target (orin_cmd_brake). The gap between the
 //     fill level and the amber tick is the actuator-tracking error.
 // Same fill = real / amber = target convention as the steering gauge.
@@ -2572,7 +2573,11 @@ body{
     const batBad = rcUpdateBattery(d);
     const batTab = document.querySelector('.race-tab[data-page="battery"]');
     if (batTab) batTab.classList.toggle('bad', batBad);
-    rcDrawPedals($('rcPedalsDial'), d.esp32_throttle || 0, d.orin_cmd_throttle || 0, d.esp32_braking || 0, d.orin_cmd_brake || 0);
+    // Both bars show the DRIVER's pedals from ESP_PEDALS (GPIO 4 = CN6.2 accel,
+    // GPIO 5 = CN6.1 brake). The brake side used esp32_braking — the brake
+    // ACTUATOR's effort — which left the CN6.1 pedal reading invisible even
+    // though the ESP32 reports it.
+    rcDrawPedals($('rcPedalsDial'), d.esp32_throttle || 0, d.orin_cmd_throttle || 0, d.esp32_brake_pedal || 0, d.orin_cmd_brake || 0);
     // SYSTEM page
     const sys = (id, txt, cls) => { const el = $(id); el.textContent = txt; el.className = 'val num rc-sysval ' + cls; };
     // Steering sensor. The kart's ESP32-S3 board reads an MT6701 over PWM. health_steer_ok
@@ -2854,7 +2859,7 @@ if (new URLSearchParams(location.search).has('demo')) {
       esp32_steering_rad: st, orin_cmd_steering_rad: tst, esp32_steering_pwm: (tst - st) * 1.5,
       esp32_speed: sp / 3.6,
       esp32_accel_lon: lon * 4.9, esp32_accel_lat: -st * sp * 0.2,
-      esp32_throttle: th, esp32_braking: br,
+      esp32_throttle: th, esp32_braking: br, esp32_brake_pedal: br,
       orin_cmd_throttle: Math.min(1, th + 0.08), orin_cmd_brake: br,
       // Matches what the ESP32-S3 kart actually reports: the steering sensor is an MT6701 on
       // PWM (steer_ok true, no latched trip), and the AS5600-over-I2C magnet/I2C/AGC values
