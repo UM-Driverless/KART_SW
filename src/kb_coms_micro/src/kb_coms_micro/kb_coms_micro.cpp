@@ -39,6 +39,8 @@ KB_coms_micro::KB_coms_micro() : Node("kb_coms_micro_node") {
 
     esp_steer_pid_pub_ = create_publisher<kb_interfaces::msg::Frame>("/esp32/steer_pid", 10);
 
+    esp_pedals_pub_ = create_publisher<kb_interfaces::msg::Frame>("/esp32/pedals", 10);
+
     esp_fps_pub_ = create_publisher<std_msgs::msg::Float32>("/esp32/fps", 10);
 
     // Create Subscriptors
@@ -264,6 +266,19 @@ void KB_coms_micro::kb_coms_RXcallback(const SerialDriver::Frame &frame_esp) {
         steer_pid_msg.type = frame_esp.type;
         steer_pid_msg.payload = frame_esp.payload;
         esp_steer_pid_pub_->publish(steer_pid_msg);
+
+        break;
+    }
+
+    case kb_interfaces::msg::Frame::ESP_PEDALS: {
+        // Driver pedals at ~20 Hz: [acc_mv, brake_mv, acc_effort, brake_effort].
+        // mV = calibrated pin voltage (half the 0-5 V pedal signal, 10k/10k board
+        // divider); effort = 0-255 from provisional firmware constants. Forwarded
+        // as-is; the dashboard node does the scaling.
+        kb_interfaces::msg::Frame pedals_msg;
+        pedals_msg.type = frame_esp.type;
+        pedals_msg.payload = frame_esp.payload;
+        esp_pedals_pub_->publish(pedals_msg);
 
         break;
     }

@@ -1294,13 +1294,14 @@ function rcDrawGauge(canvas, cfg, value) {
 }
 // Pedals — two vertical bars, filling bottom→up (more pedal = taller bar).
 // LEFT/green = accelerator, RIGHT/red = brake.
-//   • Accel: ONE fill. The kart has no independent throttle sensor — the value
-//     is the electronic effort we command — so there is no target-vs-real split.
+//   • Accel: green fill = real accelerator pedal (ESP_PEDALS ADC on GPIO 4,
+//     esp32_throttle); an amber tick marks the commanded target
+//     (orin_cmd_throttle). Same target-vs-real split as the brake.
 //   • Brake: red fill = real (brake-pressure channel, esp32_braking); an amber
-//     tick marks the commanded target (orin_cmd_brake). The gap between the red
-//     level and the amber tick is the actuator-tracking error.
-// Same red = real / amber = target convention as the steering gauge.
-function rcDrawPedals(canvas, thr, brkReal, brkTgt) {
+//     tick marks the commanded target (orin_cmd_brake). The gap between the
+//     fill level and the amber tick is the actuator-tracking error.
+// Same fill = real / amber = target convention as the steering gauge.
+function rcDrawPedals(canvas, thr, thrTgt, brkReal, brkTgt) {
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
   const W = canvas.width, H = canvas.height;
@@ -1333,7 +1334,7 @@ function rcDrawPedals(canvas, thr, brkReal, brkTgt) {
     ctx.beginPath(); ctx.moveTo(x, fy); ctx.lineTo(x + bw, fy); ctx.stroke();  // bright cap at the level
     ctx.restore(); ctx.shadowBlur = 0;
   };
-  const drawTick = (x, v) => {   // amber target marker (brake only)
+  const drawTick = (x, v) => {   // amber target marker (both pedals)
     const ty = trackBot - trackH * clamp01(v);
     ctx.strokeStyle = '#ffb020'; ctx.lineWidth = 2; ctx.shadowColor = '#ffb020'; ctx.shadowBlur = 6;
     ctx.beginPath(); ctx.moveTo(x - 3, ty); ctx.lineTo(x + bw + 3, ty); ctx.stroke();
@@ -1345,6 +1346,7 @@ function rcDrawPedals(canvas, thr, brkReal, brkTgt) {
   drawTrack(thrX); drawTrack(brkX);
   drawFill(thrX, thr, '#2ecc71', '#1f7a34', '#2ecc71');
   drawFill(brkX, brkReal, '#e2001a', '#7a1420', '#ff5a5a');
+  drawTick(thrX, thrTgt);
   drawTick(brkX, brkTgt);
 
   // labels above each bar
@@ -2484,7 +2486,7 @@ body{
     rcDrawGauge($('rcBatCurGauge'), RC_GAUGE_CURRENT, NaN);
     rcDrawGauge($('rcBatVoltGauge'), RC_GAUGE_VOLTAGE, NaN);
     rcDrawGauge($('rcBatTempGauge'), RC_GAUGE_TEMP, NaN);
-    rcDrawPedals($('rcPedalsDial'), 0, 0, 0);
+    rcDrawPedals($('rcPedalsDial'), 0, 0, 0, 0);
     rcDrawGauge($('rcPneuDial'), RC_DIAL_TANK, NaN);  // '-- bar' until the sensor reports
     rcDrawGauge($('rcPistDial'), RC_DIAL_PIST, NaN);
     return () => {
@@ -2566,7 +2568,7 @@ body{
     const batBad = rcUpdateBattery(d);
     const batTab = document.querySelector('.race-tab[data-page="battery"]');
     if (batTab) batTab.classList.toggle('bad', batBad);
-    rcDrawPedals($('rcPedalsDial'), d.esp32_throttle || 0, d.esp32_braking || 0, d.orin_cmd_brake || 0);
+    rcDrawPedals($('rcPedalsDial'), d.esp32_throttle || 0, d.orin_cmd_throttle || 0, d.esp32_braking || 0, d.orin_cmd_brake || 0);
     // SYSTEM page
     const sys = (id, txt, cls) => { const el = $(id); el.textContent = txt; el.className = 'val num rc-sysval ' + cls; };
     // Steering sensor. The kart's ESP32-S3 board reads an MT6701 over PWM. health_steer_ok

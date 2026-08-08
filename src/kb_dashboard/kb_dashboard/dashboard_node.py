@@ -36,6 +36,7 @@ from kb_dashboard.protocol import (
     decode_accel,
     decode_braking,
     decode_throttle,
+    decode_pedals,
     decode_health_flags,
     decode_health_data,
     decode_pneumatic,
@@ -89,7 +90,7 @@ class DashboardNode(Node):
             Frame, "/esp32/acceleration", self._on_esp_accel, qos_reliable
         )
         self.create_subscription(
-            Frame, "/esp32/throttle", self._on_esp_throttle, qos_reliable
+            Frame, "/esp32/pedals", self._on_esp_pedals, qos_reliable
         )
         self.create_subscription(
             Frame, "/esp32/braking", self._on_esp_braking, qos_reliable
@@ -275,9 +276,14 @@ class DashboardNode(Node):
             self.state.update("esp32_accel_lat", lat)
             self.state.update("esp32_accel_lon", lon)
 
-    def _on_esp_throttle(self, msg: Frame):
-        """@brief Callback for ESP32 throttle frames. Decodes throttle effort 0.0-1.0."""
-        self.state.update("esp32_throttle", decode_throttle(list(msg.payload)))
+    def _on_esp_pedals(self, msg: Frame):
+        """@brief Callback for ESP_PEDALS frames (accelerator + brake pedal ADCs).
+
+        Feeds esp32_throttle (accelerator effort 0.0-1.0), esp32_brake_pedal,
+        and the raw pin millivolts. See protocol.decode_pedals for the layout.
+        """
+        for key, value in decode_pedals(list(msg.payload)).items():
+            self.state.update(key, value)
 
     def _on_esp_braking(self, msg: Frame):
         """@brief Callback for ESP32 braking frames. Decodes braking effort 0.0-1.0."""
