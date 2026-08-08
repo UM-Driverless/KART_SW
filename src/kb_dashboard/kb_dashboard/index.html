@@ -141,7 +141,7 @@ body {
   <b>HB</b> Topbar chip 3 — seconds since the last ESP32 heartbeat. Green while they keep arriving, red "HB LOST" once they stop, "HB --" before any has been seen<br>
   <b>SYS</b> Topbar chip 4 — worst case of the readouts below, naming where the trouble is instead of only changing colour. Red for a tripped or unreadable steering sensor, low heap, any stack under 200 bytes, or a missing ESP32; amber for slow YOLO or ESP frame rates. I2C and AGC are left out on purpose — they are never populated on this board, so folding them in would peg the chip to a permanent false alarm<br>
   <br>
-  <b>STEER</b> Steering sensor (MT6701 read over PWM). OK, NO SIGNAL, or TRIPPED = latched fault, EBS fired, throttle refused until the ESP32 reboots<br>
+  <b>STEER</b> Steering sensor (MT6701 read over PWM). OK, NO SIGNAL, or STEERING LOCKED = the sensor went silent at some point and the firmware locked itself (emergency brake fired, throttle blocked); the lock only clears when the ESP32 reboots<br>
   <b>I2C</b> Legacy AS5600-over-I2C bus. N/A on this board — the ESP32-S3 firmware does not poll an AS5600<br>
   <b>HEAP</b> Free heap memory on ESP32 (KB)<br>
   <b>AGC</b> AS5600 Auto Gain Control (0–255, ideal 20–235). N/A on this board for the same reason as I2C<br>
@@ -951,7 +951,7 @@ function updateHealth(d) {
   // magnet/I2C/AGC values below belong to the older classic board and are never populated
   // here — they read N/A in grey rather than raising a permanent false alarm.
   const as5600Live = !!d.health_magnet_ok || !!d.health_i2c_ok || (d.health_agc || 0) > 0;
-  hm.textContent = d.health_steer_trip ? 'STEER TRIPPED' : (d.health_steer_ok ? 'STEER OK' : 'STEER NO SIGNAL');
+  hm.textContent = d.health_steer_trip ? 'STEERING LOCKED (reboot ESP32)' : (d.health_steer_ok ? 'STEER OK' : 'STEER NO SIGNAL');
   hm.style.color = (d.health_steer_ok && !d.health_steer_trip) ? ok : bad;
   hi.textContent = !as5600Live ? 'I2C N/A' : (d.health_i2c_ok ? 'I2C OK' : 'I2C ERR '+d.health_i2c_errors);
   hi.style.color = !as5600Live ? dim : (d.health_i2c_ok ? ok : bad);
@@ -988,7 +988,7 @@ function updateSysChip(d) {
   const warn = (l) => { if (cls === 'sys-ok') { cls = 'sys-warn'; label = 'SYS ' + l; } };
   const fail = (l) => { if (cls !== 'sys-bad') { cls = 'sys-bad'; label = 'SYS ' + l; } };
 
-  if (d.health_steer_trip) fail('STEER TRIP');
+  if (d.health_steer_trip) fail('STEERING LOCKED');
   else if (!d.health_steer_ok) fail('STEER');
   if (!d.health_heap_ok) fail('HEAP');
   const stacks = [d.stack_comms, d.stack_control, d.stack_heartbeat, d.stack_health];
@@ -2586,10 +2586,10 @@ body{
     // the firmware refuses throttle until the ESP32 is rebooted, so it gets its own wording.
     const steerTrip = !!d.health_steer_trip;
     const steerHealthy = !!d.health_steer_ok && !steerTrip;
-    sys('rcSysMag', steerTrip ? 'TRIPPED' : (d.health_steer_ok ? 'OK' : 'NO SIGNAL'),
+    sys('rcSysMag', steerTrip ? 'LOCKED' : (d.health_steer_ok ? 'OK' : 'NO SIGNAL'),
         steerHealthy ? 'rc-ok' : 'rc-bad');
     $('rcSysSteerNote').textContent = steerTrip
-      ? 'latched fault · EBS fired, throttle refused until the ESP32 reboots'
+      ? 'The steering sensor went silent at some point, so the firmware locked itself: emergency brake fired, throttle blocked. The lock stays until the ESP32 reboots (power cycle or reflash) — it does NOT clear when the sensor comes back.'
       : (d.health_steer_ok ? 'signal present, angle trusted' : 'no valid signal from the encoder');
     // AS5600 magnet / I2C / AGC belong to the older classic board, which read the steering
     // angle from an AS5600 over I2C. The ESP32-S3 firmware never polls that chip, so those
