@@ -28,7 +28,7 @@
 ## Environments
 
 ### Jetson Orin (Real Hardware)
-- **Connection:** `ssh orin-local` (join the "kart" Wi-Fi AP, pwd `umotorsport` → 10.42.0.1) or `ssh orin-remote` (Cloudflare Tunnel, needs the USB-tethered phone or other internet) or AnyDesk. Offline dashboard: `http://10.42.0.1:9090` on the kart AP.
+- **Connection:** `ssh orin-local` (join the "kart" Wi-Fi AP, pwd `umotorsport` → 10.42.0.1) or `ssh orin-remote` (Cloudflare Tunnel, needs the USB-tethered phone or other internet) or AnyDesk. Offline dashboard: `http://10.42.0.1/` on the kart AP (port 80 — the default `port` param and all three launch files set 80; it was 9090 before commit `6756a39`).
 - **Dashboard:** `kart.rubenayla.xyz` (password: `0`, configurable via ROS param `password`)
 - **Workspace:** `~/kart-brain` (renamed from `~/kart_brain` on 2026-07-06; `.bashrc` + systemd unit updated, workspace clean-rebuilt)
 - **Camera:** ZED 2 stereo (USB)
@@ -69,9 +69,15 @@ wasted turns — the answer is always yes. A commit that sits unpushed is invisi
 and every other machine, so committing without pushing is a half-finished job, not a cautious one.
 
 What each kind of change needs after `git pull` on the Orin:
-- **`index.html`** — nothing. The server does `HTML_PATH.read_bytes()` per request and sends
-  `Cache-Control: no-cache`, and `build/kb_dashboard/kb_dashboard` is a symlink into `src/`. Pull, then
-  hard-refresh the browser.
+- **`index.html`** — `colcon build --packages-select kb_dashboard`, then restart, then hard-refresh
+  the browser. It ships via `package_data` and `server.py` resolves `HTML_PATH` relative to its own
+  module, so the file actually served is the installed copy at
+  `install/kb_dashboard/lib/python3.10/site-packages/kb_dashboard/index.html` — a real file, not a
+  symlink. A pull alone leaves the old page being served. `build/kb_dashboard/kb_dashboard` *is* a
+  symlink into `src/`, which is exactly what makes the build look unnecessary; it is not the path on
+  `sys.path`. Verify by grepping the installed file, never the source and never the tunnel root
+  (which returns the login page). This line claimed "nothing" until 2026-08-08 and caused a fix to be
+  reported as deployed when it was not.
 - **Other Python (`server.py`, nodes, launch files)** — `sudo systemctl restart kart-brain`. The
   running process already imported the old module; `--symlink-install` does not reload it.
 - **C++** — `colcon build --symlink-install --packages-select <pkg>`, then restart.
@@ -79,6 +85,12 @@ What each kind of change needs after `git pull` on the Orin:
   esptool fails with "device reports readiness to read but returned no data (device disconnected or
   multiple access on port?)" if you skip it. Confirm the port is free with `fuser /dev/ttyACM0`, flash,
   then start the service again.
+  **Also de-power the Cytron or unplug the steering motor before flashing.** Steering is the one
+  actuator with no hardware safe state — `CMD_STEER_PWM` runs from the ESP32 straight to the Cytron
+  with no pull resistor, so the pins are undriven for the whole bootloader window, and the Cytron is
+  fed permanently from the 48 V pack. On 2026-08-08 the steering swung to full lock during a reflash
+  and broke teeth off the steering gears. Stopping `kart-brain` is not a substitute: it does nothing
+  while the chip is in the bootloader. Full account in kart-medulla `history.md`, same date.
 
 Then say in one line what was deployed and what you saw come back. Do not report a push as if it were
 a deployment — the two commits that only moved documentation onto the Orin, while the dashboard fix

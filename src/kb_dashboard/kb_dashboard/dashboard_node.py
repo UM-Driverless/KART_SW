@@ -3,7 +3,7 @@
 kb_dashboard — Phone dashboard for kart telemetry and mission control.
 
 Runs a WebSocket server alongside a ROS2 node. Any phone/browser on the
-same network can open http://<orin-ip>:9090 to see live sensor values
+same network can open http://<orin-ip>/ to see live sensor values
 and send commands (mission select, start/stop, EBS).
 """
 
