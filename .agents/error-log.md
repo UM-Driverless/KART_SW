@@ -414,3 +414,11 @@ makes it worth logging separately.
 - **A destructive remote action must first confirm the target is up**, in its own call, with output actually read.
 - **When a machine is unreachable, check whether it is supposed to be on before diagnosing anything.** "The user is at home" is sufficient to explain every symptom here, costs one thought, and was already written down.
 - **Repeated identical failures are a signal to re-examine the premise, not to keep polling.** Fifteen minutes of 530s carried no more information than the first one.
+
+## 2026-08-08 — Called two repos "your two branches" (Claude Fable 5)
+
+**What happened:** After creating one branch named `feature/pedal-telemetry` in each of two repos (kart-brain and kart-medulla), the explanation opened with "kart-medulla branch" and "kart-brain branch" — naming the branches by their repos, as if the repos themselves were the branches.
+
+**Root cause:** Compressing "the `feature/pedal-telemetry` branch in the kart-medulla repo" into "kart-medulla branch" for brevity. The shorthand collapsed two different git concepts into one phrase.
+
+**Prevention:** When the same branch name exists in more than one repo, always say "branch X in repo Y" — never let a repo name stand in as a branch label.
