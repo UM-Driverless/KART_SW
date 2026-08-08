@@ -1361,14 +1361,18 @@ function rcDrawPedals(canvas, thr, thrTgt, brkReal, brkTgt) {
   ctx.fillText(Math.round(clamp01(thr) * 100), thrX + bw / 2, numY);
   ctx.fillText(Math.round(clamp01(brkReal) * 100), brkX + bw / 2, numY);
 
-  // legend (red = real, amber = target) centered at the bottom
+  // legend (bar fill = real, amber = target) centered at the bottom.
+  // The REAL swatch is split green/red because "real" is the green fill on the
+  // accel bar and the red fill on the brake bar — a single-colour dot would
+  // contradict one of them.
   ctx.textBaseline = 'middle';
   ctx.font = '700 ' + Math.round(H * 0.05) + 'px Rajdhani, system-ui, sans-serif';
   const ly = trackBot + H * 0.16, dotR = H * 0.02, dgap = H * 0.025, mid = H * 0.055;
   const wReal = ctx.measureText('REAL').width, wTgt = ctx.measureText('TARGET').width;
   let lx = W / 2 - (dotR * 4 + dgap * 2 + wReal + wTgt + mid) / 2;
   ctx.textAlign = 'left';
-  ctx.fillStyle = '#e2001a'; ctx.beginPath(); ctx.arc(lx + dotR, ly, dotR, 0, 6.2832); ctx.fill();
+  ctx.fillStyle = '#2ecc71'; ctx.beginPath(); ctx.arc(lx + dotR, ly, dotR, Math.PI / 2, Math.PI * 1.5); ctx.fill();
+  ctx.fillStyle = '#e2001a'; ctx.beginPath(); ctx.arc(lx + dotR, ly, dotR, Math.PI * 1.5, Math.PI / 2); ctx.fill();
   ctx.fillStyle = '#b4b4be'; ctx.fillText('REAL', lx + dotR * 2 + dgap, ly);
   lx += dotR * 2 + dgap + wReal + mid;
   ctx.fillStyle = '#ffb020'; ctx.beginPath(); ctx.arc(lx + dotR, ly, dotR, 0, 6.2832); ctx.fill();
