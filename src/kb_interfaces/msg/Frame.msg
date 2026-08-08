@@ -14,6 +14,7 @@ uint8 ESP_DIAG_STEERING     = 0x0A
 uint8 ESP_HEALTH_STATUS     = 0x0B
 uint8 ESP_PNEUMATIC         = 0x0C
 uint8 ESP_STEER_PID         = 0x0D
+uint8 ESP_PEDALS            = 0x0E
 
 
 # ==========================

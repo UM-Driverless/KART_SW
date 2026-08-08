@@ -141,6 +141,41 @@ def decode_throttle(payload) -> float:
     return payload[0] / 255.0
 
 
+def decode_pedals(payload) -> dict:
+    """@brief Decode driver-pedal telemetry (ESP_PEDALS, 0x0E, ~20 Hz) to dict.
+
+    Payload (4 int32 fields): [acc_mv, brake_mv, acc_effort, brake_effort].
+    - acc_mv / brake_mv: eFuse-calibrated millivolts at the ADC pin (GPIO 4 /
+      GPIO 5 on the ESP32-S3). The pedal outputs 0-5 V; the board halves it
+      with a 10k/10k divider (R14/R15 accel, R16/R17 brake, dv-hardware
+      kart-medulla_P1 schematic), so full pedal is ~2500 mV at the pin.
+    - acc_effort / brake_effort: 0-255 normalized in firmware from PROVISIONAL
+      min/max constants (main.c PEDAL_MIN_MV/PEDAL_MAX_MV) — approximate until
+      the pedal endpoints are measured on the kart. The mV fields are the
+      trustworthy ones.
+
+    Fields are only ever appended, so shorter payloads still decode; missing
+    fields come back as 0.0/0 rather than crashing.
+
+    @param payload List of int32 values from the Frame.
+    @return Dict with esp32_throttle / esp32_brake_pedal (0.0-1.0 efforts)
+            and esp32_pedal_acc_mv / esp32_pedal_brake_mv (raw pin mV).
+    """
+    out = {
+        "esp32_pedal_acc_mv": 0,
+        "esp32_pedal_brake_mv": 0,
+        "esp32_throttle": 0.0,
+        "esp32_brake_pedal": 0.0,
+    }
+    if len(payload) >= 2:
+        out["esp32_pedal_acc_mv"] = payload[0]
+        out["esp32_pedal_brake_mv"] = payload[1]
+    if len(payload) >= 4:
+        out["esp32_throttle"] = payload[2] / 255.0
+        out["esp32_brake_pedal"] = payload[3] / 255.0
+    return out
+
+
 def decode_health_flags(payload) -> dict:
     """@brief Decode the flags-only health payload from /esp32/health/flags.
 
@@ -580,8 +615,11 @@ class DashboardState:
             "esp32_speed": 0.0,
             "esp32_accel_lat": 0.0,   # lateral acceleration (m/s^2), positive = right
             "esp32_accel_lon": 0.0,   # longitudinal acceleration (m/s^2), positive = forward
-            "esp32_throttle": 0.0,    # throttle pedal 0.0-1.0
-            "esp32_braking": 0.0,     # brake pedal 0.0-1.0
+            "esp32_throttle": 0.0,    # accelerator pedal 0.0-1.0 (ESP_PEDALS effort)
+            "esp32_braking": 0.0,     # brake 0.0-1.0 (brake-pressure channel)
+            "esp32_brake_pedal": 0.0, # brake PEDAL 0.0-1.0 (ESP_PEDALS effort)
+            "esp32_pedal_acc_mv": 0,  # accelerator pedal, mV at the ADC pin
+            "esp32_pedal_brake_mv": 0,# brake pedal, mV at the ADC pin
             "orin_cmd_throttle": 0.0, # target throttle 0.0-1.0
             "orin_cmd_brake": 0.0,    # target brake 0.0-1.0
             "esp32_steering_raw": 0,

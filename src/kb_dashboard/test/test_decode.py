@@ -12,6 +12,7 @@ from kb_dashboard.protocol import (
     decode_speed,
     decode_accel,
     decode_throttle,
+    decode_pedals,
     decode_braking,
     decode_health,
     decode_pneumatic,
@@ -392,3 +393,32 @@ class TestDashboardStatePidDefaults:
         snap = DashboardState().snapshot()
         for key in ("pid_override", "pid_kp", "pid_ki", "pid_kd", "pid_pwm_limit"):
             assert snap[key] is None, f"{key} must start unknown, not 0.0"
+
+
+class TestDecodePedals:
+    """ESP_PEDALS (0x0E): [acc_mv, brake_mv, acc_effort, brake_effort]."""
+
+    def test_full_payload(self):
+        got = decode_pedals([1250, 300, 255, 0])
+        assert got["esp32_pedal_acc_mv"] == 1250
+        assert got["esp32_pedal_brake_mv"] == 300
+        assert abs(got["esp32_throttle"] - 1.0) < 1e-9
+        assert got["esp32_brake_pedal"] == 0.0
+
+    def test_mid_effort_scales_by_255(self):
+        assert abs(decode_pedals([0, 0, 127, 51])["esp32_throttle"] - 127 / 255) < 1e-9
+
+    def test_mv_only_payload_keeps_efforts_zero(self):
+        got = decode_pedals([800, 900])
+        assert got["esp32_pedal_acc_mv"] == 800
+        assert got["esp32_throttle"] == 0.0
+
+    def test_empty_payload_decodes_to_zeros(self):
+        got = decode_pedals([])
+        assert set(got) == {
+            "esp32_pedal_acc_mv",
+            "esp32_pedal_brake_mv",
+            "esp32_throttle",
+            "esp32_brake_pedal",
+        }
+        assert all(v == 0 for v in got.values())
