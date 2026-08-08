@@ -1565,3 +1565,24 @@ U13.10 -> U1.3 copper (DAC to amplifier) was restored after six of its seven seg
 deleted in KiCad. So the physical board carries the *unamplified* 0-5 V brake output on CN10.2 and
 may have no connection into the amplifier at all. A netlist exported from dv-hardware HEAD describes
 the design, not the board on the kart.
+
+## 2026-08-08 — Remote-control pane layout fix; accel pedal telemetry live end to end
+
+- Fixed the race skin's Remote control pane overlapping/clipping on narrow viewports (merged as
+  `8f5ca2d`): the pane now scrolls instead of clipping, the Steering PID inputs collapse to 2/1
+  columns via `auto-fit minmax`, the steering/drive readouts stack instead of overlapping, and the
+  Apply/Firmware-defaults buttons wrap to full-width rows.
+- Real accelerator-pedal telemetry works on the kart (merge `dc5d090` here, kart-medulla side merged
+  by another session): ESP_PEDALS frame 0x0E at 20 Hz → `/esp32/pedals` → pedals dial. Verified live:
+  heartbeat 1 Hz, pedals 20 Hz, 0 CRC errors. The accel bar shows green real fill + amber
+  `orin_cmd_throttle` target tick; the dead `/esp32/throttle` subscription was removed.
+- Measured on the kart: the accel pedal at rest reads ~410 mV at the ADC pin (not 0), so the bar
+  idles near 16% until `PEDAL_MIN_MV`/`PEDAL_MAX_MV` in kart-medulla `main/main.c` are calibrated
+  with a full-press measurement. Brake pedal reads 0 — CN6.1 not wired yet; firmware and dashboard
+  already handle it, wiring is the only remaining step.
+- Deploy incident: the first flash after the merge carried the bench-only `SPI_DIAG_LOGS=1` flag
+  (see kart-medulla `.agents/error-log.md` 2026-08-08) — ESP_LOG ASCII on UART0 corrupted the binary
+  frames, killing the heartbeat and slowing pedal updates to ~3 s. Removed in kart-medulla `23ec8c8`,
+  reflashed, verified clean.
+- The Orin checkout had stale uncommitted index.html WIP duplicating the already-committed topbar
+  status-group work; resolved to the committed version (kept as `stash@{0}` on the Orin).
