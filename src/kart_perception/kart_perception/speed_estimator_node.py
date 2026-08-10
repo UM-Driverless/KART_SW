@@ -13,8 +13,10 @@ dashboard's speed readout would otherwise show a confident number sourced from
 nothing, and a false reading is indistinguishable from a real one — the same
 failure the steering gauge and piston readout had before 2026-07-25.
 
-This output is unvalidated. See the accuracy note in speed_model.py before wiring
-it into any controller.
+This output has never been checked against a real speed. cone_follower's constant_speed
+mode does close a loop on it, but only behind a throttle ceiling that keeps the worst
+case no worse than the open-loop mode it replaces. See the accuracy note in
+speed_model.py before relying on it anywhere else.
 """
 
 import rclpy
@@ -63,7 +65,8 @@ class SpeedEstimatorNode(Node):
 
         self.get_logger().info(
             f"speed_estimator up: {det_topic} → {speed_topic}. "
-            "Output is UNVALIDATED — do not close a control loop on it yet."
+            "Output is UNVALIDATED against a real speed — the constant_speed mode "
+            "closes a capped loop on it; nothing else should."
         )
 
     def _now(self) -> float:

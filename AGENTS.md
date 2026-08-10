@@ -69,15 +69,15 @@ wasted turns — the answer is always yes. A commit that sits unpushed is invisi
 and every other machine, so committing without pushing is a half-finished job, not a cautious one.
 
 What each kind of change needs after `git pull` on the Orin:
-- **`index.html`** — `colcon build --packages-select kb_dashboard`, then restart, then hard-refresh
-  the browser. It ships via `package_data` and `server.py` resolves `HTML_PATH` relative to its own
-  module, so the file actually served is the installed copy at
-  `install/kb_dashboard/lib/python3.10/site-packages/kb_dashboard/index.html` — a real file, not a
-  symlink. A pull alone leaves the old page being served. `build/kb_dashboard/kb_dashboard` *is* a
-  symlink into `src/`, which is exactly what makes the build look unnecessary; it is not the path on
-  `sys.path`. Verify by grepping the installed file, never the source and never the tunnel root
-  (which returns the login page). This line claimed "nothing" until 2026-08-08 and caused a fix to be
-  reported as deployed when it was not.
+- **`index.html`** — same rule as the Python bullet below, because the page served is
+  whatever `server.py` resolves next to its own module. Check
+  `install/kb_dashboard/lib/python3.10/site-packages/`: an `.egg-link` means the page comes
+  straight from `src/` and a pull plus restart is enough; a real `kb_dashboard/` directory means
+  the page was copied at build time and needs `colcon build --symlink-install --packages-select
+  kb_dashboard` first. It was copied until 2026-08-10 and is egg-linked now. Either way restart
+  and hard-refresh the browser. Verify by grepping the file the egg-link or the install dir
+  actually points at — never the tunnel root, which returns the login page. This line claimed
+  "nothing" until 2026-08-08 and caused a fix to be reported as deployed when it was not.
 - **Other Python (nodes, `server.py`, launch files)** — whether a pull is enough depends on how that
   package was **last built**, which is invisible from `src/` and differs per package. Check before
   claiming a deploy:
