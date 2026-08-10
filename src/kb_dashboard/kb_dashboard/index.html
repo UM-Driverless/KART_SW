@@ -514,8 +514,13 @@ function updateMissionUI() {
 function updateAlgoButtons() {
   document.querySelectorAll('.algo-dropdown:not(.speed-algo-dropdown):not(.svo-dropdown):not(#targetSpeedInput)').forEach(sel => sel.value = currentControllerType);
   document.querySelectorAll('.speed-algo-dropdown').forEach(sel => sel.value = currentSpeedControllerType);
+  // "block", not "": .algo-select is display:none in the stylesheet, so clearing
+  // the inline style falls back to hidden. Only shown in autonomous missions,
+  // where updateMissionUI reveals the pane these rows live in.
   const row = $('targetSpeedRow');
-  if (row) row.style.display = currentSpeedControllerType === 'constant_speed' ? '' : 'none';
+  const show = currentSpeedControllerType === 'constant_speed'
+    && AUTONOMOUS_MISSIONS.has(currentMission);
+  if (row) row.style.display = show ? 'block' : 'none';
 }
 // The kart is commanded in m/s; the box asks for km/h because that is what a
 // speed reads as to the person standing next to it.
