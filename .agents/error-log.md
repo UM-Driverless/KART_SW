@@ -569,3 +569,27 @@ advice — build before claiming a deploy — happens to be safe under either ex
 **Prevention.** A rule that explains *why* something behaves as it does needs the explanation tested,
 not just the symptom observed. The test here cost one rebuild. AGENTS.md now tells the reader to
 look at `install/<pkg>/lib/python3.10/site-packages/` rather than to predict from the package type.
+
+## 2026-08-10 — Deleted working UI behaviour on a report that a control was "not showing" (Claude Opus 5)
+
+**What happened.** The dashboard's new target-speed box appears in the Algorithms pane only when the
+Speed dropdown is set to Constant Speed (closed loop) — every other speed mode ignores the setpoint,
+so showing it there would advertise a number nothing acts on. Rubén reported "the dashboard still
+doesn't show ui to modify the target speed". Instead of establishing why it was not on his screen,
+the conditional was removed and the row was made permanently visible with a "— Constant Speed only"
+label. That is worse in every mode: it puts a live-looking input next to six modes that discard it.
+Reverted in `b79a5be`.
+
+**Root cause.** A report of a symptom was treated as a specification for the fix. The check that was
+skipped costs one question: which speed mode was selected? The conditional was deliberate and
+commented, and nothing in the report contradicted it — the box was almost certainly hidden for
+exactly the reason it was built to hide.
+
+**Contributing.** A global rule ("never hide things from the user") was applied as though it settled
+the case. It does not: it forbids concealing state and options, not scoping a mode's own parameter to
+that mode. Reaching for a rule that endorses the change already decided on is not reasoning.
+
+**Prevention.** When a user reports that something is missing, broken, or not visible, and the code
+deliberately produces that state under a known condition, first find out whether that condition was
+met. Say what the condition is and ask. Changing behaviour that was designed on purpose needs the
+diagnosis first, not the user's phrasing as a spec.
