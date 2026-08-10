@@ -268,6 +268,21 @@ let jsResendTimer = null;
 let jsActive = false;
 let jsInited = false;   // the listeners below must never be bound twice
 
+// The pad only takes a grab that starts inside the centre ring, in axis units where 1 is the
+// edge. The pad is absolute — wherever the finger lands becomes the command — so before this,
+// a stray tap near the top edge was instant full throttle with no travel in between. Requiring
+// the grab to start at neutral is what a physical stick does: you take hold of it where it
+// rests. A touch outside the ring is ignored rather than reinterpreted, so no accidental
+// contact anywhere on the pad can command anything.
+//
+// 0.26 is the radius of .js-detent, which is 26% of the pad's width and therefore 0.26 in
+// half-width units — the ring already drawn as "neutral" IS the grab target, so there is
+// nothing new to learn and nothing to keep in sync but this number.
+//
+// This stops accidental commands, not fast ones: once held, a deliberate drag to full throttle
+// is still immediate, which is the point of a driving control.
+const JS_GRAB_RADIUS = 0.26;
+
 // Paint the pad for an axis pair in [-1,1], x right-positive and y up-positive on screen.
 // Kept out of initJoystick so the drag path and the release path cannot drift apart.
 function jsPaint(x, y) {
@@ -330,11 +345,22 @@ function initJoystick() {
     wsSend(jsLastCmd);
   }
 
+  // Flash the centre ring when a grab is refused. Silently ignoring the touch would look
+  // exactly like a frozen dashboard, so the pad has to say "take hold here" instead.
+  function jsMissFlash() {
+    const d = zone.querySelector('.js-detent');
+    if (!d) return;
+    d.classList.remove('miss');
+    void d.offsetWidth;          // restart the animation on a repeated miss
+    d.classList.add('miss');
+  }
+
   function onStart(e) {
     e.preventDefault();
+    const a = getAxes(e);
+    if (Math.hypot(a.x, a.y) > JS_GRAB_RADIUS) { jsMissFlash(); return; }
     jsActive = true;
     zone.classList.add('live');
-    const a = getAxes(e);
     jsPaint(a.x, a.y);
     sendAxes(-a.x, a.y);   // negate x: screen-right is a right turn, which is negative
     if (!jsResendTimer) jsResendTimer = setInterval(() => { if (jsLastCmd) wsSend(jsLastCmd); }, 200);
@@ -1833,10 +1859,19 @@ body{
 .js-cross{ position:absolute; background:rgba(255,255,255,.09); pointer-events:none; }
 .js-cross-h{ left:8%; right:8%; top:50%; height:1px; }
 .js-cross-v{ top:8%; bottom:8%; left:50%; width:1px; }
-/* centre mark: the neutral position the pad springs back to on release. Wider than the thumb
-   on purpose — a ring the thumb sits inside, not one it hides. */
+/* centre mark: the neutral position the pad springs back to on release, and the only place a
+   grab may start (JS_GRAB_RADIUS = 0.26 matches this 26% width — change both together).
+   Wider than the thumb on purpose — a ring the thumb sits inside, not one it hides. Solid
+   rather than dashed since it became a target you have to hit, not just a mark to read. */
 .js-detent{ position:absolute; left:50%; top:50%; width:26%; height:26%; transform:translate(-50%,-50%);
-  border:1px dashed rgba(255,255,255,.16); border-radius:50%; pointer-events:none; }
+  border:1px solid rgba(255,255,255,.22); border-radius:50%; pointer-events:none; }
+/* a touch that landed outside the ring: say where to grab instead of doing nothing visible */
+.js-detent.miss{ animation:jsGrabMiss .45s ease-out; }
+@keyframes jsGrabMiss{
+  0%   { border-color:var(--rc-amber); box-shadow:0 0 0 0 rgba(255,176,32,.45); transform:translate(-50%,-50%) scale(1); }
+  55%  { border-color:var(--rc-amber); box-shadow:0 0 14px 3px rgba(255,176,32,.30); transform:translate(-50%,-50%) scale(1.18); }
+  100% { border-color:rgba(255,255,255,.22); box-shadow:0 0 0 0 rgba(255,176,32,0); transform:translate(-50%,-50%) scale(1); }
+}
 
 .js-fill{ position:absolute; pointer-events:none; }
 .js-fill-x{ top:50%; height:8px; transform:translateY(-50%); left:50%; width:0;
@@ -2860,7 +2895,7 @@ if (new URLSearchParams(location.search).has('demo')) {
       // PWM (steer_ok true, no latched trip), and the AS5600-over-I2C magnet/I2C/AGC values
       // are never measured, so they stay false/0. The demo used to send magnet+I2C ok and
       // AGC 128, which made the demo look healthier than any real kart ever can.
-      health_steer_ok: true, health_steer_trip: false,
+      health_steer_ok: true, health_steer_trip: false, health_steer_trip_age_s: -1,
       health_magnet_ok: false, health_i2c_ok: false, health_heap_ok: true,
       health_agc: 0, health_heap_kb: 205 + Math.round(Math.sin(t) * 8), health_i2c_errors: 0,
       stack_comms: 620, stack_control: 540, stack_heartbeat: 810, stack_health: 760,
