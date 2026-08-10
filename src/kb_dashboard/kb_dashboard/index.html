@@ -322,6 +322,7 @@ let demoMission = 'manual', demoState = 'idle', demoCompDisabled = false;
 let demoPid = { override: false, kp: 1.5, ki: 0, kd: 0.03, limit: 0.5 };
 let currentControllerType = 'geometric';
 let currentSpeedControllerType = 'curve_factor';
+let currentTargetSpeed = 0.28; // m/s (1 km/h), setpoint for the constant_speed loop
 let currentSvoFile = 'live';
 const AUTONOMOUS_MISSIONS = new Set([
   'acceleration','skidpad','autocross','trackdrive',
@@ -511,8 +512,20 @@ function updateMissionUI() {
 }
 
 function updateAlgoButtons() {
-  document.querySelectorAll('.algo-dropdown:not(.speed-algo-dropdown):not(.svo-dropdown)').forEach(sel => sel.value = currentControllerType);
+  document.querySelectorAll('.algo-dropdown:not(.speed-algo-dropdown):not(.svo-dropdown):not(#targetSpeedInput)').forEach(sel => sel.value = currentControllerType);
   document.querySelectorAll('.speed-algo-dropdown').forEach(sel => sel.value = currentSpeedControllerType);
+  const row = $('targetSpeedRow');
+  if (row) row.style.display = currentSpeedControllerType === 'constant_speed' ? '' : 'none';
+}
+// The kart is commanded in m/s; the box asks for km/h because that is what a
+// speed reads as to the person standing next to it.
+function onTargetSpeedChange(inp) {
+  let kmh = parseFloat(inp.value);
+  if (!isFinite(kmh)) kmh = 1;
+  kmh = Math.max(0, Math.min(18, kmh));
+  inp.value = kmh;
+  currentTargetSpeed = kmh / 3.6;
+  wsSend({action:'set_target_speed', speed: currentTargetSpeed});
 }
 function onAlgoChange(sel) {
   currentControllerType = sel.value;
@@ -809,6 +822,12 @@ function connect() {
       if (lastData.mission) { currentMission = lastData.mission; updateJoystickWidget(); updateMissionUI(); }
       if (lastData.controller_type) { currentControllerType = lastData.controller_type; updateAlgoButtons(); }
       if (lastData.speed_controller_type) { currentSpeedControllerType = lastData.speed_controller_type; updateAlgoButtons(); }
+      if (typeof lastData.target_speed === 'number') {
+        currentTargetSpeed = lastData.target_speed;
+        const inp = $('targetSpeedInput');
+        // Left alone while it has focus, so a value being typed is not overwritten.
+        if (inp && document.activeElement !== inp) inp.value = (currentTargetSpeed * 3.6).toFixed(1);
+      }
       if (lastData.svo_file) { currentSvoFile = lastData.svo_file; document.querySelectorAll('.svo-dropdown').forEach(sel => sel.value = currentSvoFile); }
       if (lastData.steer_pid_error) { showPidError(lastData.steer_pid_error); return; }
       // Reflect ESP32 heartbeat in the connection dot (green only when HB alive)
@@ -2615,6 +2634,9 @@ body{
           <div class="algo-select svo-select" style="display:none"><div class="algo-label">Video Input</div><select class="algo-dropdown svo-dropdown" onchange="onSvoChange(this)"><option value="live">Live Camera</option></select></div>
           <div class="algo-select"><div class="algo-label">Steering</div><select class="algo-dropdown" onchange="onAlgoChange(this)"><option value="geometric">Geometric</option><option value="pure_pursuit">Pure Pursuit</option><option value="stanley">Stanley</option><option value="neural_v2">Neural V2</option><option value="mpc">MPC</option><option value="none">None</option></select></div>
           <div class="algo-select"><div class="algo-label">Speed</div><select class="algo-dropdown speed-algo-dropdown" onchange="onSpeedAlgoChange(this)"><option value="curve_factor">Curve Factor</option><option value="constant_throttle">Constant Throttle (needs cones)</option><option value="constant_throttle_blind">Constant Throttle (blind)</option><option value="constant_throttle_stop">Constant Throttle + Stop</option><option value="constant_speed">Constant Speed (closed loop)</option><option value="neural_v2">Neural V2</option><option value="zero">Zero</option></select></div>
+          <!-- Setpoint for the closed loop only; every other speed mode ignores it,
+               so the row appears with that mode and nowhere else. -->
+          <div class="algo-select" id="targetSpeedRow" style="display:none"><div class="algo-label">Target speed (km/h)</div><input class="algo-dropdown" id="targetSpeedInput" type="number" step="0.5" min="0" max="18" value="1" onchange="onTargetSpeedChange(this)"></div>
         </div>
         <div class="rc-panel rc-mpanel" id="rcCtrlPane">
           <span class="rc-label">Controls</span>

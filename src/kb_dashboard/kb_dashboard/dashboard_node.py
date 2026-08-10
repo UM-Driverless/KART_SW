@@ -223,6 +223,10 @@ class DashboardNode(Node):
         self.speed_controller_type_pub = self.create_publisher(String, "/dashboard/speed_controller_type", 10)
         self._pending_speed_controller_type = None
         self._pending_speed_controller_type_count = 0
+        # Setpoint for the closed-loop speed controller, in m/s.
+        self.target_speed_pub = self.create_publisher(Float32, "/dashboard/target_speed", 10)
+        self._pending_target_speed = None
+        self._pending_target_speed_count = 0
         self.create_timer(0.01, self._publish_pending)  # 100 Hz
 
         # One-shot self-test after 2 seconds
@@ -519,6 +523,9 @@ class DashboardNode(Node):
         if self._pending_speed_controller_type is not None and self._pending_speed_controller_type_count > 0:
             self.speed_controller_type_pub.publish(self._pending_speed_controller_type)
             self._pending_speed_controller_type_count -= 1
+        if self._pending_target_speed is not None and self._pending_target_speed_count > 0:
+            self.target_speed_pub.publish(self._pending_target_speed)
+            self._pending_target_speed_count -= 1
 
     def publish_steer_mode(self, mode: int):
         """@brief Publish steering mode change to ESP32.
@@ -605,6 +612,17 @@ class DashboardNode(Node):
         self._pending_speed_controller_type = msg
         self._pending_speed_controller_type_count = 100
         self.get_logger().info(f"Speed controller type: {speed_type}")
+
+    def publish_target_speed(self, speed_mps: float):
+        """@brief Publish the closed-loop speed setpoint to cone_follower.
+
+        @param speed_mps Setpoint in m/s. The dashboard shows km/h and converts.
+        """
+        msg = Float32()
+        msg.data = float(speed_mps)
+        self._pending_target_speed = msg
+        self._pending_target_speed_count = 100
+        self.get_logger().info(f"Target speed: {speed_mps:.2f} m/s")
 
     def publish_manual_control(
         self, steer: float, steer_type: str, throttle: float, brake: float

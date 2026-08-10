@@ -230,7 +230,9 @@ class ConeFollowerNode(Node):
         self.declare_parameter("speed_curve_factor", 0.0)
 
         # --- constant_speed params (closed loop on /kart/speed) ---
-        self.declare_parameter("target_speed", 2.0)          # m/s
+        # 0.28 m/s ≈ 1 km/h: walking-pace default, so selecting the closed loop
+        # by accident does not launch the kart. The dashboard sets it live.
+        self.declare_parameter("target_speed", 0.28)         # m/s
         self.declare_parameter("speed_kp", 0.6)              # throttle units per m/s error
         self.declare_parameter("speed_ki", 0.4)              # per m/s error per second
         self.declare_parameter("speed_stale_timeout", 0.4)   # s
@@ -357,6 +359,9 @@ class ConeFollowerNode(Node):
             self._on_speed_controller_type,
             10,
         )
+        self.create_subscription(
+            Float32, "/dashboard/target_speed", self._on_target_speed, 10
+        )
 
         self.get_logger().info(
             f"Controller: steer={self.controller_type} speed={self.speed_controller_type}"
@@ -428,6 +433,23 @@ class ConeFollowerNode(Node):
             # the instant closed-loop control is selected.
             self._speed_integral = 0.0
             self._speed_pid_time = None
+
+    def _on_target_speed(self, msg: Float32):
+        """@brief Callback for the closed-loop speed setpoint from the dashboard.
+
+        @param msg Float32 setpoint in m/s. Clamped to a sane range, and the
+                   integral is dropped on a change so the old error does not
+                   push the kart past the new setpoint.
+        """
+        new_target = max(0.0, min(5.0, float(msg.data)))
+        if abs(new_target - self.target_speed) < 1e-6:
+            return
+        self.get_logger().info(
+            f"Target speed: {self.target_speed:.2f} → {new_target:.2f} m/s"
+        )
+        self.target_speed = new_target
+        self._speed_integral = 0.0
+        self._speed_pid_time = None
 
     def _on_speed(self, msg: Float32):
         """@brief Callback for the estimated forward speed from speed_estimator."""

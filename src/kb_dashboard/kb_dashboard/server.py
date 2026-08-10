@@ -434,6 +434,13 @@ async def run_websocket_server(
             state.update("controller_type", ctrl_type)
             if hasattr(node, "publish_controller_type"):
                 node.publish_controller_type(ctrl_type)
+        elif action == "set_target_speed":
+            # Clamped here as well as in the browser: a hand-written WebSocket
+            # frame must not be able to ask the kart for an arbitrary speed.
+            speed = max(0.0, min(5.0, float(cmd.get("speed", 0.28))))
+            state.update("target_speed", speed)
+            if hasattr(node, "publish_target_speed"):
+                node.publish_target_speed(speed)
         elif action == "set_speed_controller":
             speed_type = cmd.get("type", "curve_factor")
             state.update("speed_controller_type", speed_type)

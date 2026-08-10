@@ -687,6 +687,7 @@ class DashboardState:
             "pid_pwm_limit": None,
             "controller_type": "geometric",  # geometric | pure_pursuit | neural_v2 | mpc
             "speed_controller_type": "curve_factor",  # curve_factor | constant | neural_v2
+            "target_speed": 0.28,  # m/s setpoint for constant_speed (1 km/h)
         }
         self._heartbeat_time = 0.0
 
