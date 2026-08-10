@@ -210,7 +210,8 @@ class ConeFollowerNode(Node):
         )  # geometric|pure_pursuit|neural|neural_v2|mpc|stanley
         self.declare_parameter(
             "speed_controller_type", "curve_factor"
-        )  # curve_factor|constant_throttle|constant_throttle_stop|neural_v2|zero
+        )  # curve_factor|constant_throttle|constant_throttle_blind
+        #    |constant_throttle_stop|neural_v2|zero
         self.declare_parameter("weights_json", "")  # path for neural
 
         # --- geometric params ---
@@ -361,6 +362,7 @@ class ConeFollowerNode(Node):
             in (
                 "curve_factor",
                 "constant_throttle",
+                "constant_throttle_blind",
                 "constant_throttle_stop",
                 "neural_v2",
                 "zero",
@@ -388,7 +390,7 @@ class ConeFollowerNode(Node):
         """
         if self.speed_controller_type == "zero":
             return 0.0
-        if self.speed_controller_type == "constant_throttle":
+        if self.speed_controller_type in ("constant_throttle", "constant_throttle_blind"):
             return self.max_speed
         if self.speed_controller_type == "constant_throttle_stop":
             if cones:
@@ -914,13 +916,29 @@ class ConeFollowerNode(Node):
     # ── safety timeout ────────────────────────────────────────────────
 
     def _safety_check(self):
-        """@brief Timer callback: publish zero-velocity if no detections received within timeout."""
+        """@brief Timer callback: decide what to command when no detections are arriving.
+
+        This node is driven by the detection callback, not merely gated by it — with
+        no camera running, nothing else here ever publishes. So this timer is the only
+        thing that speaks when perception is silent, and what it should say depends on
+        the speed controller:
+
+        - constant_throttle_blind wants to move anyway. It is the bench mode for
+          checking the throttle wiring and the ESP32 path with no ZED, no cones and
+          no perception nodes at all, so the timeout publishes the fixed throttle
+          with the steering centred.
+        - every other mode treats silence as a fault and gets zero.
+        """
         elapsed = (self.get_clock().now() - self.last_detection_time).nanoseconds / 1e9
-        if elapsed > self.no_cone_timeout:
-            cmd = Twist()
+        if elapsed <= self.no_cone_timeout:
+            return
+        cmd = Twist()
+        if self.speed_controller_type == "constant_throttle_blind":
+            cmd.linear.x = self.max_speed
+        else:
             cmd.linear.x = 0.0
-            cmd.angular.z = 0.0
-            self.cmd_pub.publish(cmd)
+        cmd.angular.z = 0.0
+        self.cmd_pub.publish(cmd)
 
 
 def main():

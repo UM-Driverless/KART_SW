@@ -1739,3 +1739,22 @@ and restarting.
 Separately, the `throttle_test` mission (`state_machine_node.py`) hardcodes `linear.x = 2.5` and
 bypasses perception entirely — it exercises the throttle path alone and leaves steering untouched,
 which is a different job from the above.
+
+## 2026-08-10 — Split constant throttle into a cones-required and a blind mode
+
+`constant_throttle` was not actually constant. `cone_follower_node.py` is driven by the detection
+callback rather than merely gated by it: with no camera running, the detection callback never fires
+and the only thing that publishes is the `_safety_check` timer, which zeroed `cmd_vel` after
+`no_cone_timeout`. So the mode held a fixed throttle only while perception was feeding it cones,
+and commanded zero otherwise.
+
+Now there are two modes. `constant_throttle` keeps the old behaviour — fixed throttle while cones
+are visible, zero when perception goes quiet, which is what a driving run wants. `constant_throttle_blind`
+makes the safety timer publish the fixed throttle with steering centred instead of zero, so the
+kart moves on a bench with no ZED, no cones and no perception nodes. That is the throttle-wiring
+and ESP32-path check.
+
+Note this puts the blind bench mode behind the normal autonomous gating (an autonomous mission plus
+AS_DRIVING), unlike the older `throttle_test` mission in `state_machine_node.py`, which applies
+throttle as soon as it is selected and never checks the state. `throttle_test` is left in place and
+unchanged for now; whether to gate it, lower it, or delete it is still open.
