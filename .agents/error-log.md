@@ -459,3 +459,34 @@ distinguished them.
 would separate them before recommending anything. Here the separating test is a meter on CN9.1
 with the motor unplugged during a flash. The remedy that works under either hypothesis — de-power
 the Cytron before flashing — was the one worth leading with.
+
+## 2026-08-10 — Built a failover mechanism on an untested premise (Claude Opus 5)
+
+**What happened:** while fixing the Orin's internet fallback, the agent wrote a probe-and-demote
+layer for the USB tethers: probe each phone, demote a failing one to route metric 900 so the
+next-ranked phone takes over, promote it back on recovery. The premise was that a phone with
+Personal Hotspot switched off keeps its USB link and DHCP lease while carrying no traffic, so only an
+end-to-end probe could notice.
+
+The premise was false, and the test that disproved it was run afterwards rather than first. Turning
+the hotspot off makes iOS drop the USB ethernet carrier; NetworkManager logged `state change:
+activated -> unavailable (reason 'carrier-changed')` about a second later, withdrew the route, and
+the kernel fell through to the other phone on its own. That had been working before anything was
+written. Rubén then asked why code that never runs should be kept — "any coverage test would tell you
+to get rid of it" — and the demote layer was cut to report-only.
+
+**Root cause:** the failure mode was assumed from how the hardware *ought* to behave rather than
+established by a five-minute observation, and the code was written before the observation was
+available. The order was backwards: the failover test was treated as verification of a finished
+build, when it was the experiment that should have defined what to build.
+
+**Why it mattered more than an ordinary wasted hour:** the discarded branch's action was to tear down
+the kart's only working default route, on a timer, against a threshold picked out of the air (three
+failures, five seconds apart), with nobody watching. kart-medulla's pump-stall detector is
+report-only for exactly this reason — its first version acted on a guessed threshold that later
+analysis showed would have false-tripped on healthy hardware.
+
+**Prevention:** when a fix targets a failure mode nobody has observed, run the observation before
+writing the handler, not after. If the observation is not available, write the detector as
+report-only and let the journal supply the threshold — which is where this one ended up anyway, just
+after the detour.
