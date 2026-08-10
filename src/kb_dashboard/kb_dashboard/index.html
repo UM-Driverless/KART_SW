@@ -1711,39 +1711,46 @@ body{
 .rc-card .val .u{ font-size:var(--fs-sm); color:var(--rc-label); font-weight:600; font-family:'Titillium Web',sans-serif; }
 .rc-card .bar{ width:100%; height:5px; background:var(--rc-raised); margin-top:8px; overflow:hidden; border:1px solid var(--rc-line); }
 .rc-card .bar .fill{ height:100%; width:0%; transition:width .3s ease; background:var(--rc-green); }
-.rc-speeddial{ display:flex; flex-direction:column; align-items:center; justify-content:center; gap:var(--sp-1); padding:var(--sp-3) var(--sp-2) var(--sp-2); }
+/* space-evenly, not center: this panel now holds the speedo AND the G block, and centring the
+   pair would have pushed the speedo up against its label. Even spacing lifts the speedo a
+   little and seats the G dial in the gap that the 54% cap already left below it. */
+.rc-speeddial{ display:flex; flex-direction:column; align-items:center; justify-content:space-evenly; gap:var(--sp-1); padding:var(--sp-3) var(--sp-2) var(--sp-2); }
 #rcSpeedDial{ max-height:54%; max-width:82%; width:auto; height:auto; }
-.rc-minis{ display:grid; grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr; gap:var(--sp-2); height:100%; min-height:0; }
+/* The G block keeps its own stacking context so the "G" tag pins to the dial, not to the panel.
+   Its old tag was positioned against the mini cell it used to sit in, so reusing that rule here
+   would have parked the letter next to the "Speed" label instead. */
+.rc-ggblock{ position:relative; display:flex; flex-direction:column; align-items:center; gap:var(--sp-1);
+  width:100%; min-height:0; }
+.rc-gglbl{ position:absolute; top:0; left:6px; font-size:var(--fs-xs); letter-spacing:.18em;
+  color:var(--rc-label-dim); text-transform:uppercase; font-weight:700; }
+/* Sized to land at roughly the diameter it had in the minis grid: that cell was ~half of the
+   1.25fr column, this panel is a whole 1fr one, so the percentage has to be smaller to keep the
+   dial the same size on screen. */
+.rc-speeddial #ggCanvas{ max-width:62%; max-height:34%; width:auto; height:auto; }
+/* auto-flow:column so the two square dials stack in the left track and the pedals take the
+   right one whole — row-major placement would have put them side by side instead. */
+.rc-minis{ display:grid; grid-auto-flow:column; grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr; gap:var(--sp-2); height:100%; min-height:0; }
+.rc-pedalcell{ grid-row:span 2; }
 /* min-width:0 is load-bearing, not symmetry with min-height. A grid item defaults to
    min-width:auto, so a 1fr track refuses to shrink below its content's min-content width.
    The g-force caption under the G-G dial is white-space:nowrap and is rewritten every frame
    as "LON -0.03 · LAT 0.12 g"; tabular-nums equalises the digits but not the minus sign, so
    the string's width changed as the values dithered across zero and dragged the column
    divider with it — a visible twitch on the telemetry page. min-width:0 lets the tracks stay
-   at a fixed 50/50 regardless of what the caption currently says. */
+   at a fixed 50/50 regardless of what the caption currently says. (That caption moved to the
+   speedo panel on 2026-08-10 along with its dial; the rule stays, because any nowrap content
+   in a future mini would bring the same twitch straight back.) */
 .rc-mini{ display:flex; align-items:center; justify-content:center; padding:var(--sp-1); min-height:0; min-width:0; }
-/* These four cells are much taller than they are wide, so max-WIDTH is what actually sizes the
-   dials — every percent here is a percent of dial diameter. */
+/* These cells are much taller than they are wide, so max-WIDTH is what actually sizes the
+   dials — every percent here is a percent of dial diameter. The exception is the pedals cell,
+   which spans both rows and is bound by its height instead. */
 .rc-mini canvas{ max-height:98%; max-width:98%; width:auto; height:auto; }
-/* One of the four minis (the G-G) carries a numeric caption under its dial. Grid rather than a
-   hand-picked percentage: the caption row takes its natural height and the canvas row takes
-   exactly what is left. The percentages this replaces were 82% for a captioned dial against 98%
-   for an uncaptioned one, which is why two dials sitting side by side came out visibly different
-   sizes for a reason nobody looking at them could see. */
-/* align-content, not align-items: both rows are content-sized and the PAIR is centred in the
-   cell, so the caption stays tucked under its dial. Giving the canvas row the slack instead
-   (1fr) centres the dial but strands the caption at the bottom of the cell, reading as a label
-   for the panel below it. */
-.rc-mini-col{ display:grid; grid-template-rows:auto auto; gap:var(--sp-1); justify-items:center; align-content:center; }
-.rc-mini-col canvas{ max-height:100%; }
 .rc-gcap{ font-size:var(--fs-xs); color:var(--rc-label-dim); letter-spacing:.06em; text-transform:uppercase;
   font-weight:700; font-variant-numeric:tabular-nums; white-space:nowrap;
   display:flex; flex-direction:column; align-items:center; line-height:1.35; }
 
 #ggCanvas{ background:#0a0a0c; border:1px solid var(--rc-line); border-radius:50%; }
 .rc-mini{ position:relative; }
-.rc-mini-lbl{ position:absolute; top:6px; left:10px; font-size:var(--fs-xs); letter-spacing:.18em;
-  color:var(--rc-label-dim); text-transform:uppercase; font-weight:700; }
 .rc-pwm{ font-size:var(--fs-xs); color:var(--rc-label-dim); letter-spacing:.14em; margin-top:5px; font-weight:700; text-transform:uppercase; }
 .rc-legend{ display:flex; gap:var(--sp-4); align-items:center; margin-top:5px; font-size:var(--fs-xs); font-weight:700;
   letter-spacing:.12em; text-transform:uppercase; color:var(--rc-label-dim); }
@@ -2159,6 +2166,15 @@ body{
         <div class="rc-panel rc-speeddial">
           <span class="rc-label">Speed</span>
           <canvas id="rcSpeedDial" width="300" height="300"></canvas>
+          <!-- The G-G dial lives here, under the speedo, rather than in the minis grid. The
+               speedo is capped at 54% of the panel height, so the lower half of this panel was
+               already empty; space-evenly lifts the speedo just enough to seat the G block in
+               it without either dial changing size. -->
+          <div class="rc-ggblock">
+            <span class="rc-gglbl">G</span>
+            <canvas id="ggCanvas" width="280" height="280"></canvas>
+            <div class="rc-gcap" id="rcGCap"><span id="rcGCapLon">LON 0.00 g</span><span id="rcGCapLat">LAT 0.00 g</span></div>
+          </div>
         </div>
         <div class="rc-panel rc-steer">
           <span class="rc-label">Steering angle</span>
@@ -2189,9 +2205,12 @@ body{
                what binds, and every draw routine derives its geometry from canvas.width, so a
                bigger backing store means a bigger AND sharper dial with no code change. -->
           <div class="rc-panel rc-mini"><canvas id="rcDialYolo" width="300" height="300"></canvas></div>
-          <div class="rc-panel rc-mini rc-mini-col"><span class="rc-mini-lbl">G</span><canvas id="ggCanvas" width="280" height="280"></canvas><div class="rc-gcap" id="rcGCap"><span id="rcGCapLon">LON 0.00 g</span><span id="rcGCapLat">LAT 0.00 g</span></div></div>
           <div class="rc-panel rc-mini"><canvas id="rcBatDial" width="300" height="300"></canvas></div>
-          <div class="rc-panel rc-mini"><canvas id="rcPedalsDial" width="240" height="400"></canvas></div>
+          <!-- Pedals take the whole right-hand column now that the G-G dial has moved out. The
+               backing store grew with the cell (240x400 -> 260x620): with width/height:auto the
+               attributes are also the largest size this canvas will ever lay out at, so leaving
+               them at 400 tall would have capped the bars halfway up the taller cell. -->
+          <div class="rc-panel rc-mini rc-pedalcell"><canvas id="rcPedalsDial" width="260" height="620"></canvas></div>
         </div>
       </div>
 
