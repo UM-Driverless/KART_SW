@@ -888,13 +888,9 @@ function toggleCompressor() {
 // ═══════════════════════════════════════════════════════
 // SHARED HELPERS
 // ═══════════════════════════════════════════════════════
-function missionClick(e) {
-  const btn = e.target.closest('[data-m]');
-  if (btn) {
-    wsSend({ action: 'set_mission', mission: btn.dataset.m });
-    if (btn.dataset.m === 'inspection') wsSend({action:'list_svo'});
-  }
-}
+/* missionClick() lived here and handled the 8-button mission grid. The grid became a wheel on
+   2026-08-10 and the wheel commits through its own two-step, so nothing called this any more.
+   The list_svo it sent on picking "inspection" moved into misCommit() with it. */
 
 // Data convention is positive = LEFT (REP 103 yaw). Screen X and SVG rotate()
 // both grow to the right, so flip the sign once here for every steering widget.
@@ -925,7 +921,11 @@ function updatePills(d) {
 }
 
 function updateMissions(d) {
-  document.querySelectorAll('.mis-btn').forEach(b => b.classList.toggle('sel', b.dataset.m === d.mission));
+  // Pushed in rather than derived from a class on a button: the wheel keeps the kart's mission
+  // and the operator's candidate as two separate things, and only it knows the difference.
+  // (This used to also mark the selected .mis-btn — there are none left since the wheel landed,
+  // and skinRace is the only skin, so that line was updating nothing.)
+  if (typeof window.rcSetCurrentMission === 'function') window.rcSetCurrentMission(d.mission);
 }
 
 function updateStateButtons(d) {
@@ -1553,6 +1553,107 @@ const RC_DIAL_TANK = { min: 0, max: PNEU_MAX_BAR, major: 2, minor: 1, numbers: t
 const RC_DIAL_PIST = { min: 0, max: PNEU_MAX_BAR, major: 2, minor: 1, numbers: true, topLabel: 'PISTON', label: 'bar',
   fmt: v => (v == null || isNaN(v)) ? '--' : v.toFixed(1) };
 
+/**
+ * @brief Vertical drag wheel: an endless ring of names with a fixed centre slot.
+ *
+ * The page rail in the Race skin is the same idea, and this is deliberately NOT a refactor of
+ * it. That rail drives the page stack from the same position variable, so pulling it apart
+ * while it is the only way to navigate the dashboard is a risk that buys nothing here. What
+ * this does share is the maths, which is the part worth having in one place: a continuous
+ * position measured in items, each element placed at its shortest signed distance from it, so
+ * N nodes serve an infinite ring with no cloning.
+ *
+ * The one behavioural difference is deliberate. The rail commits on settle — whatever stops in
+ * the centre becomes the page — which is right when the cost of a wrong turn is looking at the
+ * wrong screen. Here the cost is putting the kart in a different mission, so settling only
+ * moves the highlight and a second, separate tap commits. See rcWireMissionWheel.
+ *
+ * @param o.rail    Element that captures the drag gesture.
+ * @param o.win     The window element; its centre is where the selection sits.
+ * @param o.items   Array of elements, one per entry, absolutely positioned by this function.
+ * @param o.onPaint Optional (pos, sel) callback on every repaint.
+ * @param o.onTap   Optional (index) callback for a tap that did not drag.
+ * @return { go, sel, pos } — go(i, animate) moves the ring; sel() is the centred index.
+ */
+function rcMakeWheel(o) {
+  const items = o.items, N = items.length;
+  const mod = (a, n) => ((a % n) + n) % n;   // JS % keeps the sign; a wheel must not
+  const itemH = () => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--rail-item')) || 36;
+  const relOf = (i, pos) => mod(i - pos + N / 2, N) - N / 2;
+  let pos = 0, anim = null;
+
+  const paint = p => {
+    const h = itemH(), mid = o.win.clientHeight / 2, sel = mod(Math.round(p), N);
+    items.forEach((t, i) => {
+      const rel = relOf(i, p), dist = Math.abs(rel);
+      t.style.transform = `translateY(${mid + rel * h - h / 2}px) scale(${Math.max(0.92, 1 - dist * 0.03)})`;
+      t.style.opacity = Math.max(0.1, 1 - Math.pow(dist / 2.9, 4));
+      t.classList.toggle('on', i === sel);
+    });
+    if (o.onPaint) o.onPaint(p, sel);
+    return sel;
+  };
+
+  const to = (target, animate) => {
+    if (anim) { cancelAnimationFrame(anim); anim = null; }
+    if (!animate) { pos = target; paint(pos); return; }
+    const from = pos, delta = mod(target - from + N / 2, N) - N / 2;   // shortest arc
+    const t0 = performance.now(), dur = 220;
+    const step = now => {
+      const k = Math.min(1, (now - t0) / dur);
+      pos = from + delta * (1 - Math.pow(1 - k, 3));
+      paint(pos);
+      if (k < 1) anim = requestAnimationFrame(step);
+      else { pos = mod(target, N); paint(pos); anim = null; }
+    };
+    anim = requestAnimationFrame(step);
+  };
+
+  const go = (i, animate = true) => to(mod(i, N), animate);
+
+  let dragging = false, startY = 0, startPos = 0, moved = 0;
+  o.rail.addEventListener('pointerdown', e => {
+    if (anim) { cancelAnimationFrame(anim); anim = null; }
+    dragging = true; startY = e.clientY; startPos = pos; moved = 0;
+    // Capture keeps the drag alive if the finger leaves the wheel. Guarded because it throws
+    // when there is no live pointer behind the event — synthetic events in a test harness, and
+    // any browser that has already released the pointer by the time this runs. Losing capture
+    // costs a drag that ends early; letting it throw would abort the handler and leave
+    // dragging set, which wedges the wheel until the next pointerdown.
+    try { o.rail.setPointerCapture(e.pointerId); } catch (_) {}
+  });
+  o.rail.addEventListener('pointermove', e => {
+    if (!dragging) return;
+    const dy = e.clientY - startY;
+    moved = Math.max(moved, Math.abs(dy));
+    pos = startPos - dy / itemH();               // unbounded: the ring never hits an end
+    paint(pos);
+  });
+  const end = e => {
+    if (!dragging) return;
+    dragging = false;
+    const centred = mod(Math.round(pos), N);     // what was under the centre slot before this
+    let idx = centred;                           // snap to the nearest detent
+    const tapped = moved < 6;
+    if (tapped) {
+      // Hit-test by pointer position, NOT e.target: setPointerCapture retargets every later
+      // pointer event to the rail, so e.target is never the button.
+      const y = e.clientY;
+      const hit = items.findIndex(t => { const b = t.getBoundingClientRect(); return y >= b.top && y <= b.bottom; });
+      if (hit >= 0) idx = hit;
+    }
+    go(idx);
+    // wasCentred distinguishes "bring this name to the centre" from "act on the name already
+    // there", which is what lets a caller require two taps without a separate button.
+    if (tapped && o.onTap) o.onTap(idx, idx === centred);
+  };
+  o.rail.addEventListener('pointerup', end);
+  o.rail.addEventListener('pointercancel', end);
+  window.addEventListener('resize', () => paint(pos));
+  go(0, false);
+  return { go, sel: () => mod(Math.round(pos), N), pos: () => pos };
+}
+
 /* Forced off-time after a compressor burst hits its cap. Mirrors COMPRESSOR_COOLDOWN_MS in
    kart-medulla main/main.c — the firmware does not put the remaining time on the wire, so the
    dashboard counts it down itself from the observed transition into state 2. If that constant
@@ -1863,7 +1964,12 @@ body{
 /* ---- page 2: MISSION ---- */
 /* auto-flow columns so only the *visible* panes share the width: [Mission | Algorithms | Status]
    for autonomous, [Mission | Status | Joystick] for remote, [Mission | Status] for manual. */
-.rc-mission{ display:grid; grid-auto-flow:column; grid-auto-columns:1fr; gap:var(--sp-3); height:100%; min-height:0; }
+/* grid-template-columns fixes the FIRST track only; every later pane still lands in an
+   implicit 1fr track, so the auto-distribution of whichever panes are visible is unchanged.
+   That first track is the mission wheel, which needs a name's width and no more — the width
+   the old 8-button grid was taking is what the pad gains. */
+.rc-mission{ display:grid; grid-auto-flow:column; grid-template-columns:126px; grid-auto-columns:1fr; gap:var(--sp-3); height:100%; min-height:0; }
+.rc-mispanel{ overflow:hidden; }   /* the wheel scrolls itself; the pane must not */
 .rc-mpanel{ padding:var(--sp-3) var(--sp-4); display:flex; flex-direction:column; gap:var(--sp-3); min-height:0; overflow-y:auto; }
 /* the driving pad gets its own pane on the right — never scrollable (was cramped inside Status).
    position:relative so the PID panel can cover exactly this pane and nothing else. */
@@ -1875,7 +1981,23 @@ body{
 /* stretch, not centre: the widget fills the slot and centres the pad itself, so the pad grows
    into whatever height the pane has. min-height:min-content, not 0, so the slot is never handed
    less than the widget needs, which is what let the pad render at zero height on a phone. */
-.rc-joypane #rcJoySlot{ flex:1 1 auto; min-height:min-content; width:100%; display:flex; align-items:stretch; justify-content:center; }
+/* The pad row. Stacked by default and side-by-side once the pane is wide enough, decided by a
+   CONTAINER query rather than a media query: what governs is the width of this pane, which the
+   mission grid changes as panes appear and disappear, and that has no fixed relationship to the
+   viewport — at 844x390 the pane is 606px, so a viewport-based rule read "narrow" for a pane
+   with room to spare. Browsers without container queries keep the stacked layout, which is what
+   the pane did before and still works. */
+.rc-joypane{ container-type:inline-size; }
+.rc-joypane .joy-row{ flex:1 1 auto; min-height:0; display:flex; flex-direction:column; gap:var(--sp-2); align-items:stretch; }
+.rc-joypane .joy-side{ flex:0 0 auto; min-width:0; display:flex; flex-direction:column;
+  justify-content:center; gap:var(--sp-2); }
+.rc-joypane #rcJoySlot{ flex:1 1 auto; min-height:0; min-width:0; display:flex; align-items:stretch; justify-content:center; }
+/* 430px = the 140px control column, its gap, and enough left for the pad to be at least as
+   wide as the pane is tall — below that, seating them side by side would shrink the pad. */
+@container (min-width:430px){
+  .rc-joypane .joy-row{ flex-direction:row; }
+  .rc-joypane .joy-side{ width:140px; }
+}
 /* Steering PID. The four gains are set once a session while the pad is wanted the whole time,
    so they live behind a button in a panel that covers the pane, and Apply closes it again. */
 /* Two classes, so this beats the flex:1 on .ctrl-btn regardless of source order. That flex:1
@@ -1910,15 +2032,40 @@ body{
 .rc-pid-force{ font:var(--fs-sm) ui-monospace,monospace; color:#84848a; }
 .rc-pid-force #pidInForce{ color:#e8e8ea; }
 .rc-pid-note{ font-size:var(--fs-xs); line-height:1.45; color:#6a6a70; }
-.mis-grid{ display:grid; grid-template-columns:1fr 1fr; gap:var(--sp-2); flex:1; }
-.mis-btn{ border:1px solid var(--rc-line-hard); background:linear-gradient(180deg,#1f1f25,#131317); color:var(--rc-label);
-  font-family:'Rajdhani',sans-serif; font-weight:700; font-size:var(--fs-sm); letter-spacing:.1em; text-transform:uppercase;
-  cursor:pointer; padding:var(--sp-3) var(--sp-1); -webkit-user-select:none; user-select:none;
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.05); transition:filter .12s ease, border-color .12s ease;
+/* Mission wheel. Same shape and gesture as the page rail on the left of the skin, so the hand
+   already knows it; the panel is a fixed narrow track (see .rc-mission) and everything the
+   page gives back goes to the pad. */
+.mis-wheel{ flex:1; position:relative; overflow:hidden; touch-action:none;
+  -webkit-user-select:none; user-select:none; cursor:grab; min-height:0; }
+.mis-wheel:active{ cursor:grabbing; }
+/* Capped at 5 slots against 8 missions — strictly fewer slots than items, or a wrapped ring
+   would show the same name twice at once and stop reading as a wheel. */
+.mis-wheel-win{ position:absolute; left:0; right:0; top:50%; transform:translateY(-50%);
+  height:calc(var(--rail-item) * 5); overflow:hidden;
+  -webkit-mask-image:linear-gradient(transparent 0%, #000 13%, #000 87%, transparent 100%);
+  mask-image:linear-gradient(transparent 0%, #000 13%, #000 87%, transparent 100%); }
+/* the fixed centre slot: it marks where selection happens, and it does not move */
+.mis-wheel-mid{ position:absolute; left:var(--sp-1); right:var(--sp-1); top:50%; height:var(--rail-item);
+  transform:translateY(-50%); border-top:1px solid var(--rc-line-hard);
+  border-bottom:1px solid var(--rc-line-hard); pointer-events:none; }
+.mis-wheel-list{ position:absolute; inset:0; }
+.mis-tab{ position:absolute; left:0; right:0; height:var(--rail-item);
+  background:none; border:none; color:var(--rc-label-dim);
+  font-family:'Rajdhani',sans-serif; font-weight:700; letter-spacing:.1em; font-size:var(--fs-sm);
+  padding:0 var(--sp-1); cursor:inherit; text-transform:uppercase; text-align:center;
+  display:flex; align-items:center; justify-content:center; will-change:transform; }
+/* .on is the name under the centre slot — a candidate, not the mission. .cur is the mission
+   the kart is actually in. Keeping them different colours is the whole point of the two-step:
+   at a glance you can see that the wheel is parked somewhere the kart is not. */
+.mis-tab.on{ color:var(--rc-white); }
+.mis-tab.cur{ color:var(--rc-red); text-shadow:0 0 8px rgba(226,0,26,.5); }
+.mis-set{ flex:none; margin-top:var(--sp-2); border:1px solid var(--rc-red); color:#fff;
+  background:linear-gradient(180deg,#8a0012,#5c000c); font-family:'Rajdhani',sans-serif;
+  font-weight:700; font-size:var(--fs-sm); letter-spacing:.1em; text-transform:uppercase;
+  padding:var(--sp-2) var(--sp-1); cursor:pointer;
   clip-path:polygon(0 0, calc(100% - var(--cut-sm)) 0, 100% var(--cut-sm), 100% 100%, var(--cut-sm) 100%, 0 calc(100% - var(--cut-sm))); }
-.mis-btn:hover{ filter:brightness(1.3); border-color:var(--rc-label); }
-.mis-btn:active{ transform:scale(0.97); }
-.mis-btn.sel{ background:linear-gradient(180deg,#8a0012,#5c000c); color:#fff; border-color:var(--rc-red); text-shadow:0 0 8px rgba(255,36,56,.6); }
+.mis-set:active{ filter:brightness(1.2); }
+.mis-set[hidden]{ display:none; }
 /* Read-only status readouts: rounded, flat, with a glowing LED dot — deliberately
    NOT button-shaped so they are never mistaken for the controls below. */
 .spill{ flex:1; display:flex; align-items:center; justify-content:center; gap:var(--sp-2); padding:var(--sp-2) var(--sp-2); cursor:default;
@@ -2323,9 +2470,20 @@ body{
       </div>
 
       <div class="race-page rc-mission">
-        <div class="rc-panel rc-mpanel">
+        <!-- Mission picker. A wheel rather than the 8-button grid it replaces: the grid took a
+             full column of this page for a control that is touched once per run, and the pad
+             next to it is the one that gets used while driving. Turning the wheel only moves
+             the highlight — the mission changes when the centred name is tapped a second time,
+             or via the SET button that appears while the two disagree. -->
+        <div class="rc-panel rc-mpanel rc-mispanel">
           <span class="rc-label">Mission</span>
-          <div class="mis-grid" id="misGrid"><button class="mis-btn sel" data-m="manual">Manual</button><button class="mis-btn" data-m="remote_control">Remote</button><button class="mis-btn" data-m="inspection">Inspect</button><button class="mis-btn" data-m="autonomous">Auto</button><button class="mis-btn" data-m="acceleration">Accel</button><button class="mis-btn" data-m="skidpad">Skidpad</button><button class="mis-btn" data-m="autocross">Autocross</button><button class="mis-btn" data-m="trackdrive">Trackdrive</button></div>
+          <div class="mis-wheel" id="misWheel">
+            <div class="mis-wheel-win" id="misWheelWin">
+              <div class="mis-wheel-mid"></div>
+              <div class="mis-wheel-list" id="misGrid"><button class="mis-tab" data-m="manual">Manual</button><button class="mis-tab" data-m="remote_control">Remote</button><button class="mis-tab" data-m="inspection">Inspect</button><button class="mis-tab" data-m="autonomous">Auto</button><button class="mis-tab" data-m="acceleration">Accel</button><button class="mis-tab" data-m="skidpad">Skidpad</button><button class="mis-tab" data-m="autocross">Autocross</button><button class="mis-tab" data-m="trackdrive">Trackdrive</button></div>
+            </div>
+          </div>
+          <button class="mis-set" id="misSet" type="button" hidden>Set</button>
         </div>
         <div class="rc-panel rc-mpanel" id="rcAlgoPane">
           <span class="rc-label">Algorithms</span>
@@ -2339,10 +2497,19 @@ body{
         </div>
         <div class="rc-panel rc-mpanel rc-joypane" id="rcJoyPane" style="display:none">
           <span class="rc-label">Remote control</span>
-          <div id="rcJoySlot"></div>
-          <!-- home of the relocated Angle/PWM steering-mode toggle (#manualWidget) -->
-          <div id="rcGpSlot"></div>
-          <button class="ctrl-btn pid-open" id="btnPidOpen">Steering PID</button>
+          <!-- Pad on the left, its controls beside it rather than under it. The pad is square
+               and sized by HEIGHT (.js-pad is aspect-ratio:1 / height:100%), so stacking the
+               gamepad readout and the PID button below it spent the pane's height — the one
+               axis the pad grows on — and the width freed up by the mission wheel bought it
+               nothing. Side by side, the pad takes the full height of the pane. -->
+          <div class="joy-row">
+            <div id="rcJoySlot"></div>
+            <div class="joy-side">
+              <!-- home of the relocated Angle/PWM steering-mode toggle (#manualWidget) -->
+              <div id="rcGpSlot"></div>
+              <button class="ctrl-btn pid-open" id="btnPidOpen">Steering PID</button>
+            </div>
+          </div>
           <!-- Live steering PID tuning, so a gain can be tried without reflashing the ESP32.
                A panel over the pad rather than a block under it: the pad wants the whole pane
                while driving, and these four numbers are touched once a session. Apply closes it
@@ -2615,7 +2782,48 @@ body{
       if (Math.abs(dy) > 45 && Math.abs(dy) > 1.5 * Math.abs(dx)) go(page + (dy < 0 ? 1 : -1));
     }, { passive: true });
     go(0, false);   // seat the ring without animating on first render
-    $('misGrid').addEventListener('click', missionClick);
+    // Mission wheel. Two-step on purpose: turning parks a candidate under the centre slot,
+    // and only a tap on the name already there — or the SET button that appears while the
+    // candidate and the kart disagree — sends set_mission. A single-step wheel would let a
+    // knocked elbow put the kart into autonomous, which is not a risk the page rail carries.
+    const misTabs = [...document.querySelectorAll('.mis-tab')];
+    const misNames = misTabs.map(t => t.dataset.m);
+    const misSetBtn = $('misSet');
+    let misCandidate = 0;      // index centred in the wheel
+    let misCurrent = null;     // mission the kart reports; null until the first frame
+    const misRefresh = (pos, sel) => {
+      if (sel != null) misCandidate = sel;
+      misTabs.forEach(t => t.classList.toggle('cur', t.dataset.m === misCurrent));
+      // The button is the discoverable half of the two-step: the second tap is not something
+      // anyone would guess, so while the wheel is parked off the current mission there is a
+      // labelled control saying what committing would do.
+      const differs = misCurrent != null && misNames[misCandidate] !== misCurrent;
+      misSetBtn.hidden = !differs;
+      if (differs) misSetBtn.textContent = 'Set ' + misTabs[misCandidate].textContent;
+    };
+    const misCommit = () => {
+      const m = misNames[misCandidate];
+      if (m === misCurrent) return;   // already there; nothing to send
+      wsSend({ action: 'set_mission', mission: m });
+      if (m === 'inspection') wsSend({ action: 'list_svo' });
+    };
+    const misWheel = rcMakeWheel({
+      rail: $('misWheel'), win: $('misWheelWin'), items: misTabs,
+      onPaint: misRefresh,
+      onTap: (idx, wasCentred) => { if (wasCentred) misCommit(); },
+    });
+    misSetBtn.addEventListener('click', misCommit);
+    // Called from updateMissions() on every frame. Parking the wheel on the kart's mission
+    // only happens the first time: after that the wheel is the operator's to leave wherever
+    // they like, and yanking it back under their finger would fight them.
+    window.rcSetCurrentMission = m => {
+      if (!m || m === misCurrent) return;
+      const first = misCurrent === null;
+      misCurrent = m;
+      const i = misNames.indexOf(m);
+      if (first && i >= 0) misWheel.go(i, false);
+      misRefresh(null, null);
+    };
     wirePidControls();
     // relocate the global HUD stream + remote-control joystick into this skin's
     // pages (keeps their listeners/stream alive); restored on skin switch
