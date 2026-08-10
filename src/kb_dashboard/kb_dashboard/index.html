@@ -38,15 +38,15 @@ body {
      deliberate: backgrounds paint across the padding box, so the skin's colour fills the
      status-bar band instead of leaving bare black. In landscape the notch is on a side,
      which is why left/right are included. Every skin inherits this — none override padding. */
-  /* Bottom inset deliberately NOT applied. In landscape it is the home-indicator strip, and
-     reserving it left a black band under the page on every screen — asked for twice, and the
-     one axis this layout is short of. The indicator now floats over the page instead, which
-     is what it is designed to do; nothing interactive is placed against that edge, and the
-     skin's background paints under it. Top/left/right stay: those are the notch, and content
-     behind a notch is unreadable rather than merely overlapped. */
-  padding:
-    env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
-    0px env(safe-area-inset-left, 0px);
+  /* No safe-area padding HERE. Insetting the whole page was the simple reading of
+     viewport-fit=cover, but it makes every panel stop short of the glass: the top bar and its
+     hazard stripe float in a black band, and the nav rail's background ends before the left
+     edge, which on a phone in fullscreen reads as a rendering fault rather than as a margin.
+     The insets are applied per element instead (see #topbar and .race-navrail): each one keeps
+     its background running to the physical edge and pads its CONTENT clear of the notch.
+     The bottom inset is not applied anywhere — in landscape that is the home indicator, which
+     is designed to float over content, and reserving it cost a band under every screen. */
+  padding:0;
 }
 .container { max-width: 480px; margin: 0 auto; padding: 12px; }
 
@@ -1752,13 +1752,23 @@ body{
 /* Fixed height, so the bar is NOT driven by its tallest child. Without this a 48px power
    button pushes the bar to 64px and every page loses 10px of dial height — and the dials
    here are height-limited, so that comes straight off them. */
-#topbar{ max-width:none; width:100%; margin:0; flex:none; height:46px; padding:0 0 0 var(--sp-5);
+/* The bar spans the full glass and pads its own content clear of the notch, so its background
+   and the hazard stripe under it reach both edges. Height grows by the top inset for the same
+   reason: the status bar sits over the bar's own colour instead of over a black strip. */
+#topbar{ max-width:none; width:100%; margin:0; flex:none;
+  height:calc(46px + env(safe-area-inset-top, 0px));
+  padding:env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) 0
+          calc(var(--sp-5) + env(safe-area-inset-left, 0px));
   background:var(--rc-panel); border-bottom:1px solid var(--rc-line); position:relative; z-index:10; }
 #topbar::after{ content:''; position:absolute; left:0; right:0; top:100%; height:5px;
   background:repeating-linear-gradient(-45deg, var(--rc-red) 0 8px, #0d0d0e 8px 16px); opacity:.9; }
 #topbarTitle{ font-family:'Orbitron',sans-serif; font-weight:700; font-size:var(--fs-lg); letter-spacing:.04em;
   color:var(--rc-red); text-shadow:0 0 12px rgba(226,0,26,.4); }
-#topbarTitle{ display:flex; align-items:center; gap:var(--sp-3); }
+/* flex:none + nowrap: the brand is the one thing in the bar with no reason to reflow. As a
+   flex item it was allowed to shrink, and once the safe-area inset ate into the bar's width
+   "Ü MOTORSPORT" broke onto a second line and pushed the bar's height out. */
+#topbarTitle{ display:flex; align-items:center; gap:var(--sp-3); flex:none; }
+.rc-bname{ white-space:nowrap; }
 
 /* Always-visible status group in the topbar. margin-right:auto parks it just after the
    logo instead of centring it, so its width changing (ESP32 SILENT 12.4s is far wider than
@@ -2444,9 +2454,16 @@ body{
    than aiming at one. Dragging needs no pointing accuracy, which is the point — picking a
    page on a vibrating kart with gloves should not require hitting a 34px target.
    touch-action:none so the drag never turns into a page scroll or an iOS system gesture. */
-.race-navrail{ order:-1; flex:none; width:88px; position:relative; overflow:hidden;
+/* Widened by the left inset and padded by the same amount: the rail's panel colour runs to the
+   physical left edge while the names stay where they were, clear of the notch. Without this the
+   rail's background stopped short and left a black strip down the side of the page. */
+.race-navrail{ order:-1; flex:none; width:calc(88px + env(safe-area-inset-left, 0px));
+  padding-left:env(safe-area-inset-left, 0px); position:relative; overflow:hidden;
   border-right:1px solid var(--rc-line); background:var(--rc-panel);
   touch-action:none; -webkit-user-select:none; user-select:none; cursor:grab; }
+/* The right-hand inset is the only one with nothing behind it to paint, so it is taken off the
+   page area itself and the body's background shows through. */
+.race-stage{ padding-right:env(safe-area-inset-right, 0px); }
 .race-navrail:active{ cursor:grabbing; }
 /* The wheel is endless: past the last name you come back to the first. That only reads as a
    wheel if you can never see one name twice at once, so the window is capped at 5 slots
@@ -2454,7 +2471,10 @@ body{
    taller than the 6x36=216px list, so without this cap a wrapped list would show TELEMETRY
    at the top and bottom simultaneously. The mask fades both ends so names appear to roll
    over the edge of a drum rather than being cut off. */
-.rail-window{ position:absolute; left:0; right:0; top:50%; transform:translateY(-50%);
+/* left, not 0: this is absolutely positioned, so it resolves against the rail's PADDING box and
+   the rail's padding-left does not move it — the names sat under the notch while the rail's
+   background correctly ran past it. Insetting the window is what keeps them clear. */
+.rail-window{ position:absolute; left:env(safe-area-inset-left, 0px); right:0; top:50%; transform:translateY(-50%);
   height:calc(var(--rail-item) * 5); overflow:hidden;
   -webkit-mask-image:linear-gradient(transparent 0%, #000 13%, #000 87%, transparent 100%);
   mask-image:linear-gradient(transparent 0%, #000 13%, #000 87%, transparent 100%); }
