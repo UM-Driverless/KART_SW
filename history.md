@@ -1707,3 +1707,12 @@ Two consequences visible in the same log, both expected but worth having written
 join `kart` in eleven seconds, so someone standing at the kart when it powers up loses the dashboard
 anyway. A boot grace period of 60-90 s before spending the attempt would close it, at the cost of a
 bench boot getting remote access a minute later. Not yet implemented.
+
+**Boot grace period: proposed and dropped, same day.** The observation above stands — the client
+attempt fires ~11 s after startup, so the "never drop the AP while a station is associated" guard
+cannot protect someone standing at the kart when it powers up. The proposed fix was to wait 60-90 s
+before spending the attempt. Rubén rejected it: if the phone is plugged and the hotspot on before
+power-up, `tether_present` is true from the first poll, no attempt ever fires and the AP simply
+stays, so the delay only buys something in a scenario he does not intend to be in. It also costs a
+minute of no remote access on every tetherless boot. Not implemented, and not on the board — enable
+the hotspot before booting instead.
