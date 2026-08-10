@@ -2174,7 +2174,10 @@ body{
     radial-gradient(circle at 50% 50%, #17171a 0%, #0c0c0e 78%);
   border:1px solid var(--rc-line-hard);
   box-shadow:inset 0 0 0 1px rgba(0,0,0,.5), inset 0 2px 14px rgba(0,0,0,.6);
-  clip-path:polygon(0 0, calc(100% - var(--cut-md)) 0, 100% var(--cut-md), 100% 100%, var(--cut-md) 100%, 0 calc(100% - var(--cut-md)));
+  /* Square corners, unlike the panels and buttons around it. The skin's cut corner is styling
+     on a container; this is a control surface whose corners are its extremes of travel, and
+     cutting two of them takes real area off full-left-brake and full-right-accelerator. It
+     was barely visible at 150px and is obvious at 274. */
   transition:border-color .15s ease, box-shadow .15s ease; }
 .js-pad.live{ border-color:var(--rc-red); box-shadow:inset 0 0 0 1px rgba(0,0,0,.5), 0 0 18px rgba(226,0,26,.28); }
 /* someone else holds the control token, so input here goes nowhere — say so rather than
