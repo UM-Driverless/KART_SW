@@ -2032,7 +2032,10 @@ body{
 .rc-joypane #rcJoySlot{ flex:1 1 0; min-height:0; min-width:0; display:flex; align-items:stretch; justify-content:center; }
 /* 430px = the 140px control column, its gap, and enough left for the pad to be at least as
    wide as the pane is tall — below that, seating them side by side would shrink the pad. */
-/* Pad left, everything else in ONE column on the right. Two things made that awkward. The pad
+/* Pad on the RIGHT, everything else in ONE column to its left. The pad is the only thing on
+   this page a hand is on while the kart moves, and on a tablet or phone held in two hands the
+   right edge is where the thumb already is — a centred pad meant reaching across the screen.
+   Two things made this layout awkward. The pad
    is square and sized by height, so anything stacked above or below it eats the only axis it
    grows on. And the controls come from two places in the markup — the readouts belong to the
    relocated joystick widget, the Angle/PWM toggle and the PID button to this pane — so they
@@ -2043,7 +2046,11 @@ body{
 @container (min-width:430px){
   .rc-joypane .js-widget.on{
     /* 172px, not 150: at 150 the readouts clipped their own words ("CENTRED" came out "CE…"). */
-    display:grid; grid-template-columns:1fr 172px; grid-template-rows:auto auto auto auto 1fr;
+    /* Three tracks: an empty flexible one, the controls, then the pad. The pad's track is
+       auto and its wrapper is a square sized by the row height, so the leftover width of the
+       pane collects in track 1 — on the far side from the hand — instead of opening a gap
+       between the controls and the pad. */
+    display:grid; grid-template-columns:1fr 172px auto; grid-template-rows:auto auto auto auto 1fr;
     column-gap:var(--sp-3); row-gap:var(--sp-2); }
   /* align-self:stretch is load-bearing against the row sizing above, which otherwise
      shrink-wraps this to its content — and its content is a pad sized as a percentage of it,
@@ -2054,9 +2061,11 @@ body{
      about 2px wide, a vertical line with the ACCEL/BRAKE/LEFT/RIGHT labels piled on top of
      each other. top/bottom give it a definite height with no percentage involved, and
      aspect-ratio then derives the width, which every engine agrees on. */
-  .rc-joypane .js-padwrap{ grid-column:1; grid-row:1 / -1; min-height:0; min-width:0;
-    align-self:stretch; position:relative; }
-  .rc-joypane .js-pad{ position:absolute; top:0; bottom:0; left:50%; transform:translateX(-50%);
+  .rc-joypane .js-padwrap{ grid-column:3; grid-row:1 / -1; min-height:0; min-width:0;
+    align-self:stretch; position:relative; aspect-ratio:1; }
+  /* Fills the wrapper, which is the square. Flush against the wrapper's right edge, which is
+     the pane's right edge — the whole point of moving it here is to put it under the thumb. */
+  .rc-joypane .js-pad{ position:absolute; inset:0;
     height:auto; width:auto; max-width:100%; margin:0; }
   .rc-joypane .js-hdr,
   .rc-joypane .js-take,
