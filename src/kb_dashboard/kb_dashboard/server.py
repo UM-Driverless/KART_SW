@@ -17,6 +17,9 @@ from http.cookies import SimpleCookie
 from kb_dashboard.protocol import DashboardState, MISSIONS
 
 HTML_PATH = Path(__file__).parent / "index.html"
+# Same directory as the page itself: both ship as package_data, so they land wherever the
+# installed package does and neither needs to know the workspace layout.
+ICON_DIR = Path(__file__).parent
 
 # Shell command that powers the Orin down. Named here rather than inlined so tests can
 # swap it for something harmless — the flow around it (acknowledge, then report a refusal)
@@ -208,6 +211,67 @@ async def run_websocket_server(
                     controller["id"] = None
                     node.get_logger().info(f"Controller released: {client_id} disconnected")
                 node.get_logger().info(f"WS disconnected: {client_id}")
+            return
+
+        # Home Screen icon and web-app manifest. Deliberately BEFORE the auth gate: iOS
+        # fetches apple-touch-icon while the user is adding the page to the Home Screen, and
+        # it does not always carry the session cookie when it does — behind the gate the
+        # request would be answered with the login page, and the icon would silently fall back
+        # to a screenshot of the login screen. Nothing here is telemetry; it is a logo and a
+        # few strings naming the app.
+        #
+        # The icons are real files rather than data: URIs because iOS ignores data: URIs for
+        # apple-touch-icon. They carry the UMotorsport logo composited onto the skin's
+        # background: the source PNG has an alpha channel, and iOS flattens transparency onto
+        # black rather than onto the theme colour.
+        if path in ("/icon-180.png", "/icon-512.png"):
+            icon = ICON_DIR / path.lstrip("/")
+            if icon.exists():
+                body = icon.read_bytes()
+                header = (
+                    f"HTTP/1.1 200 OK\r\n"
+                    f"Content-Type: image/png\r\n"
+                    f"Content-Length: {len(body)}\r\n"
+                    f"Connection: close\r\n"
+                    f"Cache-Control: max-age=86400\r\n\r\n"
+                ).encode()
+                writer.write(header + body)
+            else:
+                writer.write(
+                    b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                )
+            await writer.drain()
+            writer.close()
+            await writer.wait_closed()
+            return
+
+        if path == "/manifest.webmanifest":
+            # Android/Chrome read this to install the page as an app. iOS uses the apple-*
+            # meta tags in index.html instead and ignores most of what is here.
+            manifest = json.dumps({
+                "name": "Kart Dashboard",
+                "short_name": "Kart",
+                "start_url": "/",
+                "display": "standalone",
+                "orientation": "landscape",
+                "background_color": "#111113",
+                "theme_color": "#111113",
+                "icons": [
+                    {"src": "/icon-180.png", "sizes": "180x180", "type": "image/png"},
+                    {"src": "/icon-512.png", "sizes": "512x512", "type": "image/png"},
+                ],
+            }).encode()
+            header = (
+                f"HTTP/1.1 200 OK\r\n"
+                f"Content-Type: application/manifest+json\r\n"
+                f"Content-Length: {len(manifest)}\r\n"
+                f"Connection: close\r\n"
+                f"Cache-Control: max-age=3600\r\n\r\n"
+            ).encode()
+            writer.write(header + manifest)
+            await writer.drain()
+            writer.close()
+            await writer.wait_closed()
             return
 
         # Serve login page if not authenticated

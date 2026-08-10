@@ -11,7 +11,9 @@ setup(
         ("share/" + package_name, ["package.xml"]),
         ("share/" + package_name + "/launch", ["launch/dashboard.launch.py"]),
     ],
-    package_data={package_name: ["index.html"]},
+    # The icons ship beside index.html because the Home Screen icon cannot be a data: URI —
+    # iOS ignores those for apple-touch-icon, so it has to be a real URL the server answers.
+    package_data={package_name: ["index.html", "icon-180.png", "icon-512.png"]},
     install_requires=["setuptools"],
     zip_safe=True,
     entry_points={

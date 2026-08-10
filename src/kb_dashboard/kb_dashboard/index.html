@@ -12,6 +12,15 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#111113">
+<meta name="apple-mobile-web-app-title" content="Kart">
+<!-- Home Screen icon: the UMotorsport logo on the skin's background. These are URLs, not data:
+     URIs like the favicon below, because iOS ignores data: URIs for apple-touch-icon — with one
+     it falls back to a screenshot of whatever the page looked like, which here is the login box.
+     server.py answers both paths before its auth gate, since iOS may fetch the icon without the
+     session cookie. iOS caches the icon at add-to-Home-Screen time: re-add to see a change. -->
+<link rel="apple-touch-icon" href="/icon-180.png">
+<link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png">
+<link rel="manifest" href="/manifest.webmanifest">
 <title>Kart Dashboard</title>
 <!-- Inline data-URI favicon (steering wheel). Without any rel="icon" the browser falls back to
      requesting /favicon.ico, which the dashboard server does not serve — one 404 per page load in
@@ -59,8 +68,9 @@ body {
 .algo-dropdown:focus { outline:none; border-color:#4a9eff; box-shadow:0 0 0 3px rgba(74,158,255,0.12); }
 .algo-dropdown option { background:#14141f; color:#e0e0e8; padding:8px; }
 
-/* Power-off progress screen. Covers the whole viewport including fullscreen, since
-   fullscreen is entered on documentElement and a fixed overlay stays on top of it. */
+/* Power-off progress screen. position:fixed against the viewport, so it covers the page
+   whether it is running in a tab or standalone from the iOS Home Screen. (It used to say
+   "including fullscreen" — the in-page fullscreen button was removed on 2026-08-10.) */
 #powerOffOverlay {
   display:none; position:fixed; inset:0; z-index:100000;
   background:rgba(6,6,10,0.94); -webkit-backdrop-filter:blur(3px); backdrop-filter:blur(3px);
@@ -80,6 +90,35 @@ body {
   text-transform:uppercase; padding:9px 20px; cursor:pointer;
   font-family:'Inter',-apple-system,sans-serif; }
 #poDismiss:active { background:#1a1a2e; }
+
+/* Confirmation dialog. Replaces window.confirm(), which was wrong here for three reasons:
+   it renders in the browser's chrome rather than the skin, it names the page's host in the
+   title bar, and on the iOS Home Screen it can appear behind the standalone status bar. It
+   also blocks the event loop, so the telemetry socket stalls while it is open. This one is
+   just an overlay, and returns a Promise so callers read the same as before. */
+#confirmOverlay {
+  display:none; position:fixed; inset:0; z-index:100001;
+  background:rgba(6,6,10,0.94); -webkit-backdrop-filter:blur(3px); backdrop-filter:blur(3px);
+  align-items:center; justify-content:center; padding:24px;
+  font-family:'Inter',-apple-system,sans-serif; color:#e0e0e8;
+}
+#confirmOverlay.on { display:flex; }
+#confirmCard { max-width:460px; width:100%; text-align:center; }
+#confirmIcon { width:40px; height:40px; margin:0 auto 14px; color:#e2001a; }
+#confirmTitle { font-size:14px; font-weight:700; letter-spacing:3px; text-transform:uppercase; }
+#confirmMsg { margin-top:12px; font-size:13px; line-height:1.65; color:#a0a0b0; }
+#confirmMsg code { font-family:monospace; font-size:12px; color:#c8c8d4; background:#14141f;
+  border:1px solid #2a2a3a; border-radius:4px; padding:1px 5px; }
+/* Row, and the cancel is first: the destructive option should not be the one under the thumb
+   that is already moving toward the dialog. */
+#confirmBtns { display:flex; gap:10px; justify-content:center; margin-top:24px; flex-wrap:wrap; }
+#confirmBtns button { border-radius:100px; font-size:10px; font-weight:600; letter-spacing:2px;
+  text-transform:uppercase; padding:11px 22px; cursor:pointer; min-width:120px;
+  font-family:'Inter',-apple-system,sans-serif; }
+#confirmNo { background:transparent; border:1px solid #3a3a4a; color:#a0a0b0; }
+#confirmNo:active { background:#1a1a2e; }
+#confirmYes { background:#e2001a; border:1px solid #e2001a; color:#fff; }
+#confirmYes:active { background:#a30013; }
 </style>
 <style id="skinCss"></style>
 </head>
@@ -234,6 +273,23 @@ body {
     <div id="poTitle">Powering off</div>
     <div id="poMsg"></div>
     <button id="poDismiss" onclick="dismissPowerOff()">Dismiss</button>
+  </div>
+</div>
+
+<!-- In-skin confirmation dialog, used instead of window.confirm(). See #confirmOverlay in the
+     stylesheet for why. Driven by rcConfirm(), which returns a Promise<boolean>. -->
+<div id="confirmOverlay">
+  <div id="confirmCard">
+    <svg id="confirmIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 9v4"/><path d="M12 17h.01"/>
+      <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+    </svg>
+    <div id="confirmTitle">Are you sure?</div>
+    <div id="confirmMsg"></div>
+    <div id="confirmBtns">
+      <button id="confirmNo" type="button">Cancel</button>
+      <button id="confirmYes" type="button">Confirm</button>
+    </div>
   </div>
 </div>
 
@@ -591,8 +647,55 @@ function paintPowerOff(title, msg, { color = '#ff6b6b', busy = true, dismiss = f
   $('poDismiss').style.display = dismiss ? 'inline-block' : 'none';
 }
 
-function requestPowerOff() {
-  if (!confirm('POWER OFF the Orin computer? SSH + dashboard will be unreachable until someone physically powers it back on. This does NOT trigger the kart safety shutdown loop.')) return;
+/**
+ * @brief In-skin stand-in for window.confirm(), styled like the rest of the dashboard.
+ * @param title Short heading, rendered uppercase.
+ * @param msg   Body text. HTML is allowed so callers can mark up a command with <code>.
+ * @param opts  { okText, cancelText } to label the buttons for the specific action.
+ * @return Promise resolving true if the user confirmed.
+ *
+ * Escape and a tap outside the card both cancel, Enter confirms. Every listener is removed on
+ * close: the dialog is a single shared element, so leaving them attached would stack one extra
+ * handler per invocation and eventually resolve a later call several times.
+ */
+function rcConfirm(title, msg, opts = {}) {
+  return new Promise(resolve => {
+    const ov = $('confirmOverlay'), yes = $('confirmYes'), no = $('confirmNo');
+    $('confirmTitle').textContent = title;
+    $('confirmMsg').innerHTML = msg;
+    yes.textContent = opts.okText || 'Confirm';
+    no.textContent = opts.cancelText || 'Cancel';
+    const close = v => {
+      ov.classList.remove('on');
+      yes.removeEventListener('click', onYes);
+      no.removeEventListener('click', onNo);
+      ov.removeEventListener('click', onBackdrop);
+      document.removeEventListener('keydown', onKey);
+      resolve(v);
+    };
+    const onYes = () => close(true);
+    const onNo = () => close(false);
+    const onBackdrop = e => { if (e.target === ov) close(false); };
+    const onKey = e => {
+      if (e.key === 'Escape') close(false);
+      else if (e.key === 'Enter') close(true);
+    };
+    yes.addEventListener('click', onYes);
+    no.addEventListener('click', onNo);
+    ov.addEventListener('click', onBackdrop);
+    document.addEventListener('keydown', onKey);
+    ov.classList.add('on');
+    // Cancel takes focus, not confirm: a stray Enter should not power off the kart's computer.
+    no.focus();
+  });
+}
+
+async function requestPowerOff() {
+  const ok = await rcConfirm('Power off the Orin',
+    'SSH and the dashboard will be unreachable until someone physically powers it back on. ' +
+    'This does <b>not</b> trigger the kart safety shutdown loop.',
+    { okText: 'Power off' });
+  if (!ok) return;
   if (DEMO) {
     paintPowerOff('Demo mode', 'This page is running without a backend (<code>?demo</code>), so nothing was sent and no computer was powered off.',
                   { color: '#e6a23c', busy: false, dismiss: true });
@@ -809,7 +912,16 @@ function updatePills(d) {
   const ph = $('pillHb');
   // "HB" meant nothing to anyone at the kart. The chip now names the box that went quiet.
   if (d.esp32_heartbeat_age < 0) { ph.textContent='ESP32 --'; ph.className='spill'; }
-  else { ph.textContent = d.esp32_heartbeat?`ESP32 ${d.esp32_heartbeat_age}s`:`ESP32 SILENT ${d.esp32_heartbeat_age}s`; ph.className='spill '+(d.esp32_heartbeat?'hb-ok':'hb-bad'); }
+  else {
+    // Always one decimal. The raw age arrives as 1, then 0.2, then 0 — three different string
+    // lengths for the same reading, so the chip resized several times a second and shoved the
+    // chips beside it. Padding the digits is half the fix; tabular figures on #pillHb are the
+    // other half, since proportional digits vary in width even at a constant length.
+    const age = Number(d.esp32_heartbeat_age);
+    const shown = Number.isFinite(age) ? age.toFixed(1) : d.esp32_heartbeat_age;
+    ph.textContent = (d.esp32_heartbeat ? 'ESP32 ' : 'ESP32 SILENT ') + shown + 's';
+    ph.className = 'spill ' + (d.esp32_heartbeat ? 'hb-ok' : 'hb-bad');
+  }
 }
 
 function updateMissions(d) {
@@ -1538,6 +1650,18 @@ body{
   padding:var(--sp-2) var(--sp-3); border-radius:var(--r-pill); border:1px solid var(--rc-line);
   background:#00000040; color:var(--rc-label); white-space:nowrap; }
 #topbarStatus .spill.act{ color:#e8e8ea; border-color:#ffffff2e; }
+/* Fixed slot for the heartbeat age. Two rules do the work and neither is optional: toFixed(1)
+   in the caller keeps the string at three characters, and tabular figures make a 1 as wide as
+   a 0 — proportional digits still breathe at a constant length. No min-width on purpose: with
+   both of those, the content is already a constant width, and padding it out would only open a
+   gap before the "s". A silent ESP32 past 9.9s does widen the chip, which is the one case
+   where a moving chip is the least of the problems. */
+/* Fixed-width heartbeat age, done with two rules and no extra element. The caller pads the
+   value to one decimal so the string is always the same length, and tabular figures make a 1
+   as wide as a 0 — proportional digits still breathe at a constant length. An earlier version
+   wrapped the number in an inline-block instead, which worked but trapped the chip's
+   letter-spacing inside the box and opened a visible gap in "0.2 s". */
+#pillHb{ font-variant-numeric:tabular-nums; }
 #topbarStatus .spill.hb-ok{ color:#33d17a; border-color:#33d17a4d; }
 #topbarStatus .spill.hb-bad{ color:var(--rc-red); border-color:var(--rc-red); }
 .sys-chip{ cursor:pointer; font-family:'Titillium Web',sans-serif; }
@@ -2101,12 +2225,10 @@ body{
   transition:color .18s, opacity .18s; }
 .race-tab.on{ color:var(--rc-red); text-shadow:0 0 8px rgba(226,0,26,.5); }
 .race-tab.bad{ color:var(--rc-red); text-shadow:0 0 10px rgba(255,36,56,.8); animation:rcPulse 1.2s ease-in-out infinite; }
-.rc-fs{ background:var(--rc-raised); border:1px solid var(--rc-line-hard); width:28px; height:28px;
-  display:flex; align-items:center; justify-content:center; color:var(--rc-label); cursor:pointer; flex:none;
-  clip-path:polygon(0 0, calc(100% - var(--cut-sm)) 0, 100% var(--cut-sm), 100% 100%, var(--cut-sm) 100%, 0 calc(100% - var(--cut-sm))); }
-.rc-fs:active{ background:var(--rc-red-dark); color:var(--rc-white); }
-.rc-fs.rc-fs-top{ width:38px; height:38px; margin-right:4px; }
-.rc-fs.rc-fs-top svg{ width:19px; height:19px; }
+/* The fullscreen button was removed on 2026-08-10. Nothing else used .rc-fs, so the rules went
+   with it. Note the page still declares apple-mobile-web-app-capable, so adding it to the iOS
+   Home Screen launches it without browser chrome — which is the way it is actually read at the
+   kart, and what made an in-page button redundant. */
 /* A CORNER target: flush to the top and right edges of the bar, so it can be hit by
    overshooting into the corner instead of aiming. Under Fitts's law a screen corner is
    effectively an infinite target — that beats any amount of extra pixels in open space,
@@ -2203,7 +2325,7 @@ body{
         </div>
         <div class="rc-panel rc-mpanel" id="rcCtrlPane">
           <span class="rc-label">Controls</span>
-          <div class="ctrl-row"><button class="ctrl-btn go" data-st="running" onclick="wsSend({action:'set_state',state:'running'})">Start</button><button class="ctrl-btn stop" data-st="idle" onclick="wsSend({action:'set_state',state:'idle'})">Stop</button><button class="ctrl-btn ebs" data-st="ebs" onclick="wsSend({action:'set_state',state:'ebs'})">EBS</button><button class="ctrl-btn restart" onclick="if(confirm('Restart kart-brain service?'))wsSend({action:'restart'})">Restart</button></div>
+          <div class="ctrl-row"><button class="ctrl-btn go" data-st="running" onclick="wsSend({action:'set_state',state:'running'})">Start</button><button class="ctrl-btn stop" data-st="idle" onclick="wsSend({action:'set_state',state:'idle'})">Stop</button><button class="ctrl-btn ebs" data-st="ebs" onclick="wsSend({action:'set_state',state:'ebs'})">EBS</button><button class="ctrl-btn restart" onclick="rcConfirm('Restart kart-brain', 'The ROS stack restarts and telemetry stops for a few seconds. The Orin itself stays up.', { okText: 'Restart' }).then(ok =&gt; { if (ok) wsSend({ action: 'restart' }); })">Restart</button></div>
         </div>
         <div class="rc-panel rc-mpanel rc-joypane" id="rcJoyPane" style="display:none">
           <span class="rc-label">Remote control</span>
@@ -2347,8 +2469,6 @@ body{
     rcPwr.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="11"/></svg>';
     // brand block in the global topbar: logo + name + sub-line (from the mockup)
     $('topbarTitle').innerHTML =
-      `<button class="rc-fs rc-fs-top" id="rcFsBtnTop" title="Fullscreen">` +
-      `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg></button>` +
       `<img class="rc-blogo" src="${RC_LOGO}" alt="">` +
       `<span class="rc-bname">Ü MOTORSPORT<span class="rc-bsub">Formula Student · DV</span></span>`;
     // gauge ticks + redlines (geometry from the mockup)
@@ -2485,17 +2605,6 @@ body{
       if (Math.abs(dy) > 45 && Math.abs(dy) > 1.5 * Math.abs(dx)) go(page + (dy < 0 ? 1 : -1));
     }, { passive: true });
     go(0, false);   // seat the ring without animating on first render
-    // fullscreen + landscape lock
-    const rcToggleFs = () => {
-      const el = document.documentElement;
-      if (!document.fullscreenElement) {
-        (el.requestFullscreen && el.requestFullscreen()) || (el.webkitRequestFullscreen && el.webkitRequestFullscreen());
-        if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(() => {});
-      } else {
-        document.exitFullscreen && document.exitFullscreen();
-      }
-    };
-    $('rcFsBtnTop').addEventListener('click', rcToggleFs);
     $('misGrid').addEventListener('click', missionClick);
     wirePidControls();
     // relocate the global HUD stream + remote-control joystick into this skin's
