@@ -684,3 +684,40 @@ of that setting and say in the change what happens when each of them writes it. 
 may overwrite is not a guarantee — either take ownership of it or re-assert it continuously. And when
 a change moves an actuator a person may be touching, the verification is on the kart, not a build and
 a restart.
+
+## 2026-08-10 — The steering motor drives whenever a mission is selected, with no Start pressed (Claude Opus 5)
+
+**What happened.** On the kart: selecting mission AUTO moved the steering column immediately, without
+Start. Switching the steering algorithm between Geometric and None made the column move and stop
+again, also without touching Start or Stop. Reported by Rubén as dangerous, and it is: a person can
+have their hands on the wheel while configuring the dashboard, and nothing they touched said "drive".
+
+**Root cause.** Two separate defects that both come from the same confusion — *zero* is being used to
+mean *nothing*.
+
+1. `state_machine_node.py:_mux_tick` publishes a **zero Twist** whenever an autonomous mission is
+   selected and the state is not `AS_DRIVING` ("else: zero Twist (default)"). `cmd_vel_bridge`
+   converts that into a steering frame of 0 rad and publishes it at 100 Hz. In PID angle mode — which
+   is the default and which `state_machine` explicitly forces on entering `AS_READY`
+   (`state_machine_node.py:94`) — 0 rad is a real target, so the ESP32 powers the motor and drives
+   the wheels to centre and holds them there. There is no "no command" value in this path: the
+   actuator is commanded continuously from the moment a mission is picked.
+2. Switching the steering algorithm changes the steering *mode* as a side effect (added earlier the
+   same day: "None" switches the ESP32 to direct PWM so the motor is unpowered). Direct-PWM 0 means
+   no drive; PID 0 rad means drive to centre. So toggling Geometric ↔ None toggles the motor between
+   powered-to-centre and unpowered, which is exactly the "starts moving and stops" that was seen.
+
+**Why I did not catch it.** The "None" steering feature was added and tested by checking that the
+mode frame reached the ESP32 — never by asking what commands the actuator receives in each AS state.
+The mux was read earlier in the session and its gate (`if self._state == AS_DRIVING`) was taken as
+proof the actuators were idle outside driving. It is not: the gate chooses *which* Twist is
+published, and the fallback is a zero Twist that is still a command. A gate that always publishes
+something cannot disarm anything, and I did not check what zero meant downstream.
+
+**Prevention.** For any actuator path, establish what the *idle* command is and prove it is distinct
+from a legitimate setpoint. "Publishes zeros" is not "publishes nothing", and for a position loop the
+two are opposites: zero is the strongest possible command to move. Whenever a state machine has an
+"else" branch that emits a default message, name what that message does at the hardware, in a
+comment, at the point it is written.
+
+**Fix.** Not applied here — written up in `tasks.md` for Fable to implement, at Rubén's request.
