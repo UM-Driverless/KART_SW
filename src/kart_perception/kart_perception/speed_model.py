@@ -146,6 +146,21 @@ MAX_PLAUSIBLE_SPEED = 20.0
 # talked into near-zero uncertainty by a lucky frame.
 MIN_MEASUREMENT_STDDEV = 0.15  # m/s
 
+# Fewer than three estimates cannot be cross-checked: a median needs a majority to
+# reject an outlier, and the spread of a pair is just half their difference. Such a
+# frame used to be discarded, which stopped the closed-loop speed controller dead in
+# every corner — cones swing past the bearing limit as the kart yaws, the count drops
+# below three, and with no measurement the throttle goes to zero and stays there
+# because a stopped kart pointed away from the cones never recovers one.
+#
+# So a thin frame is now reported with a deliberately terrible noise figure instead of
+# being thrown away. The Kalman gain it earns is a few percent, so it can nudge the
+# estimate and keep it alive but cannot swing it — one bad match moves the output by
+# centimetres per second, where at three-plus cones it would be outvoted outright.
+# These are not measured figures; they are chosen to be clearly worse than any real
+# multi-cone frame while staying under max_valid_stddev so the estimate stays valid.
+LOW_CONFIDENCE_STDDEV = {1: 1.5, 2: 0.8}  # m/s, by number of surviving estimates
+
 
 def bearing_cosine(forward: float, left: float) -> float:
     """Return x/r for a cone, the cosine of its bearing off the kart's nose.
@@ -283,15 +298,17 @@ class ConeTracker:
                 continue
             estimates.append(speed)
 
-        # Two cones cannot show disagreement in a meaningful way — the spread of a
-        # pair is just half their difference — and a median needs a majority to be
-        # robust. Three is the smallest count where a single bad match is outvoted.
-        if len(estimates) < 3:
+        if not estimates:
             return None
 
         centre = median(estimates)
-        spread = median_absolute_deviation(estimates, centre)
-        stddev = max(MIN_MEASUREMENT_STDDEV, spread / math.sqrt(len(estimates)))
+        if len(estimates) < 3:
+            # No majority to reject an outlier with, so the spread of what is here
+            # says nothing. Use the fixed pessimistic figure instead of measuring it.
+            stddev = LOW_CONFIDENCE_STDDEV[len(estimates)]
+        else:
+            spread = median_absolute_deviation(estimates, centre)
+            stddev = max(MIN_MEASUREMENT_STDDEV, spread / math.sqrt(len(estimates)))
         return ConeSpeedMeasurement(centre, stddev, len(estimates), rejected)
 
     @staticmethod

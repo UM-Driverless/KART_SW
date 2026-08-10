@@ -15,7 +15,9 @@ import math
 import pytest
 
 from kart_perception.speed_model import (
+    LOW_CONFIDENCE_STDDEV,
     MIN_BEARING_COS,
+    MIN_MEASUREMENT_STDDEV,
     ConeTracker,
     SpeedFilter,
     bearing_cosine,
@@ -158,11 +160,27 @@ def test_no_measurement_from_the_first_frame():
     assert tracker.update(kart.visible_cones(), 0.0) is None
 
 
-def test_no_measurement_from_too_few_cones():
+def test_few_cones_measure_with_a_terrible_noise_figure():
+    """Under three cones there is no majority to reject an outlier with, so the
+    measurement is still made — a corner must not stop the closed-loop controller —
+    but reported badly enough that the filter barely moves on it."""
     tracker = ConeTracker()
     tracker.update([("blue_cone", 5.0, 0.0), ("blue_cone", 9.0, 1.0)], 0.0)
     m = tracker.update([("blue_cone", 4.6, 0.0), ("blue_cone", 8.6, 1.0)], 0.05)
-    assert m is None
+    assert m is not None
+    assert m.n_cones == 2
+    assert m.speed == pytest.approx(8.0, abs=0.2)
+    assert m.stddev == LOW_CONFIDENCE_STDDEV[2]
+
+
+def test_a_thin_frame_barely_moves_the_filter():
+    """The point of the bad noise figure: one weak frame cannot swing the estimate."""
+    filt = SpeedFilter()
+    filt.speed = 5.0
+    filt.variance = MIN_MEASUREMENT_STDDEV**2
+    filt.update(0.0, LOW_CONFIDENCE_STDDEV[1])
+    assert filt.speed > 4.9
+    assert filt.is_valid
 
 
 def test_no_measurement_across_a_long_gap():
@@ -232,8 +250,11 @@ def test_one_previous_cone_cannot_be_matched_twice():
         [("blue_cone", 5.6, 0.0), ("blue_cone", 5.7, 0.1), ("blue_cone", 5.8, 0.2)],
         0.05,
     )
-    # Only one of the three can match, which is below the three-cone minimum.
-    assert m is None
+    # Only one of the three can match, so the frame is reported at the
+    # single-cone noise figure rather than as three agreeing cones.
+    assert m is not None
+    assert m.n_cones == 1
+    assert m.stddev == LOW_CONFIDENCE_STDDEV[1]
 
 
 def test_cone_leaving_the_range_band_does_not_break_the_frame():
