@@ -57,21 +57,28 @@
 # assigns 100 to the first ethernet and 101 to the second, so the winner would be
 # whichever phone was plugged in first -- an accident, not a decision.
 #
-# Metrics alone cannot see a dead uplink, and that is the failure this is really
-# for: a phone plugged in with Personal Hotspot switched OFF still gives carrier,
-# still completes DHCP and still wins on metric, so traffic goes into a black hole
-# while a working phone sits unused at a higher metric. Only an end-to-end probe
-# through that specific interface distinguishes "cable connected" from "internet
-# works". A tether that fails FAIL_THRESHOLD probes in a row is demoted to
-# DEMOTED_METRIC, which leaves the route in place but ranked below everything, so
-# the next-best uplink takes over; it is promoted back the moment it answers again.
+# Losing a phone's internet is NOT handled here, and does not need to be. Measured
+# on the kart 2026-08-10: switching Personal Hotspot off makes iOS drop the USB
+# ethernet carrier, NetworkManager logs `state change: activated -> unavailable
+# (reason 'carrier-changed')` about a second later and withdraws the route, and the
+# kernel falls through to the next-ranked tether on its own. A real failover took
+# ~20 s end to end, most of it the Cloudflare tunnel reconnecting. Switching the
+# hotspot back on preempted the route back to the higher-ranked phone unaided.
 #
-# Demotion is `nmcli connection modify ipv4.route-metric` plus `nmcli device
-# reapply`, never `nmcli connection down`. `reapply` changes a live connection
-# without deactivating it, so NetworkManager's autoconnect state is untouched. A
-# `down` would mark the connection manually deactivated and nothing on the Orin
-# would ever bring it back -- the same trap the last-resort block at the bottom of
-# this file exists to undo.
+# What carrier detection cannot see is a tether that keeps its link and its DHCP
+# lease while carrying no traffic: phone out of coverage, data allowance spent,
+# operator blocking tethering. Only an end-to-end probe bound to that interface can
+# tell those apart. This script probes for exactly that case and **only logs it** --
+# it never moves a route in response.
+#
+# That restraint is deliberate, and it follows the pump-stall detector in
+# kart-medulla, which is report-only for the same reason. The first version of that
+# detector acted on its threshold, and analysis afterwards showed the threshold was
+# guessed from the wrong part of the curve and would have false-tripped on healthy
+# hardware. A guessed threshold whose action is to tear down the kart's only working
+# route deserves the same caution. If `no internet through <dev>` ever appears in
+# the journal, that is a real measurement to set a threshold from, and acting on it
+# is a small change away. Until it appears, there is nothing to act on.
 #
 # Handing the radio over is done with `nmcli connection down kart-ap` rather than
 # by naming a network to join. NetworkManager treats a manually deactivated
@@ -107,18 +114,9 @@ declare -A TETHER_METRICS=(
 )
 TETHER_METRIC_UNKNOWN=150
 
-# Where a tether goes when its probes fail. Far above the Wi-Fi profiles (600-700)
-# so a demoted tether loses to absolutely everything, while its route stays in the
-# table ready to be promoted back.
-DEMOTED_METRIC=900
-
-# Consecutive failed probes before demoting. One missed probe on a cellular link is
-# ordinary; demoting on a single failure would flap the default route.
-FAIL_THRESHOLD=3
-
-# A working uplink is re-probed every poll. A demoted one is probed less often --
-# it is not carrying traffic, and each probe costs PROBE_TIMEOUT of waiting.
-DEMOTED_PROBE_EVERY=6
+# The reachability probe is observational only, so it runs on a slow cadence: it
+# drives no decision, and every probe spends real cellular data on somebody's phone.
+PROBE_EVERY_SECONDS=60
 PROBE_TIMEOUT=5
 PROBE_URL=http://connectivitycheck.gstatic.com/generate_204
 
@@ -254,51 +252,39 @@ try_client() {
     return 1
 }
 
-# Consecutive probe failures per tether, and which tethers are currently demoted.
-declare -A fail_count=()
-declare -A demoted=()
-poll_n=0
+# Whether each tether was reachable on its last probe, so the journal gets one line
+# per transition instead of one per poll.
+declare -A probe_ok=()
+last_probe=0
 
-# Number of tethers that answered their probe on the last pass. Set by rank_tethers.
-WORKING_TETHERS=0
-
-# Probe every connected tether, demote the dead ones, promote the recovered ones,
-# and keep the healthy ones pinned at their configured metric.
-rank_tethers() {
-    local dev base n_ok=0
+# Pin every connected tether at its configured metric, so the ranking survives a
+# replug, a DHCP renew or anything else that reinstalls the route.
+pin_tether_metrics() {
+    local dev
     for dev in $(tether_devices); do
-        base=$(base_metric_for "$dev")
+        set_metric "$dev" "$(base_metric_for "$dev")"
+    done
+}
 
-        if [ "${demoted[$dev]:-0}" -eq 1 ]; then
-            # A demoted tether carries no traffic, so probing it every poll only
-            # spends PROBE_TIMEOUT waiting. Check it occasionally instead -- but do
-            # check it, or the first demotion would be permanent in practice and
-            # switching the hotspot back on would never be noticed.
-            [ $((poll_n % DEMOTED_PROBE_EVERY)) -ne 0 ] && continue
-            if uplink_ok "$dev"; then
-                demoted[$dev]=0
-                fail_count[$dev]=0
-                set_metric "$dev" "$base"
-                log "$dev answers again -- promoted back to metric $base"
-                n_ok=$((n_ok + 1))
-            fi
-            continue
-        fi
+# Report-only. Says whether each tether actually reaches the internet, which
+# carrier detection cannot tell you, and takes no action either way -- see the
+# header for why this does not demote anything.
+probe_tethers() {
+    local dev ok
+    [ $((SECONDS - last_probe)) -lt "$PROBE_EVERY_SECONDS" ] && return
+    last_probe=$SECONDS
 
-        if uplink_ok "$dev"; then
-            fail_count[$dev]=0
-            set_metric "$dev" "$base"
-            n_ok=$((n_ok + 1))
-        else
-            fail_count[$dev]=$(( ${fail_count[$dev]:-0} + 1 ))
-            if [ "${fail_count[$dev]}" -ge "$FAIL_THRESHOLD" ]; then
-                demoted[$dev]=1
-                set_metric "$dev" "$DEMOTED_METRIC"
-                log "$dev failed $FAIL_THRESHOLD probes -- demoted to metric $DEMOTED_METRIC (plugged in, but no internet through it)"
+    for dev in $(tether_devices); do
+        if uplink_ok "$dev"; then ok=1; else ok=0; fi
+        if [ "$ok" != "${probe_ok[$dev]:-}" ]; then
+            if [ "$ok" -eq 1 ]; then
+                log "$dev reaches the internet"
+            else
+                log "no internet through $dev, though its link and DHCP lease are up -- route left alone"
             fi
+            probe_ok[$dev]=$ok
         fi
     done
-    WORKING_TETHERS=$n_ok
 }
 
 log "started (radio=$WIFI_DEV, ap=$AP_CON)"
@@ -312,8 +298,8 @@ client_attempt_spent=0
 no_internet_since=0
 
 while true; do
-    poll_n=$((poll_n + 1))
-    rank_tethers
+    pin_tether_metrics
+    probe_tethers
 
     if [ -e "$FORCE_FILE" ]; then
         rm -f "$FORCE_FILE"
@@ -326,20 +312,22 @@ while true; do
     con=$(wifi_connection)
     state=$(wifi_state)
 
-    # A tether that is plugged in but carrying nothing does not count here. The old
-    # test was tether_present, i.e. "is a cable connected", which kept the radio on
-    # the AP while a phone with its hotspot switched off provided no internet at all.
-    if [ "$WORKING_TETHERS" -gt 0 ]; then
-        # Internet is arriving over USB, so the next loss gets a fresh attempt.
+    # Carrier, not the probe, decides this. A phone whose hotspot goes off drops the
+    # USB carrier within about a second, so tether_present already goes false on its
+    # own -- measured on the kart 2026-08-10. Driving the AP decision off the probe
+    # instead would hand a guessed threshold the power to give away the trackside
+    # dashboard, which is the one thing this watchdog exists to protect.
+    if tether_present; then
+        # Tether is back, so the next unplug gets a fresh attempt.
         client_attempt_spent=0
         if [ "$con" != "$AP_CON" ]; then
-            log "working tether present but radio is on '${con:-nothing}' -- returning to the $AP_CON AP"
+            log "tether present but radio is on '${con:-nothing}' -- returning to the $AP_CON AP"
             start_ap
         fi
     elif [ "$con" = "$AP_CON" ]; then
         if [ "$client_attempt_spent" -eq 0 ] && [ "$(ap_client_count)" -eq 0 ]; then
             client_attempt_spent=1
-            log "no tether is providing internet and nobody is associated to the $AP_CON AP"
+            log "USB tether is gone and nobody is associated to the $AP_CON AP"
             try_client
         fi
     elif [ "$state" != connected ]; then

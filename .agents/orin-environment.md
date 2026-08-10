@@ -58,8 +58,29 @@ How the handover works, and why it is written this way:
 - **Releasing the radio is `nmcli connection down kart-ap`, never "join network X".** NetworkManager treats a manually deactivated connection as ineligible for autoconnect, so once the AP is down it picks the highest-priority known network that is actually in range by itself. `nmcli connection up kart-ap` clears that state and takes the radio back.
 - **The AP is never dropped while a station is associated to it** (`iw dev wlP1p1s0 station dump`). Anyone on the `kart` network is presumably watching the dashboard.
 - **One client attempt per tether-unplug event, never a repeating timer.** Because the radio cannot scan in AP mode, every attempt costs a blind window of up to 30 s with no `kart` network. If nothing joins, the AP is restored.
-- **No client attempt at boot.** An Orin powered up without a tether keeps the AP, because in the paddock a dashboard at a fixed `10.42.0.1` matters more than remote access.
+- **A boot with no tether spends one client attempt** (changed 2026-08-10). It used to keep the AP unconditionally, on the argument that a fixed `10.42.0.1` in the paddock beats remote access. That cost a real outage: after a battery power cycle on 2026-08-08 the Orin came up with no tether, never went looking, and stayed unreachable until someone plugged a phone in by hand. The unplug path had been working the whole time — a cold boot simply produces no unplug event to trigger it. The accepted trade is that an Orin booted in the lab with `Robots_urjc` in range and no phone attached joins it, and the dashboard leaves `10.42.0.1` for a DHCP address.
 - Force one attempt without unplugging anything: `sudo touch /run/kart-wifi-try-client`.
+
+## Two tethered iPhones share one address — rank them by route metric
+Every iOS Personal Hotspot serves the **same** network: `172.20.10.0/28`, phone at `172.20.10.1`, Orin at `172.20.10.2`. So with both phones plugged in the Orin holds two interfaces with an identical source address and two default routes via an identical gateway. **Nothing about an address distinguishes the phones** — only the kernel's `enx<mac>` interface name does, which is why every probe here is bound with `curl --interface` and never to an address.
+
+Which phone carries traffic is decided by route metric, lowest first. Left alone, NetworkManager gives 100 to the first ethernet and 101 to the second, so the winner is whichever phone was plugged in first. The order is now set explicitly (`ipv4.route-metric` on each profile, and re-pinned every poll by `wifi-watchdog.sh` so a replug or DHCP renew cannot lose it):
+
+| Uplink | Interface / SSID | Metric |
+|---|---|---|
+| Ruben's iPhone, USB | `enxfe9ca7a9ecdb` | 100 |
+| Jorge's iPhone, USB | `enx7e4b26d3e33f` | 110 |
+| An unlisted phone, USB | any other `enx*` | 150 |
+| Ruben's iPhone, Wi-Fi | Ruben’s iPhone | 600 |
+| Jorge's iPhone, Wi-Fi | iPhone de JBA | 610 |
+| — | 8=======D | 620 |
+| Lab Wi-Fi | Robots_urjc | 700 |
+
+**Losing a phone's internet needs no code, and none was written.** Measured on the kart 2026-08-10: switching Personal Hotspot off makes iOS drop the USB ethernet carrier, NetworkManager logs `state change: activated -> unavailable (reason 'carrier-changed')` about a second later and withdraws the route, and the kernel falls through to the next-ranked tether by itself. A real failover took ~20 s end to end, most of it the Cloudflare tunnel reconnecting; `kart` stayed up on `10.42.0.1` throughout. Switching the hotspot back on preempted the route back to metric 100 unaided.
+
+**What carrier detection cannot see** is a tether that keeps its link and DHCP lease while carrying no traffic — out of coverage, data allowance spent, operator blocking tethering. `wifi-watchdog.sh` probes for exactly that once a minute per tether and **only logs it** (`no internet through <dev>, though its link and DHCP lease are up`). It deliberately does not demote or reroute: the threshold would be guessed, and its action would be to tear down the kart's only working route. Same reasoning as the report-only pump-stall detector in kart-medulla, whose first version acted on a guessed threshold that analysis later showed would have false-tripped. If that log line ever appears, it is a real measurement to set a threshold from.
+
+**Changing a metric on a live connection:** `nmcli connection modify <con> ipv4.route-metric <n>` then `nmcli device reapply <dev>`. Never `nmcli connection down` — that marks the profile manually deactivated and nothing on the Orin autoconnects it again. And **verify against `ip route`, not against nmcli's exit status**: measured 2026-08-10, a `modify` plus one `reapply` printed "Connection successfully reapplied" while the route kept its old metric, and a second `reapply` moved it. `set_metric()` in the script retries up to three times for this reason.
 
 **Interaction to know about: if a phone auto-joins the `kart` Wi-Fi, the fallback will not fire** — the station guard sees a client and correctly refuses to drop the AP. Ruben's iPhone has taken a DHCP lease on `kart` before (`DHCPACK ... 10.42.0.128 ... iPhone`), so for the fallback to work the phone must be tethered over USB only, not also joined to `kart` over Wi-Fi.
 

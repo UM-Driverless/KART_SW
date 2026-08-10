@@ -1620,3 +1620,62 @@ in `tasks.md` rather than one silently overriding the other.
 Also confirmed from the same live frame: both pedals rest around 400 mV, so with the provisional
 `PEDAL_MIN_MV 0` / `PEDAL_MAX_MV 2500` span in kart-medulla both bars show ~15 % with nobody
 touching them. Filed as its own task — it now looks like a fault to anyone reading the dashboard.
+
+## 2026-08-10 — Two tethered iPhones share one IP; ranking them, and what turned out not to need code
+
+Reported symptom: the Orin's internet "only works with Rubén's iPhone plugged in over USB, not with
+Jorge's, and it does not catch Wi-Fi networks". Three separate things, and only one of them was a bug
+in the sense reported.
+
+**Jorge's iPhone was never broken.** With it plugged in, `enx7e4b26d3e33f` came up, NetworkManager
+auto-created `Wired connection 3`, `/var/lib/lockdown/` held pairing records for both phones, and a
+`curl` bound to his interface returned HTTP 204 at 20–42 ms. It later carried the whole kart on its
+own for a full failover window. What made it look dead is that plugging it in alongside Rubén's phone
+changes nothing observable, because Rubén's already held the default route.
+
+**Why nothing about an address can tell the phones apart.** Every iOS Personal Hotspot serves the
+same `172.20.10.0/28`, phone at `.1`, Orin at `.2`. Two tethers therefore give the Orin two interfaces
+with an identical source address and two default routes via an identical gateway, separated only by
+metric. The ARP table survives this only because neighbour entries are per-interface. The single
+distinguishing handle is the kernel's `enx<mac>` name, so the ranking, the probes and every `nmcli`
+call key on the device, and probes use `curl --interface` rather than binding an address.
+
+Left to itself NetworkManager assigns 100 to the first ethernet and 101 to the second, so the winner
+was plug order. Explicit `ipv4.route-metric` now encodes Rubén's stated preference: his phone 100,
+Jorge's 110, unlisted phones 150, then Wi-Fi 600/610/620/700. `wifi-watchdog.sh` re-pins these every
+poll so a replug or DHCP renew cannot lose them.
+
+**The cold-boot bug, which was the real outage.** The 2026-08-08 "no internet after a battery power
+cycle" had a clean root cause: `wifi-watchdog.sh` set `client_attempt_spent=1` before its loop, on
+purpose, so a boot with no tether kept the AP and never looked for a network. The journal shows every
+boot ending at `radio is 'unavailable' with no connection` — while the *unplug* path succeeded twice
+in the same log, joining `Robots_urjc` within 7 s. The trigger was an unplug event, and a cold boot
+produces none. Now starts at 0.
+
+**What was built and then cut.** A probe-and-demote layer was written first: probe each tether, demote
+a failing one to metric 900 so the next takes over, promote it back when it answers. The failover test
+killed the premise. Switching Personal Hotspot off does not leave a black-holing link — iOS drops the
+USB carrier, NetworkManager logged `activated -> unavailable (reason 'carrier-changed')` one second
+later and withdrew the route, and the kernel fell through to Jorge's phone unaided. Full recovery was
+~20 s, mostly the Cloudflare tunnel reconnecting, and `kart` stayed up on `10.42.0.1` throughout.
+Switching it back on preempted the route back to metric 100 with no help either.
+
+So the demote branch guarded a failure that had never been observed, with a threshold picked out of
+the air, whose action was to tear down the kart's only working route — and it would have run on a
+timer with nobody watching. Rubén's objection was that any coverage test would delete it. Cut to
+report-only: the probe still runs, once a minute, and logs `no internet through <dev>, though its link
+and DHCP lease are up`. That covers what carrier detection genuinely cannot see (out of coverage, data
+spent, operator blocking tethering) and gathers the measurement a threshold would need. Same shape as
+kart-medulla's pump-stall detector, whose first version acted on a guessed threshold and would have
+false-tripped. The AP decision was moved back onto carrier detection for the same reason — a guessed
+threshold should not be able to give away the trackside dashboard.
+
+**Gotcha worth keeping: `nmcli device reapply` reported success without moving the route.** A `modify`
+to metric 110 followed by one `reapply` printed "Connection successfully reapplied" while `ip route`
+still showed 101; a second `reapply` moved it. So nmcli's exit status is not evidence the route
+changed — verify against `ip route`. `set_metric()` retries up to three times and logs a warning if
+the kernel still disagrees. Also: `nmcli connection down` must never be used on a tether, because NM
+then treats the profile as manually deactivated and nothing on the Orin autoconnects it again.
+
+Untested and left open: the cold-boot path itself (needs a real power cycle with no phone attached),
+and whether the report-only probe ever fires.
