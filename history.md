@@ -1865,3 +1865,28 @@ Worth correcting one earlier claim in this log: the stationary reading of about
 0.01 m/s observed on deployment was produced by the cone measurements, not by this
 correction. Cones were visible for 100% of frames in that sample, so the zero-speed
 update was contributing nothing to the number it appeared to explain.
+
+## 2026-08-10 — Decided against adding the IMU to the speed estimator for now
+
+Asked whether to fuse the ZED IMU into the cone-based speed estimate, or leave it as a
+single-source adaptive smoother. Decision: leave it, and revisit only after the estimate
+has been measured against a known speed. ZED visual odometry was ruled out separately by
+Rubén as too GPU-heavy, consistent with why it was disabled in `02eda4d`.
+
+Three reasons. First, the only consumer of `/kart/speed` is the dashboard readout, so the
+gap the IMU would fill — the 0.65 s from cones vanishing to the node going silent — costs
+a flickering number on a screen and nothing more. Second, an IMU introduces a bias that
+drifts, and bias is only observable if something anchors it; the design's one anchor was
+just removed because the throttle cannot tell whether the kart stopped, so the IMU would
+make long dropouts worse rather than better. Third, the estimate's accuracy is unmeasured,
+and building a fusion layer over a number that might not survive validation is work spent
+on something that may be deleted.
+
+What would reverse it: a validation run showing the estimate is accurate but drops out
+often enough to be unusable through corners. The node's 10-second log line already reports
+the share of frames yielding a measurement, so that figure comes free from the same run.
+
+The hall sensors, when the PCB frees their pins, change the design rather than adding to
+it — they would become the primary drift-free source, and they are what would make an IMU
+worth fusing, because they give the anchor that makes its bias observable. Cones would
+then become a cross-check. So IMU work done now would be partly thrown away.
