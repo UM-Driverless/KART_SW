@@ -1890,3 +1890,38 @@ The hall sensors, when the PCB frees their pins, change the design rather than a
 it — they would become the primary drift-free source, and they are what would make an IMU
 worth fusing, because they give the anchor that makes its bias observable. Cones would
 then become a cross-check. So IMU work done now would be partly thrown away.
+
+## 2026-08-10 — Closed-loop constant_speed mode, so a test run holds a speed rather than a PWM
+
+Rubén pushed back on the estimate being read-only: the validation run itself is much
+better done at a slow constant speed than at a fixed PWM, because a fixed PWM gives a
+speed that varies with slope, surface and battery charge, so every repeat measures
+something different.
+
+The objection to closing a loop on an unvalidated estimate dissolves with a throttle
+ceiling. `_constant_speed_throttle` in `cone_follower_node.py` caps its output at
+`self.max_speed` — the exact value `constant_throttle` commands outright — so however
+wrong the speed estimate is, the throttle can never exceed what the open-loop mode
+would have applied. The worst case is the behaviour being replaced, not a new one.
+
+The rest of the containment:
+
+  * No throttle at all unless a reading arrived within `speed_stale_timeout` (0.4 s).
+    speed_estimator stops publishing when its estimate is no longer backed by cones,
+    so silence means no measurement, never zero speed. A frozen reading from before
+    the cones were lost must not keep feeding the pedal.
+  * The integral is dropped whenever the reading is stale, so nothing accumulates
+    while blind and slams in when cones return.
+  * The integral is clamped to the same ceiling, so a kart held back on a slope or
+    against a chock cannot store full throttle and release it when it frees.
+  * Throttle only, never brake. A negative command would reach the brake actuator
+    through cmd_vel_bridge, and braking on an unvalidated speed is a different risk
+    from lifting off. Overspeed coasts down instead.
+
+10 tests in `src/kart_control/test/test_constant_speed.py`, run without ROS.
+
+The gains (kp 0.6, ki 0.4) are guesses, and should be treated as such: the throttle
+command is in the fake-m/s units cmd_vel uses, and how those map to real speed on this
+kart has never been measured, which is the very thing the run is for. Default target is
+2.0 m/s. If the first run is lively, lower `max_speed` on the cone_follower node in
+`kart_bringup/launch/launch.py` — it is the ceiling as well as the open-loop level.

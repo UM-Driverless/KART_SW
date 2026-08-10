@@ -39,7 +39,7 @@ from rclpy.qos import QoSProfile, DurabilityPolicy, ReliabilityPolicy
 from geometry_msgs.msg import PointStamped, Twist
 
 # from nav_msgs.msg import Odometry  # removed: kart has no speed sensor
-from std_msgs.msg import String
+from std_msgs.msg import Float32, String
 
 # from std_msgs.msg import Float32    # removed: kart has no speed sensor
 from vision_msgs.msg import Detection3DArray
@@ -211,7 +211,7 @@ class ConeFollowerNode(Node):
         self.declare_parameter(
             "speed_controller_type", "curve_factor"
         )  # curve_factor|constant_throttle|constant_throttle_blind
-        #    |constant_throttle_stop|neural_v2|zero
+        #    |constant_throttle_stop|constant_speed|neural_v2|zero
         self.declare_parameter("weights_json", "")  # path for neural
 
         # --- geometric params ---
@@ -222,6 +222,12 @@ class ConeFollowerNode(Node):
         self.declare_parameter("lookahead_max", 15.0)
         self.declare_parameter("half_track_width", 1.5)
         self.declare_parameter("speed_curve_factor", 0.0)
+
+        # --- constant_speed params (closed loop on /kart/speed) ---
+        self.declare_parameter("target_speed", 2.0)          # m/s
+        self.declare_parameter("speed_kp", 0.6)              # throttle units per m/s error
+        self.declare_parameter("speed_ki", 0.4)              # per m/s error per second
+        self.declare_parameter("speed_stale_timeout", 0.4)   # s
 
         # --- Stanley params ---
         self.declare_parameter("stanley_k", 1.5)
@@ -257,6 +263,16 @@ class ConeFollowerNode(Node):
         self.lookahead_max = float(self.get_parameter("lookahead_max").value)
         self.half_track_width = float(self.get_parameter("half_track_width").value)
         self.speed_curve_factor = float(self.get_parameter("speed_curve_factor").value)
+
+        # constant_speed fields
+        self.target_speed = float(self.get_parameter("target_speed").value)
+        self.speed_kp = float(self.get_parameter("speed_kp").value)
+        self.speed_ki = float(self.get_parameter("speed_ki").value)
+        self.speed_stale_timeout = float(
+            self.get_parameter("speed_stale_timeout").value
+        )
+        self._speed_integral = 0.0
+        self._speed_pid_time = None
 
         # Stanley fields
         self.stanley_k = float(self.get_parameter("stanley_k").value)
@@ -304,12 +320,14 @@ class ConeFollowerNode(Node):
                 lambda msg: self._on_detections(zed_objects_to_det3d(msg)),
                 10,
             )
-        # Speed feedback removed: the kart has no speed sensor, and ZED VIO
-        # speed estimation was unreliable. Controllers that referenced
-        # _actual_speed now fall back to max_speed (MPC) or 0.0 (neural_v2).
+        # Speed feedback: /kart/speed comes from speed_estimator (cone range rates,
+        # see kart_perception/speed_model.py). The ZED VIO odometry that used to feed
+        # this was disabled in 02eda4d for its GPU cost, and the commented-out lines
+        # below are what it looked like.
         # self.odom_sub = self.create_subscription(Odometry, odom_topic, self._on_odom, odom_qos)
-        # self.speed_pub = self.create_publisher(Float32, "/kart/speed", 10)
+        self.create_subscription(Float32, "/kart/speed", self._on_speed, 10)
         self._actual_speed = 0.0
+        self._speed_time = None  # None until the first reading arrives
         self._last_steer = 0.0
         # Controller-selected target (fwd, left) for HUD arrow rendering.
         # Set by each controller after it picks its aim point.
@@ -363,6 +381,7 @@ class ConeFollowerNode(Node):
                 "curve_factor",
                 "constant_throttle",
                 "constant_throttle_blind",
+                "constant_speed",
                 "constant_throttle_stop",
                 "neural_v2",
                 "zero",
@@ -373,15 +392,82 @@ class ConeFollowerNode(Node):
                 f"Speed controller: {self.speed_controller_type} → {new_type}"
             )
             self.speed_controller_type = new_type
+            # A stale integral from a previous stint would otherwise apply itself
+            # the instant closed-loop control is selected.
+            self._speed_integral = 0.0
+            self._speed_pid_time = None
+
+    def _on_speed(self, msg: Float32):
+        """@brief Callback for the estimated forward speed from speed_estimator."""
+        self._actual_speed = float(msg.data)
+        self._speed_time = self.get_clock().now()
+
+    def _speed_is_fresh(self) -> bool:
+        """@brief Whether a speed reading arrived recently enough to steer a loop by.
+
+        speed_estimator stops publishing entirely once its estimate is no longer
+        backed by cone detections, so silence here means "no measurement", not
+        "zero". Treating a stale value as current is what would let the closed-loop
+        mode keep feeding throttle against a number frozen from before the cones
+        were lost.
+        """
+        if self._speed_time is None:
+            return False
+        age = (self.get_clock().now() - self._speed_time).nanoseconds / 1e9
+        return age <= self.speed_stale_timeout
+
+    def _constant_speed_throttle(self) -> float:
+        """@brief PI control of throttle to hold target_speed, in the fake-m/s units.
+
+        The output is capped at self.max_speed, the same ceiling constant_throttle
+        commands outright. That cap is what makes this safe to run on a speed
+        estimate nobody has validated yet: however wrong the estimate is, the
+        throttle can never exceed what the open-loop mode would have applied, so
+        the worst case is the behaviour being replaced rather than a new one.
+
+        Throttle only, never brake. A negative command would ask cmd_vel_bridge for
+        the brake actuator, and braking on an unvalidated speed reading is a
+        different risk from merely lifting off. Overspeed is handled by commanding
+        zero throttle and letting the kart coast down.
+        """
+        now = self.get_clock().now()
+
+        if not self._speed_is_fresh():
+            # No measurement: shut the throttle and drop the integral, so nothing
+            # accumulates while blind and slams in when the reading returns.
+            self._speed_integral = 0.0
+            self._speed_pid_time = now
+            return 0.0
+
+        dt = 0.0
+        if self._speed_pid_time is not None:
+            dt = (now - self._speed_pid_time).nanoseconds / 1e9
+        self._speed_pid_time = now
+        # A long gap means the loop was not running; treat it as a restart rather
+        # than integrating an error over a period nobody was controlling.
+        if dt <= 0.0 or dt > 0.5:
+            return 0.0
+
+        error = self.target_speed - self._actual_speed
+        proportional = self.speed_kp * error
+
+        # Integrate, then clamp so the integral alone can never exceed the ceiling.
+        # Without this the term winds up while the kart is held back — on a slope,
+        # or against a wheel chock — and dumps full throttle the moment it frees.
+        self._speed_integral += self.speed_ki * error * dt
+        self._speed_integral = max(0.0, min(self.max_speed, self._speed_integral))
+
+        return max(0.0, min(self.max_speed, proportional + self._speed_integral))
 
     def _compute_speed(self, steer, nn_out=None, cones=None):
         """@brief Compute speed based on the active speed controller type.
 
-        The kart has no speed sensor, so nothing here closes a loop on speed.
-        cmd_vel_bridge_node divides the returned value by its own max_speed
-        param to get a throttle fraction, which means this number is really an
-        open-loop throttle command in m/s clothing. Hence constant_throttle
-        rather than constant_speed: it holds the pedal still, not the speed.
+        Every mode except constant_speed is open loop. cmd_vel_bridge_node divides
+        the returned value by its own max_speed param to get a throttle fraction,
+        so for those modes this number is a throttle command in m/s clothing —
+        hence constant_throttle rather than constant_speed: it holds the pedal
+        still, not the speed. constant_speed is the one mode that closes a loop,
+        using /kart/speed from the cone-based estimator.
 
         @param steer Current steering angle (rad).
         @param nn_out Raw neural net output (2-element array), or None if steering is not neural.
@@ -392,6 +478,8 @@ class ConeFollowerNode(Node):
             return 0.0
         if self.speed_controller_type in ("constant_throttle", "constant_throttle_blind"):
             return self.max_speed
+        if self.speed_controller_type == "constant_speed":
+            return self._constant_speed_throttle()
         if self.speed_controller_type == "constant_throttle_stop":
             if cones:
                 for cls, _fwd, _left in cones:
