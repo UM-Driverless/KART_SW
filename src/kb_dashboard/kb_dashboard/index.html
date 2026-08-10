@@ -106,7 +106,7 @@ body {
 }
 .global-ebs.on {
   background:linear-gradient(180deg,#ffc247,#e0920a); color:#08080a;
-  box-shadow:0 0 12px rgba(255,176,32,.5);
+  box-shadow:0 0 14px rgba(255,176,32,.7);
 }
 
 /* Confirmation dialog. Replaces window.confirm(), which was wrong here for three reasons:
@@ -172,7 +172,7 @@ body {
       </div>
     </div>
     <div class="conn-dot" id="connDot"></div>
-    <button class="ctrl-btn global-ebs" data-st="ebs" onclick="wsSend({action:'set_state',state:'ebs'})" title="Trigger Emergency Brake System">EBS</button>
+    <button class="h-ctrl global-ebs" data-st="ebs" onclick="wsSend({action:'set_state',state:'ebs'})" title="Trigger Emergency Brake System">EBS</button>
     <button id="powerOffBtn"
             onclick="requestPowerOff()"
             title="Power off the Orin computer (NOT the kart safety shutdown loop / EBS)"
