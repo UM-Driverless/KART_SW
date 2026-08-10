@@ -520,3 +520,28 @@ carried the same point and needed no quotation marks.
 **Not a new rule.** No rule file needs changing for this; the rules exist and were skipped. This
 entry is here so the next session greps it rather than a future reader adding a third overlapping
 bullet to CLAUDE.md.
+
+## 2026-08-10 — AGENTS.md said a Python node deploys with a pull and a restart; half of them do not (Claude Opus 5)
+
+**What happened.** While deploying a new node in `kart_perception`, checked whether a `git pull`
+plus a restart would pick it up, as AGENTS.md's deploy section said for "Other Python (server.py,
+nodes, launch files)". It would not have. Listing the installed files on the Orin showed regular
+files, not symlinks.
+
+**The real rule.** It splits by package build type, which nothing in the deploy section mentioned:
+
+  * `ament_python` packages — `kart_perception`, `kb_dashboard`, `kb_bms` — have their sources
+    COPIED into `install/<pkg>/lib/python3.10/site-packages/`. A pull changes nothing that runs.
+    They need `colcon build --packages-select <pkg>`.
+  * `ament_cmake` packages — `kart_control`, whose nodes live in `scripts/` — really are symlinked
+    back into `src/`. A pull plus a restart is enough.
+
+**Root cause.** The `index.html` entry directly above it in AGENTS.md already documented exactly
+this trap for one file, and had been corrected on 2026-08-08 after a fix was reported as deployed
+when it was not. The correction was applied to the one file that had bitten someone rather than to
+the general case, so the wrong line survived immediately beneath a detailed description of why it
+was wrong. The 2026-03-21 entry in this log is the same family again.
+
+**Prevention.** The deploy section now splits by build type. When a deploy step is corrected, check
+whether the neighbouring entries share the same mechanism instead of fixing only the instance that
+failed — the file's own structure had the answer sitting one bullet away.
