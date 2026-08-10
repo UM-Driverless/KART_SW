@@ -38,9 +38,15 @@ body {
      deliberate: backgrounds paint across the padding box, so the skin's colour fills the
      status-bar band instead of leaving bare black. In landscape the notch is on a side,
      which is why left/right are included. Every skin inherits this — none override padding. */
+  /* Bottom inset deliberately NOT applied. In landscape it is the home-indicator strip, and
+     reserving it left a black band under the page on every screen — asked for twice, and the
+     one axis this layout is short of. The indicator now floats over the page instead, which
+     is what it is designed to do; nothing interactive is placed against that edge, and the
+     skin's background paints under it. Top/left/right stay: those are the notch, and content
+     behind a notch is unreadable rather than merely overlapped. */
   padding:
     env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
-    env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+    0px env(safe-area-inset-left, 0px);
 }
 .container { max-width: 480px; margin: 0 auto; padding: 12px; }
 
@@ -1648,9 +1654,10 @@ function rcMakeWheel(o) {
       if (hit >= 0) idx = hit;
     }
     go(idx);
-    // wasCentred distinguishes "bring this name to the centre" from "act on the name already
-    // there", which is what lets a caller require two taps without a separate button.
-    if (tapped && o.onTap) o.onTap(idx, idx === centred);
+    // Fires for a drag that settles as well as for a tap — the wheel selects whatever ends up
+    // in the centre slot, which is how the page rail beside it behaves. wasCentred says which
+    // it was, for callers that care.
+    if (o.onPick) o.onPick(idx, tapped && idx === centred);
   };
   o.rail.addEventListener('pointerup', end);
   o.rail.addEventListener('pointercancel', end);
@@ -1997,10 +2004,22 @@ body{
    with room to spare. Browsers without container queries keep the stacked layout, which is what
    the pane did before and still works. */
 .rc-joypane{ container-type:inline-size; }
-.rc-joypane .joy-row{ flex:1 1 auto; min-height:0; display:flex; flex-direction:column; gap:var(--sp-2); align-items:stretch; }
+/* width:100% is load-bearing: .rc-joypane is a flex COLUMN with align-items:center, so its
+   children are sized by their content across, not stretched. Without it this row was as wide
+   as the readout column alone (180px in a 694px pane) and the pad's track had nothing left. */
+.rc-joypane .joy-row{ flex:1 1 auto; min-height:0; width:100%; display:flex; flex-direction:column; gap:var(--sp-2); align-items:stretch; }
+/* Its two controls are moved into the joystick widget at init, so this ends up empty and must
+   not hold a track open next to the pad. :empty rather than display:none outright, so it still
+   works if the controls are ever left here. */
+.rc-joypane .joy-side:empty{ display:none; }
 .rc-joypane .joy-side{ flex:0 0 auto; min-width:0; display:flex; flex-direction:column;
   justify-content:center; gap:var(--sp-2); }
-.rc-joypane #rcJoySlot{ flex:1 1 auto; min-height:0; min-width:0; display:flex; align-items:stretch; justify-content:center; }
+/* flex-basis 0, not auto. With auto the slot is only as wide as its contents, and once the pad
+   is positioned rather than in flow it contributes no width — so the slot shrank to the width
+   of the readout column and the pad's track collapsed to nothing. Basis 0 makes the slot take
+   the row's free space regardless of what is inside it, which is what gives the pad a track to
+   be as wide as it is tall. */
+.rc-joypane #rcJoySlot{ flex:1 1 0; min-height:0; min-width:0; display:flex; align-items:stretch; justify-content:center; }
 /* 430px = the 140px control column, its gap, and enough left for the pad to be at least as
    wide as the pane is tall — below that, seating them side by side would shrink the pad. */
 /* Pad left, everything else in ONE column on the right. Two things made that awkward. The pad
@@ -2019,7 +2038,16 @@ body{
   /* align-self:stretch is load-bearing against the row sizing above, which otherwise
      shrink-wraps this to its content — and its content is a pad sized as a percentage of it,
      so the pair collapses to nothing (measured: a 2x2 pad). */
-  .rc-joypane .js-padwrap{ grid-column:1; grid-row:1 / -1; min-height:0; align-self:stretch; }
+  /* The pad is positioned against this box rather than sized as a percentage of it. Its own
+     rule is height:100% + aspect-ratio, and inside a grid track Safari resolves that height
+     against a box it has not finished sizing: on an iPhone the pad came out full height and
+     about 2px wide, a vertical line with the ACCEL/BRAKE/LEFT/RIGHT labels piled on top of
+     each other. top/bottom give it a definite height with no percentage involved, and
+     aspect-ratio then derives the width, which every engine agrees on. */
+  .rc-joypane .js-padwrap{ grid-column:1; grid-row:1 / -1; min-height:0; min-width:0;
+    align-self:stretch; position:relative; }
+  .rc-joypane .js-pad{ position:absolute; top:0; bottom:0; left:50%; transform:translateX(-50%);
+    height:auto; width:auto; max-width:100%; margin:0; }
   .rc-joypane .js-hdr,
   .rc-joypane .js-take,
   .rc-joypane .js-readout,
@@ -2845,16 +2873,17 @@ body{
       if (Math.abs(dy) > 45 && Math.abs(dy) > 1.5 * Math.abs(dx)) go(page + (dy < 0 ? 1 : -1));
     }, { passive: true });
     go(0, false);   // seat the ring without animating on first render
-    // Mission wheel: drag to scroll the names, tap one to select it. The tap both sends the
-    // mission and brings that name to the centre, so the centre slot always shows what the
-    // kart is in — there is no separate "candidate" to reason about and no confirm button.
+    // Mission wheel: the name in the centre slot IS the mission, exactly like the page rail
+    // beside it. Both ways of getting a name there select it — tapping it, or turning the
+    // wheel until it settles under the slot — so there is no candidate to reason about and no
+    // confirm step.
     const misTabs = [...document.querySelectorAll('.mis-tab')];
     const misNames = misTabs.map(t => t.dataset.m);
     let misCurrent = null;     // mission the kart reports; null until the first frame
     const misRefresh = () => misTabs.forEach(t => t.classList.toggle('cur', t.dataset.m === misCurrent));
     const misWheel = rcMakeWheel({
       rail: $('misWheel'), win: $('misWheelWin'), items: misTabs,
-      onTap: idx => {
+      onPick: idx => {
         const m = misNames[idx];
         if (m === misCurrent) return;   // already there; nothing to send
         wsSend({ action: 'set_mission', mission: m });
