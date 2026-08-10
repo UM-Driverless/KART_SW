@@ -29,6 +29,9 @@ import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import BatteryState
+from std_msgs.msg import Float32
+
+from kb_bms.soc_model import SocFilter
 
 # JBD GATT (16-bit UUIDs expanded to the Bluetooth base UUID)
 NOTIFY_UUID = "0000ff01-0000-1000-8000-00805f9b34fb"
@@ -101,12 +104,25 @@ class BmsNode(Node):
         self.declare_parameter("mac", "A5:C2:37:39:58:5D")
         self.declare_parameter("name", "SP22S003BP21S100A")
         self.declare_parameter("publish_period", 1.0)
+        # Off until soc_model.OCV_TABLE and CELL_RESISTANCE_OHM are measured on this
+        # pack rather than copied from generic NMC figures. While off, the fused
+        # estimate is still computed and published, so its behaviour can be compared
+        # against the raw BMS figure on a real run before anything depends on it.
+        self.declare_parameter("soc_fusion", False)
         self.mac = self.get_parameter("mac").value
         self.name = self.get_parameter("name").value
         period = float(self.get_parameter("publish_period").value)
+        self.soc_fusion = bool(self.get_parameter("soc_fusion").value)
 
         qos = QoSProfile(depth=10, reliability=ReliabilityPolicy.RELIABLE)
         self.pub = self.create_publisher(BatteryState, "/battery/state", qos)
+        # Fused charge estimate, 0..1, on its own topic. /battery/state.percentage
+        # deliberately keeps carrying the BMS's raw figure whatever soc_fusion says,
+        # so the two can always be compared — their disagreement IS the drift, and
+        # it is the thing worth being able to see.
+        self.soc_pub = self.create_publisher(Float32, "/battery/soc_fused", qos)
+        self._soc_filter: SocFilter | None = None
+        self._last_fuse_t: float | None = None
 
         self._lock = threading.Lock()
         self._latest = None       # dict from _parse_basic + optional "cells"
@@ -380,6 +396,48 @@ class BmsNode(Node):
         return None
 
     # ── ROS side (spin thread) ──────────────────────────────────────────
+    def _fuse_soc(self, r, bms_soc):
+        """@brief Run one step of the voltage-corrected charge estimate.
+
+        Returns the fused fractional charge, or None if the pack has not reported a
+        usable capacity yet (without one there is nothing to convert the BMS's
+        remaining-Ah readings into a fraction with). Always publishes whatever it
+        computes on /battery/soc_fused, whether or not soc_fusion is on, so the
+        estimate can be watched against the raw figure before being relied on.
+
+        The rationale for fusing at all, and for the specific split of duties
+        between the coulomb count and the voltage, is in kb_bms/soc_model.py.
+        """
+        capacity_ah = float(r.get("nominal_ah") or 0.0)
+        if capacity_ah <= 0.0:
+            return None
+        if self._soc_filter is None:
+            self._soc_filter = SocFilter(capacity_ah)
+
+        now = time.monotonic()
+        dt = (now - self._last_fuse_t) if self._last_fuse_t is not None else 0.0
+        self._last_fuse_t = now
+
+        was_cold = self._soc_filter.soc is None
+        fused = self._soc_filter.update(
+            pack_voltage=float(r["voltage"]),
+            current=float(r["current"]),
+            remain_ah=float(r["remain_ah"]),
+            bms_soc=bms_soc,
+            dt=dt,
+        )
+        if was_cold:
+            source = (
+                "resting pack voltage" if self._soc_filter.seeded_from_voltage
+                else "the BMS figure (pack was under load, so its voltage was unusable)"
+            )
+            self.get_logger().info(
+                f"SOC estimate seeded from {source}: "
+                f"{fused * 100:.0f}% (BMS says {bms_soc * 100:.0f}%)"
+            )
+        self.soc_pub.publish(Float32(data=float(fused)))
+        return fused
+
     def _publish(self):
         with self._lock:
             r = self._latest
@@ -393,7 +451,11 @@ class BmsNode(Node):
         msg.charge = float(r["remain_ah"])
         msg.capacity = float(r["remain_ah"])
         msg.design_capacity = float(r["nominal_ah"])
-        msg.percentage = float(r["soc"]) / 100.0
+        bms_soc = float(r["soc"]) / 100.0
+        fused_soc = self._fuse_soc(r, bms_soc)
+        msg.percentage = (
+            fused_soc if (self.soc_fusion and fused_soc is not None) else bms_soc
+        )
         msg.temperature = float(r["temps"][0]) if r.get("temps") else float("nan")
         msg.present = age is not None and age < 10.0
         msg.power_supply_status = (

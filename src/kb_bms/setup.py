@@ -15,6 +15,7 @@ setup(
     entry_points={
         "console_scripts": [
             "bms_node = kb_bms.bms_node:main",
+            "log_battery = kb_bms.log_battery:main",
         ],
     },
 )

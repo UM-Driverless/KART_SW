@@ -121,6 +121,16 @@ class DashboardNode(Node):
         self.create_subscription(
             BatteryState, "/battery/state", self._on_battery, qos_reliable
         )
+        # The same charge, estimated independently: kb_bms corrects the BMS's coulomb
+        # count with pack voltage and publishes the result here. Both figures reach
+        # the browser, which flags them when they disagree — see rcBatRingSub in
+        # index.html for why they are shown side by side rather than merged.
+        self.create_subscription(
+            Float32,
+            "/battery/soc_fused",
+            lambda m: self.state.update("battery_soc_fused", round(m.data, 3)),
+            qos_reliable,
+        )
 
         # Pitch/roll-corrected cones from ground_plane_localizer_node — drives the
         # top-down (cenital) view in the default skin.

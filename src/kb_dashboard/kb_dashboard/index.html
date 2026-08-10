@@ -2850,6 +2850,30 @@ body{
 // caller can pulse the Battery tab red. The strip DOM is rebuilt only when the cell
 // count changes, then just fills/labels update each frame.
 const RC_CELL_MIN_MV = 2800, RC_CELL_MAX_MV = 4200;  // Li-ion display window for the bars
+// Sub-line under the SOC ring. Normally the remaining amp-hours, but it also has to
+// answer "is that percentage lying to you?".
+//
+// The big number is the BMS's own state-of-charge byte, which is an open-loop coulomb
+// count: it only re-zeros on a full-charge termination or a low-voltage cutoff, and
+// between those it drifts. It has been seen reading 93% on a pack sitting at 46.4 V,
+// which on 13 series cells is 3.57 V/cell — about a quarter charged. The kb_bms node
+// publishes an independent estimate on /battery/soc_fused that corrects the count with
+// pack voltage. When the two disagree by more than this many points, say so here rather
+// than quietly averaging them: the disagreement IS the drift, and a driver deciding
+// whether to start another session needs to see it, not a single smoothed number.
+const RC_SOC_DISAGREE_POINTS = 10;
+
+function rcBatRingSub(ah, soc, socFused) {
+  const parts = [];
+  if (ah != null && !isNaN(ah)) parts.push(ah.toFixed(1) + ' Ah');
+  const est = (socFused != null && !isNaN(socFused)) ? Math.round(socFused * 100) : null;
+  if (est != null && soc != null && !isNaN(soc) &&
+      Math.abs(est - soc) > RC_SOC_DISAGREE_POINTS) {
+    parts.push('V says ' + est + '%');
+  }
+  return parts.length ? parts.join(' · ') : null;
+}
+
 function rcUpdateBattery(d) {
   if (!$('rcCellStrip')) return false;
   const v = d.battery_voltage, soc = d.battery_soc, cur = d.battery_current;
@@ -2861,7 +2885,7 @@ function rcUpdateBattery(d) {
   rcDrawRing($('rcBatRing'), {
     frac: haveSoc ? soc / 100 : 0, color: socCol, dim: !haveSoc, label: 'SOC',
     big: haveSoc ? Math.round(soc) + '%' : '--',
-    sub: (ah != null && !isNaN(ah)) ? ah.toFixed(1) + ' Ah' : null,
+    sub: rcBatRingSub(ah, soc, d.battery_soc_fused),
   });
   // current: bidirectional analog gauge (− discharge / + charge) with amber/red over-limit zones,
   // exact signed value in the centre. Danger if it sits in a red zone (over-current either way).
