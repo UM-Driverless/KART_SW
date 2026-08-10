@@ -22,6 +22,7 @@ big-endian.
 """
 
 import asyncio
+import signal
 import threading
 import time
 
@@ -38,6 +39,12 @@ NOTIFY_UUID = "0000ff01-0000-1000-8000-00805f9b34fb"
 WRITE_UUID = "0000ff02-0000-1000-8000-00805f9b34fb"
 CMD_BASIC = bytes.fromhex("dda50300fffd77")   # register 0x03 — pack summary
 CMD_CELLS = bytes.fromhex("dda50400fffc77")   # register 0x04 — per-cell mV
+
+# How long shutdown waits for the BLE thread to disconnect from the pack. One poll
+# cycle is about 2.2 s, so this allows a cycle in progress to finish and still leaves
+# room for the disconnect itself. It is far under systemd's 90 s stop timeout, so a
+# wedged BLE stack costs a few seconds on restart rather than blocking it.
+BLE_SHUTDOWN_TIMEOUT_S = 6.0
 
 
 def _u16(b, i):
@@ -129,6 +136,9 @@ class BmsNode(Node):
         self._latest_t = 0.0      # monotonic time of last successful read
         self._connected = False
         self._fail_count = 0      # consecutive BLE failures (drives self-heal)
+        # Set during shutdown so the BLE loop stops polling and disconnects cleanly
+        # instead of being killed mid-connection. See shutdown() for why that matters.
+        self._stop = threading.Event()
 
         # Publish from the spin thread (cross-thread publish from asyncio no-ops).
         self.create_timer(period, self._publish)
@@ -146,7 +156,7 @@ class BmsNode(Node):
 
     async def _ble_main(self):
         from bleak import BleakClient, BleakScanner
-        while rclpy.ok():
+        while rclpy.ok() and not self._stop.is_set():
             try:
                 address = self.mac
                 # Connect straight by MAC. The pack advertises a *public* BLE
@@ -172,7 +182,7 @@ class BmsNode(Node):
                         buf.extend(data)
 
                     await client.start_notify(NOTIFY_UUID, cb)
-                    while rclpy.ok() and client.is_connected:
+                    while rclpy.ok() and client.is_connected and not self._stop.is_set():
                         # basic summary
                         buf.clear()
                         await client.write_gatt_char(WRITE_UUID, CMD_BASIC, response=False)
@@ -211,7 +221,12 @@ class BmsNode(Node):
                 # forget the device so the next attempt re-discovers it fresh.
                 if self._fail_count % 3 == 0:
                     await self._bluez_recover()
-                await asyncio.sleep(5.0)
+                # Interruptible wait — a plain sleep would hold shutdown for up to 5 s
+                # past the point where the node has been told to stop.
+                for _ in range(50):
+                    if self._stop.is_set():
+                        break
+                    await asyncio.sleep(0.1)
 
     async def _bluez_recover(self):
         """@brief Clear a stale BlueZ connection to the BMS (see _ble_main).
@@ -395,6 +410,40 @@ class BmsNode(Node):
             self.get_logger().warn(f"device lookup failed: {e}")
         return None
 
+    # ── shutdown ────────────────────────────────────────────────────────
+    def shutdown(self):
+        """@brief Let the BLE loop disconnect from the pack before the process exits.
+
+        Worth the wait, because dropping the link without disconnecting is expensive.
+        BlueZ keeps its own view of which devices are connected, and a link torn down
+        by a dying process leaves that view saying "connected" when nothing is. While
+        BlueZ believes that, the pack is unreachable two ways at once: connecting by
+        address fails against the stale entry, and scanning cannot find the pack either,
+        because a BLE peripheral that thinks it has a live connection stops advertising.
+        Nothing resolves it until `_bluez_recover` clears the entry, which by design
+        only happens after three consecutive failures — around two minutes with no
+        battery data on the dashboard, every restart.
+
+        That recovery path exists for genuine radio dropouts. A restart we performed
+        ourselves should not be going through it.
+
+        The BLE thread is a daemon, so it would otherwise be killed where it stands at
+        interpreter shutdown and its `finally: await client.disconnect()` would never
+        run. Setting the flag lets its loops fall out and reach that disconnect. The
+        join is bounded so a wedged BLE stack delays the restart rather than hanging it.
+        """
+        if self._stop.is_set():
+            return
+        self._stop.set()
+        if self._ble_thread.is_alive():
+            self._ble_thread.join(timeout=BLE_SHUTDOWN_TIMEOUT_S)
+            if self._ble_thread.is_alive():
+                self.get_logger().warn(
+                    "BLE thread did not finish in "
+                    f"{BLE_SHUTDOWN_TIMEOUT_S:.0f}s — exiting without a clean "
+                    "disconnect, so the next start may need a BlueZ recovery"
+                )
+
     # ── ROS side (spin thread) ──────────────────────────────────────────
     def _fuse_soc(self, r, bms_soc):
         """@brief Run one step of the voltage-corrected charge estimate.
@@ -476,6 +525,16 @@ class BmsNode(Node):
 
 
 def main(args=None):
+    # systemd stops a service with SIGTERM, whose default action in Python is to kill
+    # the process outright — no exception raised, so no `finally` anywhere in this file
+    # would run and the BLE link would be dropped mid-connection. Turning it into
+    # SystemExit routes a `systemctl restart` through the same orderly shutdown as
+    # Ctrl-C, which is what lets shutdown() below disconnect properly.
+    def _on_sigterm(_signum, _frame):
+        raise SystemExit
+
+    signal.signal(signal.SIGTERM, _on_sigterm)
+
     rclpy.init(args=args)
     node = BmsNode()
     try:
@@ -483,6 +542,7 @@ def main(args=None):
     except (KeyboardInterrupt, SystemExit):
         pass
     finally:
+        node.shutdown()
         node.destroy_node()
         if rclpy.ok():
             rclpy.shutdown()
