@@ -44,6 +44,7 @@ from rclpy.qos import QoSProfile, DurabilityPolicy, ReliabilityPolicy
 from geometry_msgs.msg import PointStamped, Twist
 
 # from nav_msgs.msg import Odometry  # removed: kart has no speed sensor
+from rcl_interfaces.msg import SetParametersResult
 from std_msgs.msg import Float32, String
 
 # from std_msgs.msg import Float32    # removed: kart has no speed sensor
@@ -233,7 +234,9 @@ class ConeFollowerNode(Node):
         # 0.28 m/s ≈ 1 km/h: walking-pace default, so selecting the closed loop
         # by accident does not launch the kart. The dashboard sets it live.
         self.declare_parameter("target_speed", 0.28)         # m/s
-        self.declare_parameter("speed_kp", 0.6)              # throttle units per m/s error
+        # Raised from 0.6 on 2026-08-10. Both gains are settable at runtime:
+        #     ros2 param set /cone_follower speed_kp 1.2
+        self.declare_parameter("speed_kp", 0.9)              # throttle units per m/s error
         self.declare_parameter("speed_ki", 0.4)              # per m/s error per second
         self.declare_parameter("speed_stale_timeout", 0.4)   # s
 
@@ -362,6 +365,7 @@ class ConeFollowerNode(Node):
         self.create_subscription(
             Float32, "/dashboard/target_speed", self._on_target_speed, 10
         )
+        self.add_on_set_parameters_callback(self._on_param_set)
 
         self.get_logger().info(
             f"Controller: steer={self.controller_type} speed={self.speed_controller_type}"
@@ -433,6 +437,24 @@ class ConeFollowerNode(Node):
             # the instant closed-loop control is selected.
             self._speed_integral = 0.0
             self._speed_pid_time = None
+
+    def _on_param_set(self, params) -> SetParametersResult:
+        """@brief Apply live gain changes, so the speed loop can be tuned at the kart.
+
+        Only the closed-loop speed gains. Everything else here still needs a
+        restart, deliberately: these are the two being tuned by hand.
+        """
+        for p in params:
+            if p.name in ("speed_kp", "speed_ki"):
+                if float(p.value) < 0.0:
+                    return SetParametersResult(
+                        successful=False, reason=f"{p.name} must not be negative"
+                    )
+                setattr(self, p.name, float(p.value))
+                # A gain change makes the accumulated integral meaningless.
+                self._speed_integral = 0.0
+                self.get_logger().info(f"{p.name} → {p.value}")
+        return SetParametersResult(successful=True)
 
     def _on_target_speed(self, msg: Float32):
         """@brief Callback for the closed-loop speed setpoint from the dashboard.
