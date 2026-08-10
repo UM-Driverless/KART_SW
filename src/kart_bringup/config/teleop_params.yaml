@@ -1,7 +1,0 @@
-joy_to_cmd_vel:
-  ros__parameters:
-    throttle: 4       # R2
-    brake: 3          # L2
-    steering: 0       # Joystick izquierdo horizontal
-    enable_button: 5  # R1
-    dead_zone: 0.05   # Deadzon of steering joystick
