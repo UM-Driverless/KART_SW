@@ -596,7 +596,8 @@ class DashboardNode(Node):
     def publish_speed_controller_type(self, speed_type: str):
         """@brief Publish speed controller type change to cone_follower.
 
-        @param speed_type One of: curve_factor, constant, neural_v2.
+        @param speed_type One of: curve_factor, constant_throttle,
+               constant_throttle_stop, neural_v2, zero.
         """
         msg = String()
         msg.data = speed_type

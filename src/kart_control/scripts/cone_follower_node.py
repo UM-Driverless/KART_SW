@@ -210,7 +210,7 @@ class ConeFollowerNode(Node):
         )  # geometric|pure_pursuit|neural|neural_v2|mpc|stanley
         self.declare_parameter(
             "speed_controller_type", "curve_factor"
-        )  # curve_factor|constant|neural_v2
+        )  # curve_factor|constant_throttle|constant_throttle_stop|neural_v2|zero
         self.declare_parameter("weights_json", "")  # path for neural
 
         # --- geometric params ---
@@ -243,8 +243,9 @@ class ConeFollowerNode(Node):
         odom_topic = str(self.get_parameter("odom_topic").value)
         self.no_cone_timeout = float(self.get_parameter("no_cone_timeout").value)
         self.controller_type = str(self.get_parameter("controller_type").value)
-        self.speed_controller_type = str(
-            self.get_parameter("speed_controller_type").value
+        self.speed_controller_type = self.SPEED_CONTROLLER_ALIASES.get(
+            str(self.get_parameter("speed_controller_type").value),
+            str(self.get_parameter("speed_controller_type").value),
         )
 
         # geometric fields
@@ -345,12 +346,25 @@ class ConeFollowerNode(Node):
             if new_type in ("neural", "neural_v2") and self._nn_W1 is None:
                 self._load_neural_weights()
 
+    # Old names for the constant-throttle modes, still accepted so a browser tab
+    # left open across the rename keeps working instead of being ignored.
+    SPEED_CONTROLLER_ALIASES = {
+        "constant": "constant_throttle",
+        "constant_stop": "constant_throttle_stop",
+    }
+
     def _on_speed_controller_type(self, msg: String):
         """@brief Callback for runtime speed controller type changes from the dashboard."""
-        new_type = msg.data
+        new_type = self.SPEED_CONTROLLER_ALIASES.get(msg.data, msg.data)
         if (
             new_type
-            in ("curve_factor", "constant", "constant_stop", "neural_v2", "zero")
+            in (
+                "curve_factor",
+                "constant_throttle",
+                "constant_throttle_stop",
+                "neural_v2",
+                "zero",
+            )
             and new_type != self.speed_controller_type
         ):
             self.get_logger().info(
@@ -361,6 +375,12 @@ class ConeFollowerNode(Node):
     def _compute_speed(self, steer, nn_out=None, cones=None):
         """@brief Compute speed based on the active speed controller type.
 
+        The kart has no speed sensor, so nothing here closes a loop on speed.
+        cmd_vel_bridge_node divides the returned value by its own max_speed
+        param to get a throttle fraction, which means this number is really an
+        open-loop throttle command in m/s clothing. Hence constant_throttle
+        rather than constant_speed: it holds the pedal still, not the speed.
+
         @param steer Current steering angle (rad).
         @param nn_out Raw neural net output (2-element array), or None if steering is not neural.
         @param cones List of (class_id, fwd, left) tuples — used by stop-on-orange modes.
@@ -368,9 +388,9 @@ class ConeFollowerNode(Node):
         """
         if self.speed_controller_type == "zero":
             return 0.0
-        if self.speed_controller_type == "constant":
+        if self.speed_controller_type == "constant_throttle":
             return self.max_speed
-        if self.speed_controller_type == "constant_stop":
+        if self.speed_controller_type == "constant_throttle_stop":
             if cones:
                 for cls, _fwd, _left in cones:
                     if cls in ("orange_cone", "large_orange_cone"):

@@ -1716,3 +1716,26 @@ power-up, `tether_present` is true from the first poll, no attempt ever fires an
 stays, so the delay only buys something in a scenario he does not intend to be in. It also costs a
 minute of no remote access on every tetherless boot. Not implemented, and not on the board — enable
 the hotspot before booting instead.
+
+## 2026-08-10 — Renamed the constant-speed controllers to constant-throttle
+
+The speed controller options `constant` and `constant_stop` were named as if they held a speed.
+Nothing in the stack can do that: the kart has no speed sensor, and `cmd_vel_bridge_node.py` turns
+the `linear.x` value from `cone_follower_node.py` into a throttle fraction by plain division
+(`throttle_effort = linear.x / max_speed`), open loop. So these modes hold a fixed PWM, not a fixed
+speed. Renamed to `constant_throttle` and `constant_throttle_stop` (dashboard labels "Constant
+Throttle" and "Constant Throttle + Stop"). The old strings are still accepted via
+`ConeFollowerNode.SPEED_CONTROLLER_ALIASES` so a browser tab left open across the rename does not
+silently fall back to `curve_factor`.
+
+This also answers the question that prompted the rename: there is no separate test mission needed
+for "fixed PWM plus a real steering algorithm". Any autonomous mission with the speed algo set to
+Constant Throttle does it, and the steering algo dropdown stays free (geometric, Stanley, MPC...).
+The throttle level is `max_speed` on the cone_follower node (2.625 in
+`kart_bringup/launch/launch.py`) divided by `max_speed` on the cmd_vel_bridge node (default 5.0),
+so 52.5% today. Neither is exposed on the dashboard, so changing it means editing the launch file
+and restarting.
+
+Separately, the `throttle_test` mission (`state_machine_node.py`) hardcodes `linear.x = 2.5` and
+bypasses perception entirely — it exercises the throttle path alone and leaves steering untouched,
+which is a different job from the above.
