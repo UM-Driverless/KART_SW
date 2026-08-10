@@ -11,4 +11,11 @@ install(PROGRAMS
   DESTINATION lib/${PROJECT_NAME}
 )
 
+# Pure-logic modules imported by the scripts above. Installed next to them so
+# the scripts' directory-relative imports resolve at runtime.
+install(FILES
+  scripts/state_logic.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+
 ament_package()

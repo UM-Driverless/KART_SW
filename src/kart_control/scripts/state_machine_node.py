@@ -4,6 +4,10 @@
 Subscribes to dashboard commands and muxes autonomous/manual cmd_vel
 to /kart/cmd_vel_muxed, which cmd_vel_bridge reads.
 
+All transition and muxing decisions live in state_logic.py (pure Python, no
+ROS), where pytest can verify the safety invariants on any machine. This node
+is plumbing only: subscribe, delegate, publish.
+
 States follow Formula Student AS (Autonomous System) conventions:
   AS_OFF(0) → AS_READY(1) → AS_DRIVING(2) → AS_FINISHED(3)
   Any state (except AS_OFF) → AS_EMERGENCY(4)
@@ -15,38 +19,21 @@ from geometry_msgs.msg import Twist
 from std_msgs.msg import String
 from kb_interfaces.msg import Frame
 
-# AS states
-AS_OFF = 0
-AS_READY = 1
-AS_DRIVING = 2
-AS_FINISHED = 3
-AS_EMERGENCY = 4
-
-STATE_NAMES = {
-    AS_OFF: "AS_OFF",
-    AS_READY: "AS_READY",
-    AS_DRIVING: "AS_DRIVING",
-    AS_FINISHED: "AS_FINISHED",
-    AS_EMERGENCY: "AS_EMERGENCY",
-}
-
-# Missions that count as "autonomous"
-AUTONOMOUS_MISSIONS = {"autonomous", "acceleration", "skidpad", "autocross", "trackdrive", "ebs_test", "inspection", "throttle_test"}
+from state_logic import StateLogic, STATE_NAMES, STEER_MODE_PID
 
 
 class StateMachineNode(Node):
     """@brief State machine node that gates cmd_vel based on mission and AS state.
 
-    Implements Formula Student AS state transitions and muxes autonomous/manual
-    cmd_vel to /kart/cmd_vel_muxed at 100 Hz. Publishes state heartbeat at 10 Hz.
+    Wraps state_logic.StateLogic and muxes autonomous/manual cmd_vel to
+    /kart/cmd_vel_muxed at 100 Hz. Publishes state heartbeat at 10 Hz.
     """
 
     def __init__(self):
         """@brief Initialize the state machine in AS_OFF with subscriptions, publishers, and timers."""
         super().__init__("state_machine")
 
-        self._state = AS_OFF
-        self._mission = "manual"
+        self._logic = StateLogic()
         self._last_auto_cmd = Twist()
         self._last_manual_cmd = Twist()
         self._last_forced_steer_mode = None
@@ -78,52 +65,35 @@ class StateMachineNode(Node):
 
         @param msg String message with the mission name.
         """
-        old = self._mission
-        self._mission = msg.data
-        if old == self._mission:
+        old_mission = self._logic.mission
+        old_state = self._logic.state
+        new_state = self._logic.on_mission(msg.data)
+        if old_mission == self._logic.mission:
             return
-        self.get_logger().info(f"Mission: {old} → {self._mission}")
+        self.get_logger().info(f"Mission: {old_mission} → {self._logic.mission}")
         self._publish_mission_frame()
-
-        # Switching away from autonomous → reset to AS_OFF
-        if self._mission not in AUTONOMOUS_MISSIONS and self._state != AS_OFF:
-            self._set_state(AS_OFF)
-        # Auto-transition: selecting autonomous mission → AS_READY
-        elif self._mission in AUTONOMOUS_MISSIONS and self._state in (AS_OFF, AS_DRIVING, AS_FINISHED):
-            # PID mode is forced on the start command, not here: arming the
-            # position loop is a driving action, and in PID mode the zero
-            # steering frames sent while idle are a real "go to centre" target.
-            self._set_state(AS_READY)
+        if new_state is not None:
+            self._log_transition(old_state, new_state)
+            self._publish_state()
 
     def _on_state_cmd(self, msg: String):
         """@brief Callback for state commands (start, stop, ebs, finish, reset).
 
         @param msg String message with the command.
         """
-        cmd = msg.data
-        s = self._state
-
-        if cmd == "start" and s == AS_READY:
-            self._set_state(AS_DRIVING)
-            if self._mission in AUTONOMOUS_MISSIONS:
-                # Arm the position loop only now that driving was requested.
-                # cone_follower re-asserts PWM mode if the algorithm is None.
-                self._publish_steer_mode(0)
-        elif cmd == "stop" and s in (AS_READY, AS_DRIVING, AS_FINISHED, AS_EMERGENCY):
-            # Stay armed (AS_READY) if an autonomous mission is selected,
-            # matching real FS behavior: stop driving ≠ deselect mission / ASMS off.
-            if self._mission in AUTONOMOUS_MISSIONS:
-                self._set_state(AS_READY)
-            else:
-                self._set_state(AS_OFF)
-        elif cmd == "ebs" and s != AS_OFF:
-            self._set_state(AS_EMERGENCY)
-        elif cmd == "finish" and s == AS_DRIVING:
-            self._set_state(AS_FINISHED)
-        elif cmd == "reset" and s in (AS_FINISHED, AS_EMERGENCY):
-            self._set_state(AS_OFF)
-        else:
-            self.get_logger().warn(f"Ignored cmd '{cmd}' in state {STATE_NAMES[s]}")
+        old_state = self._logic.state
+        new_state, force_pid = self._logic.on_state_cmd(msg.data)
+        if new_state is None:
+            self.get_logger().warn(
+                f"Ignored cmd '{msg.data}' in state {STATE_NAMES[old_state]}"
+            )
+            return
+        self._log_transition(old_state, new_state)
+        self._publish_state()
+        if force_pid:
+            # Arm the position loop only now that driving was requested.
+            # cone_follower re-asserts PWM mode if the algorithm is None.
+            self._publish_steer_mode(STEER_MODE_PID)
 
     def _on_auto_cmd(self, msg: Twist):
         """@brief Callback for autonomous cmd_vel. Stores latest command for muxing."""
@@ -133,40 +103,26 @@ class StateMachineNode(Node):
         """@brief Callback for manual (remote control) cmd_vel. Stores latest command for muxing."""
         self._last_manual_cmd = msg
 
-    # ── State transitions ──────────────────────────────────────────────
-
-    def _set_state(self, new_state: int):
-        """@brief Transition to a new AS state, logging and publishing the change.
-
-        @param new_state Target AS state constant (AS_OFF, AS_READY, etc.).
-        """
-        old = self._state
-        self._state = new_state
-        self.get_logger().info(f"State: {STATE_NAMES[old]} → {STATE_NAMES[new_state]}")
-        self._publish_state()   # sends both the String and the ESP32 Frame
-
     # ── Muxing (100 Hz) ───────────────────────────────────────────────
 
     def _mux_tick(self):
         """@brief Timer callback (100 Hz): mux autonomous or manual cmd_vel based on mission and state."""
+        linear_x, angular_z = self._logic.mux(
+            (self._last_auto_cmd.linear.x, self._last_auto_cmd.angular.z),
+            (self._last_manual_cmd.linear.x, self._last_manual_cmd.angular.z),
+        )
         out = Twist()
-
-        if self._mission in ("manual", "remote_control"):
-            out = self._last_manual_cmd
-        elif self._mission in AUTONOMOUS_MISSIONS:
-            if self._state == AS_DRIVING:
-                if self._mission == "throttle_test":
-                    # Fixed throttle for hardware debugging — no perception needed
-                    out.linear.x = 2.5  # 2.5 / max_speed(5.0) = 50% throttle
-                else:
-                    out = self._last_auto_cmd
-            # else: zero Twist (default). Safe only because the 10 Hz heartbeat
-            # holds direct-PWM steer mode outside AS_DRIVING, where 0 means
-            # unpowered — in PID mode 0 rad is a real "go to centre" target.
-
+        out.linear.x = linear_x
+        out.angular.z = angular_z
         self._muxed_pub.publish(out)
 
     # ── Publishers ─────────────────────────────────────────────────────
+
+    def _log_transition(self, old_state: int, new_state: int):
+        """@brief Log an AS state transition."""
+        self.get_logger().info(
+            f"State: {STATE_NAMES[old_state]} → {STATE_NAMES[new_state]}"
+        )
 
     def _publish_state(self):
         """@brief Publish current AS state, as a name to /kart/state and as a Frame to the ESP32.
@@ -181,7 +137,7 @@ class StateMachineNode(Node):
         lucky delivery.
         """
         msg = String()
-        msg.data = STATE_NAMES[self._state]
+        msg.data = STATE_NAMES[self._logic.state]
         self._state_pub.publish(msg)
         self._publish_state_frame()
 
@@ -189,14 +145,15 @@ class StateMachineNode(Node):
         # direct-PWM mode makes the mux's zero Twist mean "no drive" instead of
         # "drive to centre and hold". Re-asserted at 10 Hz so a dashboard mode
         # toggle cannot silently re-power the motor before Start.
-        if self._mission in AUTONOMOUS_MISSIONS and self._state != AS_DRIVING:
-            self._publish_steer_mode(1)
+        idle_mode = self._logic.heartbeat_steer_mode()
+        if idle_mode is not None:
+            self._publish_steer_mode(idle_mode)
 
     def _publish_state_frame(self):
         """@brief Publish current AS state as a Frame to /orin/machine_state for the ESP32."""
         frame = Frame()
         frame.type = Frame.ORIN_MACHINE_STATE
-        frame.payload = [self._state]
+        frame.payload = [self._logic.state]
         self._machine_state_pub.publish(frame)
 
     def _publish_steer_mode(self, mode: int):
@@ -212,7 +169,7 @@ class StateMachineNode(Node):
     def _publish_mission_frame(self):
         """@brief Publish current mission ID as a Frame to /orin/mission for the ESP32."""
         from kb_dashboard.protocol import MISSIONS
-        mission_id = MISSIONS.get(self._mission, 0)
+        mission_id = MISSIONS.get(self._logic.mission, 0)
         frame = Frame()
         frame.type = Frame.ORIN_MISION
         frame.payload = [mission_id]
