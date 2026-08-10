@@ -1758,3 +1758,63 @@ Note this puts the blind bench mode behind the normal autonomous gating (an auto
 AS_DRIVING), unlike the older `throttle_test` mission in `state_machine_node.py`, which applies
 throttle as soon as it is selected and never checks the state. `throttle_test` is left in place and
 unchanged for now; whether to gate it, lower it, or delete it is still open.
+
+## 2026-08-10 — Forward speed estimated from cone range rates
+
+The kart has no speed sensor. The motor hall sensors would be the direct answer but
+their pins are taken on the current PCB, so this is blocked until a board revision.
+The ZED SDK's visual-inertial odometry used to fill the gap and was turned off in
+`02eda4d` (19 Apr 2026) because it ran on the GPU that YOLO needs.
+
+Cones do not move, so the rate at which a detected cone's distance shrinks is caused
+entirely by the kart's own motion, and YOLO already finds those cones every frame for
+steering. Built `src/kart_perception/kart_perception/speed_model.py` (geometry plus a
+one-state Kalman filter) and `speed_estimator_node.py` (ROS glue, publishes
+`/kart/speed`, launched under the `perception` condition in `kart_bringup`).
+
+The useful piece of geometry: for a static cone at (x forward, y left), range
+r = sqrt(x^2+y^2), with the kart at speed v and yaw rate w,
+
+    dr/dt = (x*(-v + w*y) + y*(-w*x)) / r = -v * (x/r)
+
+The yaw terms cancel exactly — rotation cannot change a distance. So each cone gives
+v = -(dr/dt)/(x/r) with no yaw rate input needed, and the estimate stays correct
+through corners, which is where a "how much did the forward coordinate change" method
+would fail. Cones near 90 degrees off the nose are discarded because x/r approaches
+zero there and dividing by it amplifies depth noise without limit.
+
+Per-cone estimates are combined with a median rather than a mean, because the failure
+that matters is a wrong frame-to-frame match producing one arbitrary value. The spread
+of the estimates becomes the measurement noise handed to the filter, which is what
+makes it self-tuning: close, plentiful, dead-ahead cones agree and the filter trusts
+them; distant or sparse ones disagree and it coasts instead.
+
+The filter is one state. A second state for accelerometer bias would need the ZED IMU,
+and removing gravity from that reading needs pitch to about a degree — over a bumpy
+circuit that error would inject more drift than it removed. Detections arrive at tens
+of hertz, leaving little gap for an acceleration term to fill.
+
+A review agent checked the derivation independently and found three things worth
+recording. First, a process-model bug: uncertainty was grown by `(accel*dt)^2` per
+call, so calling predict more often produced less growth for the same elapsed time and
+the filter became more confident the faster its timer ran. It now grows the standard
+deviation by `accel*dt`, which depends only on elapsed time. Second, a constants bug:
+`MAX_FRAME_GAP_S` was 0.5 s while the match gate was 1.5 m, and at 12 m/s the kart
+covers 6 m in that time — far enough to match a cone to its NEIGHBOUR, which every
+cone in view does at once so the median cannot reject it. The gap is now 0.12 s, which
+is 1.5 m at top speed. Third, and worst, feeding camera optical coordinates (x right,
+z forward) where the kart frame (x forward, y left) is expected produced a rock-steady
+0.00 m/s at a true 5 m/s, with many cones and a tight spread — a confident false
+reading rather than a crash. A guard now refuses any frame where fewer than 60% of
+cones are ahead of the kart.
+
+Simulated against stereo depth noise: with 0.1 m of error at 10 m the estimate lands
+within 0.1 m/s; with 0.4 m at 10 m it over-reads by about 0.4 m/s. That over-reading is
+a bias, not noise — the median protects against errors affecting one cone, and is
+powerless against an error every cone shares. The same applies to sideways motion read
+as forward motion, to the camera sitting ahead of the axle so cornering swings it
+sideways, and to anything misclassified as a cone that actually moves. All are listed
+in the module docstring.
+
+Nothing steers or brakes on this. It feeds the dashboard readout only, and wants
+measuring against a GPS trace or a timed run before `stanley_assumed_speed` is retired.

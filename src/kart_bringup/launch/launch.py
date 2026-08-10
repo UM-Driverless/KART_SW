@@ -150,6 +150,19 @@ def generate_launch_description():
         output="screen",
     )
 
+    # Estimates forward speed from how fast detected cones approach. The kart has no
+    # speed sensor, so this is the only speed figure available until the hall-sensor
+    # pins are free on a future PCB. Gated on perception because it needs the cone
+    # detections, and UNVALIDATED — it feeds the dashboard readout only, nothing
+    # steers or brakes on it. See src/kart_perception/kart_perception/speed_model.py.
+    speed_estimator = Node(
+        package="kart_perception",
+        executable="speed_estimator",
+        name="speed_estimator",
+        output="screen",
+        condition=IfCondition(perception),
+    )
+
     state_machine = Node(
         package="kart_control",
         executable="state_machine_node.py",
@@ -208,6 +221,7 @@ def generate_launch_description():
             perception_custom,
             steering_hud,
             cone_follower,
+            speed_estimator,
             # Always
             state_machine,
             cmd_vel_bridge,

@@ -35,6 +35,7 @@ setup(
             "cone_depth_localizer = kart_perception.cone_depth_localizer_node:main",
             "cone_marker_viz_3d = kart_perception.cone_marker_viz_3d_node:main",
             "ground_plane_localizer = kart_perception.ground_plane_localizer_node:main",
+            "speed_estimator = kart_perception.speed_estimator_node:main",
             "steering_hud = kart_perception.steering_hud_node:main",
             "hud_viewer = kart_perception.hud_viewer_node:main",
         ],
