@@ -485,17 +485,19 @@ class ConeFollowerNode(Node):
     def _on_param_set(self, params) -> SetParametersResult:
         """@brief Apply live gain changes, so the speed loop can be tuned at the kart.
 
-        Only the closed-loop speed gains. Everything else here still needs a
-        restart, deliberately: these are the two being tuned by hand.
+        The closed-loop speed gains, and max_speed — which the PI no longer uses at
+        all, but which is still the level the open-loop modes command outright.
+        Everything else here needs a restart, deliberately: these are the ones tuned
+        by hand at the kart.
         """
         for p in params:
-            if p.name in ("speed_kp", "speed_ki"):
+            if p.name in ("speed_kp", "speed_ki", "max_speed"):
                 if float(p.value) < 0.0:
                     return SetParametersResult(
                         successful=False, reason=f"{p.name} must not be negative"
                     )
                 setattr(self, p.name, float(p.value))
-                # A gain change makes the accumulated integral meaningless.
+                # A gain or ceiling change makes the accumulated integral meaningless.
                 self._speed_integral = 0.0
                 self.get_logger().info(f"{p.name} → {p.value}")
         return SetParametersResult(successful=True)
@@ -503,11 +505,13 @@ class ConeFollowerNode(Node):
     def _on_target_speed(self, msg: Float32):
         """@brief Callback for the closed-loop speed setpoint from the dashboard.
 
-        @param msg Float32 setpoint in m/s. Clamped to a sane range, and the
-                   integral is dropped on a change so the old error does not
-                   push the kart past the new setpoint.
+        @param msg Float32 setpoint in m/s. Only the negative side is rejected —
+                   a negative setpoint is not a slower kart, it is a reversed sign
+                   through a loop that cannot brake. The integral is dropped on a
+                   change so the old error does not push the kart past the new
+                   setpoint.
         """
-        new_target = max(0.0, min(5.0, float(msg.data)))
+        new_target = max(0.0, float(msg.data))
         if abs(new_target - self.target_speed) < 1e-6:
             return
         self.get_logger().info(
@@ -539,11 +543,13 @@ class ConeFollowerNode(Node):
     def _constant_speed_throttle(self) -> float:
         """@brief PI control of throttle to hold target_speed, in the fake-m/s units.
 
-        The output is capped at self.max_speed, the same ceiling constant_throttle
-        commands outright. That cap is what makes this safe to run on a speed
-        estimate nobody has validated yet: however wrong the estimate is, the
-        throttle can never exceed what the open-loop mode would have applied, so
-        the worst case is the behaviour being replaced rather than a new one.
+        There is no ceiling on the output. It used to be capped at self.max_speed —
+        52.5% throttle — so that a wrong speed estimate could never command more than
+        the open-loop mode would have. That cap was removed on request (Rubén,
+        2026-08-10): the loop may now wind up to full throttle, and the only thing
+        bounding it is cmd_vel_bridge clamping the throttle fraction at 1.0, which is
+        the actuator's own range rather than a limit. The speed estimate this closes
+        on has still never been checked against a real speed.
 
         Throttle only, never brake. A negative command would ask cmd_vel_bridge for
         the brake actuator, and braking on an unvalidated speed reading is a
@@ -571,13 +577,14 @@ class ConeFollowerNode(Node):
         error = self.target_speed - self._actual_speed
         proportional = self.speed_kp * error
 
-        # Integrate, then clamp so the integral alone can never exceed the ceiling.
-        # Without this the term winds up while the kart is held back — on a slope,
-        # or against a wheel chock — and dumps full throttle the moment it frees.
+        # Integrated with no upper clamp, so the term winds up freely while the kart
+        # is held back — on a slope, or against a wheel chock — and dumps whatever it
+        # has accumulated the moment it frees. Only the lower bound survives, because
+        # a negative total would command the brakes rather than less throttle.
         self._speed_integral += self.speed_ki * error * dt
-        self._speed_integral = max(0.0, min(self.max_speed, self._speed_integral))
+        self._speed_integral = max(0.0, self._speed_integral)
 
-        return max(0.0, min(self.max_speed, proportional + self._speed_integral))
+        return max(0.0, proportional + self._speed_integral)
 
     def _compute_speed(self, steer, nn_out=None, cones=None):
         """@brief Compute speed based on the active speed controller type.

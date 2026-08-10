@@ -435,9 +435,11 @@ async def run_websocket_server(
             if hasattr(node, "publish_controller_type"):
                 node.publish_controller_type(ctrl_type)
         elif action == "set_target_speed":
-            # Clamped here as well as in the browser: a hand-written WebSocket
-            # frame must not be able to ask the kart for an arbitrary speed.
-            speed = max(0.0, min(5.0, float(cmd.get("speed", 0.28))))
+            # Only the negative side is rejected. The upper clamp was removed on
+            # request (Rubén, 2026-08-10) along with the controller's own ceiling;
+            # a negative setpoint is still refused because it is a sign error, not
+            # a slower kart — the loop commands throttle and cannot brake.
+            speed = max(0.0, float(cmd.get("speed", 0.28)))
             state.update("target_speed", speed)
             if hasattr(node, "publish_target_speed"):
                 node.publish_target_speed(speed)

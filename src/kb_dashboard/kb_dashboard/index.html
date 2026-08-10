@@ -527,7 +527,9 @@ function updateAlgoButtons() {
 function onTargetSpeedChange(inp) {
   let kmh = parseFloat(inp.value);
   if (!isFinite(kmh)) kmh = 1;
-  kmh = Math.max(0, Math.min(18, kmh));
+  // No upper bound: the controller's throttle ceiling was removed too. Negative is
+  // still refused — the loop commands throttle and cannot brake.
+  kmh = Math.max(0, kmh);
   inp.value = kmh;
   currentTargetSpeed = kmh / 3.6;
   wsSend({action:'set_target_speed', speed: currentTargetSpeed});
@@ -2641,7 +2643,7 @@ body{
           <div class="algo-select"><div class="algo-label">Speed</div><select class="algo-dropdown speed-algo-dropdown" onchange="onSpeedAlgoChange(this)"><option value="curve_factor">Curve Factor</option><option value="constant_throttle">Constant Throttle (needs cones)</option><option value="constant_throttle_blind">Constant Throttle (blind)</option><option value="constant_throttle_stop">Constant Throttle + Stop</option><option value="constant_speed">Constant Speed (closed loop)</option><option value="neural_v2">Neural V2</option><option value="zero">Zero</option></select></div>
           <!-- Setpoint for the closed loop only; every other speed mode ignores it,
                so the row appears with that mode and nowhere else. -->
-          <div class="algo-select" id="targetSpeedRow" style="display:none"><div class="algo-label">Target speed (km/h)</div><input class="algo-dropdown" id="targetSpeedInput" type="number" step="0.5" min="0" max="18" value="1" onchange="onTargetSpeedChange(this)"></div>
+          <div class="algo-select" id="targetSpeedRow" style="display:none"><div class="algo-label">Target speed (km/h)</div><input class="algo-dropdown" id="targetSpeedInput" type="number" step="0.5" min="0" value="1" onchange="onTargetSpeedChange(this)"></div>
         </div>
         <div class="rc-panel rc-mpanel" id="rcCtrlPane">
           <span class="rc-label">Controls</span>
