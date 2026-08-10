@@ -33,6 +33,18 @@ LOGIN_HTML = """\
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Kart Dashboard — Login</title>
+<!-- The same Home Screen icon the dashboard declares. It has to be repeated here because iOS
+     reads the icon from whatever page is on screen when Add to Home Screen is tapped, and an
+     expired session puts this page there — without these the app would be added with a
+     screenshot of the login box as its icon. The web-app meta tags come along for the same
+     reason: they decide how it launches, and the launch may well land on this page. -->
+<link rel="apple-touch-icon" href="/icon-180.png">
+<link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Kart">
+<meta name="theme-color" content="#111113">
 <style>
   body { background: #0a0a0f; color: #e0e0e0; font-family: Inter, sans-serif;
          display: flex; justify-content: center; align-items: center; min-height: 100vh; }
