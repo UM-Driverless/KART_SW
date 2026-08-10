@@ -1818,3 +1818,19 @@ in the module docstring.
 
 Nothing steers or brakes on this. It feeds the dashboard readout only, and wants
 measuring against a GPS trace or a timed run before `stanley_assumed_speed` is retired.
+
+## 2026-08-10 — Speed estimator deployed; first live reading
+
+Built, pushed and deployed to the Orin the same day (`colcon build --packages-select
+kart_perception kart_bringup`, then `systemctl restart kart-brain`). It came up clean
+and gave its first honest result immediately: with the kart stationary and cones in
+view it read 0.008 m/s, and reported that 68% of 311 frames yielded a usable
+measurement. Cone detections were arriving at 61 Hz and `/kart/speed` published at its
+configured 20 Hz.
+
+That 68% is worth remembering as the baseline. A large drop would mean cones are being
+lost between frames — either the match gate or the range band no longer suits the
+track, or perception itself has degraded.
+
+Not yet done, and the thing that decides whether any of this is usable: a run at a
+known speed. Nothing on the kart steers or brakes on this figure until then.

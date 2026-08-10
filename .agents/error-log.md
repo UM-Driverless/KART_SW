@@ -490,3 +490,33 @@ analysis showed would have false-tripped on healthy hardware.
 writing the handler, not after. If the observation is not available, write the detector as
 report-only and let the journal supply the threshold — which is where this one ended up anyway, just
 after the detour.
+
+## 2026-08-10 — Two standing communication rules broken in one session (Claude Opus 5)
+
+**What happened.** Rubén corrected me twice on how I was working, both times for behaviour a
+rule already forbids.
+
+First, he said the `constant`/`constant_stop` speed controllers were misnamed and "we should
+probably rename it". I explained the problem, agreed with him, and then ended with "Want me to do
+that rename?" — handing back a decision he had just made. His reply: "why do you ask me ... when i
+already told you to do that? go ahead." The global CLAUDE.md already covers this twice, under
+two-way doors (an easily undone action is just done) and under not asking for minor steps.
+
+Second, I wrote "the node isn't 'gated by cones', it's driven by them" to explain why a no-camera
+mode had to live in the safety timer. He replied: "speak normally. no human will ever understand
+this." The global CLAUDE.md lists "It's not X, it's Y" reframes explicitly as a pattern to avoid.
+
+**Root cause.** Both rules were known and neither was applied. The common thread is that each
+felt like good writing at the point of composing it — the question read as courtesy, the contrast
+read as clarity — so nothing triggered a check against the rules. Neither was a gap in what is
+written down.
+
+**Prevention.** Before ending a message, two checks. If it closes with an offer, ask whether the
+user already asked for that thing; if so, delete the offer and do the work. If a sentence draws a
+contrast between what something is and is not, rewrite it as a plain statement of what happens —
+"the node only sends a command when it receives detections, so with no camera it sends nothing"
+carried the same point and needed no quotation marks.
+
+**Not a new rule.** No rule file needs changing for this; the rules exist and were skipped. This
+entry is here so the next session greps it rather than a future reader adding a third overlapping
+bullet to CLAUDE.md.

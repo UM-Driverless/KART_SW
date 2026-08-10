@@ -31,6 +31,8 @@
 │   │   │   ├── cone_depth_localizer_node.py  Depth → 3D projection
 │   │   │   ├── cone_marker_viz_3d_node.py    RViz markers
 │   │   │   ├── cone_marker_viz_node.py       2D markers (legacy)
+│   │   │   ├── speed_estimator_node.py       Forward speed from cone range rates
+│   │   │   ├── speed_model.py                ↳ its geometry + Kalman filter (no ROS, tested)
 │   │   │   └── image_source_node.py          File/video publisher
 │   │   └── launch/
 │   │       ├── perception_3d.launch.py       Full 3D pipeline
@@ -197,7 +199,8 @@ Key message types (Orin → ESP32):
 | `/perception/cones_2d` | `vision_msgs/Detection2DArray` | bbox center, class_id, score |
 | `/perception/cones_3d` | `vision_msgs/Detection3DArray` | 3D position, class_id, score |
 | `/perception/yolo/annotated` | `sensor_msgs/Image` | Camera feed with YOLO bounding boxes (view with rqt_image_view) |
-| `/kart/cmd_vel` | `geometry_msgs/Twist` | linear.x (speed), angular.z (steering rad) |
+| `/kart/cmd_vel` | `geometry_msgs/Twist` | linear.x, angular.z (steering rad). **linear.x is not really m/s on the kart** — `cmd_vel_bridge_node.py` divides it by its own `max_speed` param to get a throttle fraction, and `dashboard_node.py` multiplies a real 0-1 throttle by a matching constant on the way in, so the unit is a round trip through two numbers that have to agree. `kart_sim` does treat it as true m/s. |
+| `/kart/speed` | `std_msgs/Float32` | Estimated forward speed (m/s) from `speed_estimator` — cone range rates, see `kart_perception/speed_model.py`. Published only while backed by recent cone detections. UNVALIDATED against a real speed. |
 | `/orin/steering` | `kb_interfaces/Frame` | Steering target (protobuf TargSteering) |
 | `/orin/throttle` | `kb_interfaces/Frame` | Throttle target (protobuf TargThrottle) |
 | `/orin/brake` | `kb_interfaces/Frame` | Brake target (protobuf TargBraking) |
