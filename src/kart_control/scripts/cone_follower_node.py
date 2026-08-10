@@ -351,6 +351,16 @@ class ConeFollowerNode(Node):
         self._steer_mode_frame = None
         self._steer_mode_repeats = 0
         self.create_timer(0.01, self._send_steer_mode)
+        # This topic has three publishers — this node, state_machine and the
+        # dashboard's Angle/PWM toggle — and "none" is the only one of them that
+        # is a safety claim rather than a preference: it means nothing may drive
+        # the steering motor while a human has the wheel. state_machine forces
+        # PID mode on every autonomous mission reaching AS_READY, which used to
+        # silently undo it and put a PID target of 0 rad on the column, i.e. it
+        # steered to centre against the driver. So watch the topic and re-assert
+        # direct PWM whenever anything else sets PID while "none" is selected.
+        self.create_subscription(Frame, "/orin/steer_mode", self._on_steer_mode, 10)
+        self.create_timer(1.0, self._refresh_steer_mode)
         self.last_detection_time = self.get_clock().now()
         self.timer = self.create_timer(0.1, self._safety_check)
         self.create_subscription(
@@ -392,13 +402,47 @@ class ConeFollowerNode(Node):
             if new_type in ("neural", "neural_v2") and self._nn_W1 is None:
                 self._load_neural_weights()
 
-    def _request_steer_mode(self, mode: int):
-        """@brief Queue a steering-mode frame for the ESP32. 0=PID angle, 1=direct PWM."""
+    def _request_steer_mode(self, mode: int, repeats: int = 100):
+        """@brief Queue a steering-mode frame for the ESP32. 0=PID angle, 1=direct PWM.
+
+        @param mode 0=PID angle, 1=direct PWM.
+        @param repeats How many times to send it, at 100 Hz. The default 1 s burst
+               covers a frame lost on the unacknowledged UART link; the periodic
+               re-assertion passes 1, because it runs again a second later anyway.
+        """
         frame = Frame()
         frame.type = Frame.ORIN_STEER_MODE
         frame.payload = [mode]
         self._steer_mode_frame = frame
-        self._steer_mode_repeats = 100  # 1 s at the 100 Hz timer below
+        self._steer_mode_repeats = repeats
+
+    def _on_steer_mode(self, msg: Frame):
+        """@brief Re-assert direct PWM if something else asks for PID while steering is off.
+
+        Fires on this node's own frames too; those already carry the mode it wants,
+        so they change nothing and the check cannot loop.
+        """
+        if not msg.payload or self.controller_type != "none":
+            return
+        if int(msg.payload[0]) != 1:
+            self.get_logger().warn(
+                "steer_mode was set to PID while steering is None — re-asserting "
+                "direct PWM so the motor stays unpowered"
+            )
+            self._request_steer_mode(1)
+
+    def _refresh_steer_mode(self):
+        """@brief Once a second, restate direct PWM while steering is None.
+
+        The subscription above catches anything that announces itself on this
+        topic. This covers what it cannot: an ESP32 that rebooted and came back in
+        its flashed default mode, having missed every frame sent before it.
+        """
+        if self.controller_type == "none" and self._steer_mode_repeats <= 0:
+            # One frame, not the 1 s burst a mode change gets: re-arming that burst
+            # every second would put a permanent 100 Hz stream on the UART, competing
+            # with the steering frames that actually matter.
+            self._request_steer_mode(1, repeats=1)
 
     def _send_steer_mode(self):
         """@brief Timer callback: resend a pending steering-mode frame until the repeats run out."""
