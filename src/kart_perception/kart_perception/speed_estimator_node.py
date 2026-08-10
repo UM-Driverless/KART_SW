@@ -20,6 +20,7 @@ speed_model.py before relying on it anywhere else.
 """
 
 import rclpy
+from rcl_interfaces.msg import SetParametersResult
 from rclpy.node import Node
 from std_msgs.msg import Float32
 from vision_msgs.msg import Detection3DArray
@@ -37,8 +38,13 @@ class SpeedEstimatorNode(Node):
         self.declare_parameter("speed_topic", "/kart/speed")
         self.declare_parameter("publish_rate_hz", 20.0)
         # How hard the kart is assumed able to accelerate. Sets how quickly the
-        # estimate's uncertainty grows while no cones are being matched.
-        self.declare_parameter("process_accel", 3.0)
+        # estimate's uncertainty grows while no cones are being matched, and so
+        # how much weight each new measurement gets: this is the smoothing knob.
+        # Lower = smoother output that lags real changes; higher = twitchier and
+        # quicker. Dropped from 3.0 to 2.0 on 2026-08-10 because the published
+        # speed was visibly noisy. Settable at runtime:
+        #     ros2 param set /speed_estimator process_accel 1.5
+        self.declare_parameter("process_accel", 2.0)
         # Above this uncertainty the estimate stops being published at all.
         self.declare_parameter("max_valid_stddev", 2.0)
 
@@ -51,6 +57,10 @@ class SpeedEstimatorNode(Node):
             process_accel=float(self.get_parameter("process_accel").value),
             max_valid_stddev=float(self.get_parameter("max_valid_stddev").value),
         )
+
+        # The filter copies its gains at construction, so without this a
+        # `ros2 param set` would report success and change nothing.
+        self.add_on_set_parameters_callback(self._on_param_set)
 
         self._last_predict_time = self._now()
         self._frames_with_measurement = 0
@@ -68,6 +78,27 @@ class SpeedEstimatorNode(Node):
             "Output is UNVALIDATED against a real speed — the constant_speed mode "
             "closes a capped loop on it; nothing else should."
         )
+
+    def _on_param_set(self, params) -> SetParametersResult:
+        """Apply live changes to the filter's tuning without a restart."""
+        for p in params:
+            if p.name == "process_accel":
+                if float(p.value) <= 0.0:
+                    return SetParametersResult(
+                        successful=False,
+                        reason="process_accel must be positive",
+                    )
+                self.filter.process_accel = float(p.value)
+                self.get_logger().info(f"process_accel → {p.value}")
+            elif p.name == "max_valid_stddev":
+                if float(p.value) <= 0.0:
+                    return SetParametersResult(
+                        successful=False,
+                        reason="max_valid_stddev must be positive",
+                    )
+                self.filter.max_valid_variance = float(p.value) ** 2
+                self.get_logger().info(f"max_valid_stddev → {p.value}")
+        return SetParametersResult(successful=True)
 
     def _now(self) -> float:
         return self.get_clock().now().nanoseconds / 1e9
