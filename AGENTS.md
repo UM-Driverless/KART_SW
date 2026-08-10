@@ -128,7 +128,6 @@ A change is NOT done until it's **validated on the target machine**:
   *falsify* your favourite explanation — not the explanation.
 - **Don't trust auto-memory for technical state.** Auto-memory (`~/.claude/.../memory/`) goes stale fast — file paths, parameter values, launch files, firmware settings all change between conversations. **Always read the actual file or SSH to check** before quoting any value. Treat memory as "might have been true once" not "is true now". `.agents/` docs and the code itself are the source of truth.
 - **Environment is in `.bashrc`** — ROS, workspace, and `IGN_GAZEBO_RESOURCE_PATH` are all sourced in `.bashrc` on every machine. **Never tell the user to source or export these manually.**
-- **Always use `--symlink-install`** when building. This symlinks Python scripts and launch files so edits in `src/` take effect immediately without rebuilding. Only C++ changes need a rebuild.
 - **After creating/modifying files under `src/`, scp them to the VM and rebuild via SSH — don't just tell the user.** Use: `scp <files> utm:~/kart-brain/...` then `ssh utm "source /opt/ros/humble/setup.bash && cd ~/kart-brain && colcon build --symlink-install --packages-select <pkg>"`. Note: `.bashrc` is NOT sourced in non-interactive SSH — always source ROS explicitly.
 - **Gazebo Fortress uses `ign` CLI**, not `gz`. Message types are `ignition.msgs.*`, not `gz.msgs.*`.
 - **No `<cone>` geometry** in SDF — use `<cylinder>` instead (Fortress limitation).
