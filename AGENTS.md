@@ -78,15 +78,19 @@ What each kind of change needs after `git pull` on the Orin:
   `sys.path`. Verify by grepping the installed file, never the source and never the tunnel root
   (which returns the login page). This line claimed "nothing" until 2026-08-08 and caused a fix to be
   reported as deployed when it was not.
-- **Python in an `ament_python` package — `kart_perception`, `kb_dashboard`, `kb_bms`** —
-  `colcon build --packages-select <pkg>`, then restart. Their files are **copied** into
-  `install/<pkg>/lib/python3.10/site-packages/`, so a pull alone changes nothing that runs. This is
-  the same trap as `index.html` above, and it is not limited to that one file. Verified 2026-08-10 by
-  listing the installed files: they are regular files, not symlinks.
-- **Python in an `ament_cmake` package — `kart_control` nodes under `scripts/`** — pull and
-  `sudo systemctl restart kart-brain`. These genuinely are symlinked back into `src/`, which is why
-  the "just restart" advice looks right until it silently isn't. A restart is still required: the
-  running process already imported the old module.
+- **Other Python (nodes, `server.py`, launch files)** — whether a pull is enough depends on how that
+  package was **last built**, which is invisible from `src/` and differs per package. Check before
+  claiming a deploy:
+
+      ls ~/kart-brain/install/<pkg>/lib/python3.10/site-packages/
+
+  An `.egg-link` there means the package was built with `--symlink-install` and resolves back to
+  `src/`, so a pull plus `sudo systemctl restart kart-brain` is enough. A real directory means the
+  sources were **copied** at build time and a pull changes nothing that runs — rebuild with
+  `colcon build --symlink-install --packages-select <pkg>`, then restart. As of 2026-08-10
+  `kart_perception` is egg-linked and `kb_dashboard` is copied, so the two behave differently right
+  now. `kart_control`'s nodes live in `scripts/` under `ament_cmake` and are symlinked. A restart is
+  always required either way: the running process already imported the old module.
 - **C++** — `colcon build --symlink-install --packages-select <pkg>`, then restart.
 - **ESP32 firmware** — flash it. **Stop `kart-brain` first**: `KB_Coms_micro` holds `/dev/ttyACM0`, and
   esptool fails with "device reports readiness to read but returned no data (device disconnected or

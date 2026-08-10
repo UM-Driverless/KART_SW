@@ -545,3 +545,27 @@ was wrong. The 2026-03-21 entry in this log is the same family again.
 **Prevention.** The deploy section now splits by build type. When a deploy step is corrected, check
 whether the neighbouring entries share the same mechanism instead of fixing only the instance that
 failed — the file's own structure had the answer sitting one bullet away.
+
+## 2026-08-10 — Correction to the entry above: the split is the build flag, not the package type (Claude Opus 5)
+
+**What happened.** The entry immediately above states that `ament_python` packages have their
+sources copied and `ament_cmake` packages get symlinks. That was written from a single `ls` of the
+Orin's install tree and is wrong as a general rule. It went into AGENTS.md and was pushed before
+being checked.
+
+**The actual behaviour**, established by rebuilding `kart_perception` both ways and looking:
+`colcon build --symlink-install` gives an `ament_python` package an `.egg-link` in its
+`site-packages` pointing back at `src/`, so edits are live and a pull plus a restart is enough.
+Plain `colcon build` copies the sources instead, and then a pull changes nothing that runs. Package
+type does not decide it; the flag used on the last build does. Because that state lives only in
+`install/`, two packages in this same workspace currently differ — `kart_perception` is egg-linked,
+`kb_dashboard` is copied.
+
+**Root cause.** An inference from one observation was written as a rule. The observation (regular
+files, not symlinks) was real; the explanation attached to it was a guess, and package type was the
+first plausible variable to hand. Nothing forced the guess to be tested, because the resulting
+advice — build before claiming a deploy — happens to be safe under either explanation.
+
+**Prevention.** A rule that explains *why* something behaves as it does needs the explanation tested,
+not just the symptom observed. The test here cost one rebuild. AGENTS.md now tells the reader to
+look at `install/<pkg>/lib/python3.10/site-packages/` rather than to predict from the package type.
