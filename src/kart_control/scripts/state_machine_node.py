@@ -49,6 +49,7 @@ class StateMachineNode(Node):
         self._mission = "manual"
         self._last_auto_cmd = Twist()
         self._last_manual_cmd = Twist()
+        self._last_forced_steer_mode = None
 
         # Subscriptions
         self.create_subscription(String, "/dashboard/mission", self._on_mission, 10)
@@ -89,9 +90,10 @@ class StateMachineNode(Node):
             self._set_state(AS_OFF)
         # Auto-transition: selecting autonomous mission → AS_READY
         elif self._mission in AUTONOMOUS_MISSIONS and self._state in (AS_OFF, AS_DRIVING, AS_FINISHED):
+            # PID mode is forced on the start command, not here: arming the
+            # position loop is a driving action, and in PID mode the zero
+            # steering frames sent while idle are a real "go to centre" target.
             self._set_state(AS_READY)
-            # Force PID steering mode for autonomous missions
-            self._publish_steer_mode(0)
 
     def _on_state_cmd(self, msg: String):
         """@brief Callback for state commands (start, stop, ebs, finish, reset).
@@ -103,6 +105,10 @@ class StateMachineNode(Node):
 
         if cmd == "start" and s == AS_READY:
             self._set_state(AS_DRIVING)
+            if self._mission in AUTONOMOUS_MISSIONS:
+                # Arm the position loop only now that driving was requested.
+                # cone_follower re-asserts PWM mode if the algorithm is None.
+                self._publish_steer_mode(0)
         elif cmd == "stop" and s in (AS_READY, AS_DRIVING, AS_FINISHED, AS_EMERGENCY):
             # Stay armed (AS_READY) if an autonomous mission is selected,
             # matching real FS behavior: stop driving ≠ deselect mission / ASMS off.
@@ -147,13 +153,16 @@ class StateMachineNode(Node):
 
         if self._mission in ("manual", "remote_control"):
             out = self._last_manual_cmd
-        elif self._mission == "throttle_test":
-            # Fixed 10% throttle for hardware debugging — no perception needed
-            out.linear.x = 2.5  # 2.5 / max_speed(5.0) = 50% throttle
         elif self._mission in AUTONOMOUS_MISSIONS:
             if self._state == AS_DRIVING:
-                out = self._last_auto_cmd
-            # else: zero Twist (default)
+                if self._mission == "throttle_test":
+                    # Fixed throttle for hardware debugging — no perception needed
+                    out.linear.x = 2.5  # 2.5 / max_speed(5.0) = 50% throttle
+                else:
+                    out = self._last_auto_cmd
+            # else: zero Twist (default). Safe only because the 10 Hz heartbeat
+            # holds direct-PWM steer mode outside AS_DRIVING, where 0 means
+            # unpowered — in PID mode 0 rad is a real "go to centre" target.
 
         self._muxed_pub.publish(out)
 
@@ -176,6 +185,13 @@ class StateMachineNode(Node):
         self._state_pub.publish(msg)
         self._publish_state_frame()
 
+        # Hold the steering actuator unpowered while armed but not driving:
+        # direct-PWM mode makes the mux's zero Twist mean "no drive" instead of
+        # "drive to centre and hold". Re-asserted at 10 Hz so a dashboard mode
+        # toggle cannot silently re-power the motor before Start.
+        if self._mission in AUTONOMOUS_MISSIONS and self._state != AS_DRIVING:
+            self._publish_steer_mode(1)
+
     def _publish_state_frame(self):
         """@brief Publish current AS state as a Frame to /orin/machine_state for the ESP32."""
         frame = Frame()
@@ -189,7 +205,9 @@ class StateMachineNode(Node):
         frame.type = 0x29  # ORIN_STEER_MODE
         frame.payload = [mode]
         self._steer_mode_pub.publish(frame)
-        self.get_logger().info(f"Steer mode forced: {'PID' if mode == 0 else 'PWM'}")
+        if mode != self._last_forced_steer_mode:  # called at 10 Hz — log changes only
+            self._last_forced_steer_mode = mode
+            self.get_logger().info(f"Steer mode forced: {'PID' if mode == 0 else 'PWM'}")
 
     def _publish_mission_frame(self):
         """@brief Publish current mission ID as a Frame to /orin/mission for the ESP32."""
