@@ -628,3 +628,28 @@ another rule would not have helped. Concretely, for this stack: when a rate regr
 frame budget before naming a cause. `yolo_detector_node.py` now logs
 `decode / pre / gpu / post / ros` on every FPS line, so the split is free — read it first.
 `sudo py-spy top --pid <pid>` also attaches to a running node with no restart and no code change.
+
+## 2026-08-10 — New UI row was hidden in every mode: `display = ''` against a `display:none` stylesheet rule (Claude Opus 5)
+
+**What happened.** The target-speed row added to the dashboard's Algorithms pane never appeared, in
+any mode. Its show/hide toggle wrote `row.style.display = show ? '' : 'none'`, and `''` removes the
+inline style rather than setting a visible one — so the element fell back to `.algo-select {
+display:none; }` (index.html line 64), the stylesheet rule that hides these rows by default. The
+neighbouring dropdowns are unaffected because `updateMissionUI` sets them to `block` explicitly.
+Fixed by setting `'block'`.
+
+**Root cause.** `''` was copied from the idiom used elsewhere in this file for elements whose default
+display is visible, without checking what the CSS said about this class. The class was chosen because
+it gave the row the right styling — which meant it also inherited that class's hidden default.
+
+**Contributing, and the worse error.** When Rubén reported not seeing it, the first response was to
+delete the conditional and make the row permanent (reverted, see the earlier entry today), and the
+second was to tell him to hard-reload. Both were guesses issued as answers. A live DOM check —
+`getComputedStyle(el).display` with the mode and mission printed beside it — found the real cause in
+one call and should have been the first move, not the third. Note that a bare
+`document.getElementById(...)` non-null check had already been run and was read as confirmation the
+row was fine; presence in the DOM says nothing about visibility.
+
+**Prevention.** After adding an element to an existing CSS class, check that class's rules before
+writing its show/hide logic, and set an explicit display value. When a user reports a UI element is
+missing, read the computed style on the live page before proposing any explanation.
