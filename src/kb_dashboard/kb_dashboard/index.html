@@ -2478,8 +2478,13 @@ body{
   height:calc(var(--rail-item) * 5); overflow:hidden;
   -webkit-mask-image:linear-gradient(transparent 0%, #000 13%, #000 87%, transparent 100%);
   mask-image:linear-gradient(transparent 0%, #000 13%, #000 87%, transparent 100%); }
-/* the fixed centre slot: it marks where selection happens, and it does not move */
-.rail-slot{ position:absolute; left:0; right:0; top:50%; height:var(--rail-item);
+/* the fixed centre slot: it marks where selection happens, and it does not move.
+   left is the safe-area inset for the same reason .rail-window carries one — absolutely
+   positioned, so it resolves against the rail's padding box and the rail's padding-left does
+   not move it. At left:0 the highlight and its red edge ran under the notch while the name
+   inside them started after it, so the marker and what it marks disagreed by the width of
+   the inset. */
+.rail-slot{ position:absolute; left:env(safe-area-inset-left, 0px); right:0; top:50%; height:var(--rail-item);
   transform:translateY(-50%); background:var(--rc-raised);
   border-left:2px solid var(--rc-red); border-top:1px solid var(--rc-line);
   border-bottom:1px solid var(--rc-line); pointer-events:none; z-index:0; }
