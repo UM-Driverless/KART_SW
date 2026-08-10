@@ -1553,6 +1553,16 @@ const RC_DIAL_TANK = { min: 0, max: PNEU_MAX_BAR, major: 2, minor: 1, numbers: t
 const RC_DIAL_PIST = { min: 0, max: PNEU_MAX_BAR, major: 2, minor: 1, numbers: true, topLabel: 'PISTON', label: 'bar',
   fmt: v => (v == null || isNaN(v)) ? '--' : v.toFixed(1) };
 
+/* Forced off-time after a compressor burst hits its cap. Mirrors COMPRESSOR_COOLDOWN_MS in
+   kart-medulla main/main.c — the firmware does not put the remaining time on the wire, so the
+   dashboard counts it down itself from the observed transition into state 2. If that constant
+   ever changes, this one has to change with it; the two are only linked by this comment. */
+const RC_COMP_COOLDOWN_S = 15;
+/* undefined until the first pneumatic frame is seen, which is what tells a cooldown that began
+   before this page was loaded apart from one that started while it was watching. */
+let rcCompPrevState = undefined;
+let rcCompCooldownStart = null;
+
 const skinRace = {
   name: 'Race',
   css: `
@@ -2807,6 +2817,25 @@ body{
     const COMP_TEXT = { 0: ['IDLE', 'rc-dim'], 1: ['RUNNING', 'rc-ok'], 2: ['COOLDOWN', 'rc-dim'],
                       3: ['DISABLED', 'rc-bad'], 4: ['STALLED — NO PRESSURE RISE', 'rc-bad'],
                       5: ['SENSOR OVER-RANGE', 'rc-bad'] };
+    // Cooldown countdown. The firmware forces COMPRESSOR_COOLDOWN_MS = 15000 off-time after a
+    // burst hits its cap, but the ESP_PNEUMATIC frame carries only the state, not how much of
+    // it is left — so the clock is kept here, started from the observed 0/1 -> 2 transition.
+    // Frames arrive at ~20 Hz, so the start instant is off by at most a frame.
+    //
+    // It deliberately shows NO number when the page cannot know the answer: if the very first
+    // frame after a load or a reconnect already says COOLDOWN, the burst began before anyone
+    // was watching, and counting 15 down from that moment would invent a figure that reads
+    // exactly as authoritative as a real one. Getting the remaining time onto the wire is a
+    // firmware change (one more field on ESP_PNEUMATIC) and the only way to fix that case.
+    if (compState === 2) {
+      if (rcCompPrevState !== 2) {
+        rcCompCooldownStart = rcCompPrevState === undefined ? null : performance.now();
+      }
+    } else {
+      rcCompCooldownStart = null;
+    }
+    rcCompPrevState = compState;
+
     const ecEl = $('rcEbsComp');
     if (ecEl) {
       const [txt, cls] = COMP_TEXT[compState] || (compOn ? ['RUNNING', 'rc-ok'] : ['IDLE', 'rc-dim']);
@@ -2815,7 +2844,18 @@ body{
       // spinning but duty is still near 0, so a duty-driven label printed "off" for over a
       // second while the compressor was audibly running.
       const running = compState === 1 || (compState == null && compOn);
-      ecEl.textContent = running ? txt + ' · ' + Math.round((compDuty || 0) / 255 * 100) + '%' : txt;
+      let label = txt;
+      if (running) {
+        label = txt + ' · ' + Math.round((compDuty || 0) / 255 * 100) + '%';
+      } else if (compState === 2 && rcCompCooldownStart != null) {
+        // Ceil, so it reads 15 the instant the cooldown starts and only shows 0 in the last
+        // second before the compressor may run again — a countdown that opens at 14 looks
+        // like it has already lost a second.
+        const left = Math.max(0, Math.min(RC_COMP_COOLDOWN_S,
+          Math.ceil((RC_COMP_COOLDOWN_S * 1000 - (performance.now() - rcCompCooldownStart)) / 1000)));
+        label = txt + ' · ' + left + 's';
+      }
+      ecEl.textContent = label;
       ecEl.className = 'v ' + cls;
     }
     // Shutdown circuit, read back off the ESP32's pin. null means the firmware predates the
