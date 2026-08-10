@@ -100,7 +100,7 @@ body {
        title="Kart state, mission, ESP32 heartbeat and system health — tap for the full breakdown">
     <div class="spill" id="pillState">IDLE</div>
     <div class="spill" id="pillMission">MANUAL</div>
-    <div class="spill" id="pillHb">HB --</div>
+    <div class="spill" id="pillHb">ESP32 --</div>
     <div class="spill sys-chip" id="pillSys">SYS --</div>
   </div>
   <div style="display:flex;align-items:center;gap:8px">
@@ -128,26 +128,26 @@ body {
 <div id="healthInfo" style="display:none">
   <div class="health-vals">
     <span id="hMag">STEER --</span>
-    <span id="hI2c">I2C --</span>
-    <span id="hHeap">HEAP --</span>
-    <span id="hAgc">AGC --</span>
-    <span id="hStk">STK --</span>
-    <span id="hFps">YOLO --</span>
-    <span id="hEspFps">ESP --</span>
+    <span id="hI2c">OLD I2C SENSOR BUS --</span>
+    <span id="hHeap">ESP32 FREE MEMORY --</span>
+    <span id="hAgc">MAGNET SIGNAL STRENGTH --</span>
+    <span id="hStk">ESP32 SPARE TASK MEMORY --</span>
+    <span id="hFps">CONE DETECTION --</span>
+    <span id="hEspFps">ESP32 LINK --</span>
   </div>
   <div class="health-legend">
   <b>STATE</b> Topbar chip 1 — autonomous-system state from the state machine, highlighted while it is RUNNING<br>
   <b>MISSION</b> Topbar chip 2 — selected mission. REMOTE_CONTROL is the one that hands driving to a human over the network<br>
-  <b>HB</b> Topbar chip 3 — seconds since the last ESP32 heartbeat. Green while they keep arriving, red "HB LOST" once they stop, "HB --" before any has been seen<br>
-  <b>SYS</b> Topbar chip 4 — worst case of the readouts below, naming where the trouble is instead of only changing colour. Red for a tripped or unreadable steering sensor, low heap, any stack under 200 bytes, or a missing ESP32; amber for slow YOLO or ESP frame rates. I2C and AGC are left out on purpose — they are never populated on this board, so folding them in would peg the chip to a permanent false alarm<br>
+  <b>ESP32</b> Topbar chip 3 — seconds since the ESP32 last said it is alive. Green while the messages keep arriving, red "ESP32 SILENT" once they stop, which means the dashboard is showing frozen numbers and nothing is driving the actuators. "ESP32 --" before the first message has been seen<br>
+  <b>SYS</b> Topbar chip 4 — worst case of the readouts below, naming where the trouble is instead of only changing colour. Red for a steering sensor that is unreadable or was lost, an ESP32 out of memory, any task under 200 spare bytes, or a silent ESP32; amber for slow cone detection or a slow ESP32 link. The old I2C bus and magnet signal are left out on purpose — they are never populated on this board, so folding them in would peg the chip to a permanent false alarm<br>
   <br>
   <b>STEER</b> Steering sensor (MT6701 read over PWM). OK, NO SIGNAL (missing right now), or SIGNAL LOST (was missing at some point — emergency brake fired, throttle blocked until the ESP32 reboots, even if the signal is back)<br>
-  <b>I2C</b> Legacy AS5600-over-I2C bus. N/A on this board — the ESP32-S3 firmware does not poll an AS5600<br>
-  <b>HEAP</b> Free heap memory on ESP32 (KB)<br>
-  <b>AGC</b> AS5600 Auto Gain Control (0–255, ideal 20–235). N/A on this board for the same reason as I2C<br>
-  <b>STK</b> Min free stack bytes: comms / control / heartbeat / health. Red if &lt;200<br>
-  <b>YOLO</b> YOLO inference rate (Hz). Green &gt;30, yellow 15-30, red &lt;15<br>
-  <b>ESP</b> ESP32 steering-frame rate over USB serial (Hz). Firmware target 100. Green &ge;80, yellow 30-80, red &lt;30
+  <b>OLD I2C SENSOR BUS</b> The bus the previous board used to read its steering sensor (an AS5600). This board does not use it, so "not used" is the normal reading and never means something is broken<br>
+  <b>ESP32 FREE MEMORY</b> Memory the ESP32 still has spare, in kB. Turns red when it runs low, which is the warning before the firmware starts rebooting on its own<br>
+  <b>MAGNET SIGNAL STRENGTH</b> How strongly the old AS5600 saw its magnet (0–255, healthy 20–235). Not measured on this board, for the same reason as the old I2C bus<br>
+  <b>ESP32 SPARE TASK MEMORY</b> How much working memory is left in the tightest of the ESP32's four jobs (comms / control / heartbeat / health), in bytes. Red under 200 — that job is close to overflowing and crashing the firmware<br>
+  <b>CONE DETECTION</b> How many camera frames per second the cone detector gets through. Green above 30, amber 15–30, red under 15, where the kart is reacting to cones it saw a long time ago<br>
+  <b>ESP32 LINK</b> Steering messages per second over the USB cable to the ESP32. Firmware target 100. Green from 80 up, amber 30–80, red under 30, where steering commands are arriving too slowly to control the kart smoothly
   </div>
 </div>
 
@@ -875,8 +875,9 @@ function updatePills(d) {
   $('pillMission').textContent = d.mission.toUpperCase();
   $('pillMission').className = 'spill act';
   const ph = $('pillHb');
-  if (d.esp32_heartbeat_age < 0) { ph.textContent='HB --'; ph.className='spill'; }
-  else { ph.textContent = d.esp32_heartbeat?`HB ${d.esp32_heartbeat_age}s`:`HB LOST ${d.esp32_heartbeat_age}s`; ph.className='spill '+(d.esp32_heartbeat?'hb-ok':'hb-bad'); }
+  // "HB" meant nothing to anyone at the kart. The chip now names the box that went quiet.
+  if (d.esp32_heartbeat_age < 0) { ph.textContent='ESP32 --'; ph.className='spill'; }
+  else { ph.textContent = d.esp32_heartbeat?`ESP32 ${d.esp32_heartbeat_age}s`:`ESP32 SILENT ${d.esp32_heartbeat_age}s`; ph.className='spill '+(d.esp32_heartbeat?'hb-ok':'hb-bad'); }
 }
 
 function updateMissions(d) {
@@ -953,33 +954,33 @@ function updateHealth(d) {
   const as5600Live = !!d.health_magnet_ok || !!d.health_i2c_ok || (d.health_agc || 0) > 0;
   hm.textContent = d.health_steer_trip ? 'STEER SIGNAL LOST (reboot ESP32)' : (d.health_steer_ok ? 'STEER OK' : 'STEER NO SIGNAL');
   hm.style.color = (d.health_steer_ok && !d.health_steer_trip) ? ok : bad;
-  hi.textContent = !as5600Live ? 'I2C N/A' : (d.health_i2c_ok ? 'I2C OK' : 'I2C ERR '+d.health_i2c_errors);
+  hi.textContent = !as5600Live ? 'OLD I2C SENSOR BUS not used' : (d.health_i2c_ok ? 'OLD I2C SENSOR BUS ok' : 'OLD I2C SENSOR BUS '+d.health_i2c_errors+' errors');
   hi.style.color = !as5600Live ? dim : (d.health_i2c_ok ? ok : bad);
-  hh.textContent = 'HEAP '+d.health_heap_kb+'K';
+  hh.textContent = 'ESP32 FREE MEMORY '+d.health_heap_kb+' kB';
   hh.style.color = d.health_heap_ok ? dim : bad;
-  ha.textContent = as5600Live ? 'AGC '+d.health_agc : 'AGC N/A';
+  ha.textContent = as5600Live ? 'MAGNET SIGNAL STRENGTH '+d.health_agc : 'MAGNET SIGNAL STRENGTH not measured';
   ha.style.color = (!as5600Live || (d.health_agc >= 20 && d.health_agc <= 235)) ? dim : bad;
   if (hs && d.stack_comms !== undefined) {
     const vals = [d.stack_comms, d.stack_control, d.stack_heartbeat, d.stack_health];
-    hs.textContent = 'STK '+vals.join('/');
+    hs.textContent = 'ESP32 SPARE TASK MEMORY '+Math.min.apply(null, vals)+' B (lowest of '+vals.join('/')+')';
     hs.style.color = vals.some(v => v < 200) ? bad : dim;
   }
   const hf=$('hFps');
   if (hf && d.yolo_fps !== undefined) {
-    hf.textContent = 'YOLO '+d.yolo_fps.toFixed(1)+'Hz';
+    hf.textContent = 'CONE DETECTION '+d.yolo_fps.toFixed(1)+' Hz';
     hf.style.color = d.yolo_fps >= 30 ? ok : d.yolo_fps >= 15 ? '#f39c12' : bad;
   }
   const he=$('hEspFps');
   if (he && d.esp_fps !== undefined) {
-    he.textContent = 'ESP '+d.esp_fps.toFixed(1)+'Hz';
+    he.textContent = 'ESP32 LINK '+d.esp_fps.toFixed(1)+' Hz';
     he.style.color = d.esp_fps >= 80 ? ok : d.esp_fps >= 30 ? '#f39c12' : bad;
   }
   updateSysChip(d);
 }
 
-// Collapse the seven health readouts into the topbar's one-word verdict. Worst case wins, and
-// the chip names the worst thing rather than just colouring — "SYS" going red tells you to look,
-// "SYS STEER" tells you where. The AS5600 I2C/AGC pair is excluded on purpose: it is never
+// Collapse the seven health readouts into the topbar's one verdict. Worst case wins, and the
+// chip names the worst thing in plain words rather than just colouring — "SYS" going red tells
+// you to look, "SYS NO STEER SIGNAL" tells you what. The old I2C/magnet pair is excluded on purpose: it is never
 // populated on this board, so folding it in would peg the chip to a permanent false alarm.
 function updateSysChip(d) {
   const chip = $('pillSys');
@@ -989,13 +990,13 @@ function updateSysChip(d) {
   const fail = (l) => { if (cls !== 'sys-bad') { cls = 'sys-bad'; label = 'SYS ' + l; } };
 
   if (d.health_steer_trip) fail('STEER SIGNAL LOST');
-  else if (!d.health_steer_ok) fail('STEER');
-  if (!d.health_heap_ok) fail('HEAP');
+  else if (!d.health_steer_ok) fail('NO STEER SIGNAL');
+  if (!d.health_heap_ok) fail('ESP32 OUT OF MEMORY');
   const stacks = [d.stack_comms, d.stack_control, d.stack_heartbeat, d.stack_health];
-  if (stacks.every(v => v !== undefined) && stacks.some(v => v < 200)) fail('STACK');
+  if (stacks.every(v => v !== undefined) && stacks.some(v => v < 200)) fail('ESP32 TASK MEMORY LOW');
   if (d.esp32_heartbeat === false) fail('NO ESP32');
-  if (d.yolo_fps !== undefined && d.yolo_fps < 15) warn('YOLO');
-  if (d.esp_fps !== undefined && d.esp_fps < 30) warn('ESP');
+  if (d.yolo_fps !== undefined && d.yolo_fps < 15) warn('CONE DETECTION SLOW');
+  if (d.esp_fps !== undefined && d.esp_fps < 30) warn('ESP32 LINK SLOW');
 
   chip.textContent = label;
   chip.className = 'spill sys-chip ' + cls;
@@ -1554,8 +1555,8 @@ body{
 #topbarTitle{ display:flex; align-items:center; gap:var(--sp-3); }
 
 /* Always-visible status group in the topbar. margin-right:auto parks it just after the
-   logo instead of centring it, so its width changing (HB LOST 12.4s is far wider than
-   HB 0.2s) cannot shove the power button around. */
+   logo instead of centring it, so its width changing (ESP32 SILENT 12.4s is far wider than
+   ESP32 0.2s) cannot shove the power button around. */
 #topbarStatus{ display:flex; align-items:center; gap:var(--sp-2); margin-left:14px; margin-right:auto;
   cursor:pointer; padding:var(--sp-1); margin-top:-3px; margin-bottom:-3px; border-radius:var(--r-pill);
   border:1px solid transparent; }
@@ -2232,12 +2233,12 @@ body{
       <div class="race-page rc-system">
         <div class="rc-sysgrid">
         <div class="rc-card"><div class="row1"><span class="rc-label">Steering sensor</span><span class="val num rc-sysval" id="rcSysMag">--</span></div><div class="rc-sysdesc">MT6701 encoder read over PWM · <span id="rcSysSteerNote">--</span></div></div>
-        <div class="rc-card"><div class="row1"><span class="rc-label">AS5600 I2C</span><span class="val num rc-sysval" id="rcSysI2c">--</span></div><div class="rc-sysdesc"><span id="rcSysI2cNote">--</span> · AGC <span id="rcSysAgc">--</span></div></div>
-        <div class="rc-card"><div class="row1"><span class="rc-label">Heap</span><span class="val num rc-sysval" id="rcSysHeap">--</span></div><div class="rc-sysdesc">free ESP32 memory</div></div>
-        <div class="rc-card"><div class="row1"><span class="rc-label">Stack</span><span class="val num rc-sysval" id="rcSysStk">--</span></div><div class="rc-sysdesc">min free task stack, bytes · comms/ctrl/hb/health: <span id="rcSysStkAll">--</span> · red &lt;200</div></div>
-        <div class="rc-card"><div class="row1"><span class="rc-label">YOLO</span><span class="val num rc-sysval" id="rcSysYolo">--</span></div><div class="rc-sysdesc">cone inference rate · green &gt;30 Hz</div></div>
-        <div class="rc-card"><div class="row1"><span class="rc-label">ESP32 link</span><span class="val num rc-sysval" id="rcSysEsp">--</span></div><div class="rc-sysdesc">steering frames over USB serial · firmware target 100 Hz</div></div>
-        <div class="rc-card"><div class="row1"><span class="rc-label">Heartbeat</span><span class="val num rc-sysval" id="rcSysHb">--</span></div><div class="rc-sysdesc">time since last ESP32 heartbeat</div></div>
+        <div class="rc-card"><div class="row1"><span class="rc-label">Old I2C sensor bus</span><span class="val num rc-sysval" id="rcSysI2c">--</span></div><div class="rc-sysdesc"><span id="rcSysI2cNote">--</span> · magnet signal strength <span id="rcSysAgc">--</span></div></div>
+        <div class="rc-card"><div class="row1"><span class="rc-label">ESP32 free memory</span><span class="val num rc-sysval" id="rcSysHeap">--</span></div><div class="rc-sysdesc">spare memory on the ESP32; running out makes the firmware reboot on its own</div></div>
+        <div class="rc-card"><div class="row1"><span class="rc-label">ESP32 spare task memory</span><span class="val num rc-sysval" id="rcSysStk">--</span></div><div class="rc-sysdesc">tightest of the four ESP32 jobs, in bytes · comms/control/heartbeat/health: <span id="rcSysStkAll">--</span> · red under 200, that job is close to crashing</div></div>
+        <div class="rc-card"><div class="row1"><span class="rc-label">Cone detection</span><span class="val num rc-sysval" id="rcSysYolo">--</span></div><div class="rc-sysdesc">camera frames per second the cone detector gets through · green above 30 Hz · under 15 the kart is reacting to cones it saw a long time ago</div></div>
+        <div class="rc-card"><div class="row1"><span class="rc-label">ESP32 link</span><span class="val num rc-sysval" id="rcSysEsp">--</span></div><div class="rc-sysdesc">steering messages per second over the USB cable to the ESP32 · firmware target 100 Hz · under 30 the kart cannot be steered smoothly</div></div>
+        <div class="rc-card"><div class="row1"><span class="rc-label">ESP32 alive</span><span class="val num rc-sysval" id="rcSysHb">--</span></div><div class="rc-sysdesc">how long since the ESP32 last said it is alive; once it stops, every number on this page is frozen</div></div>
         <div class="rc-card"><div class="row1"><span class="rc-label">AS state</span><span class="val num rc-sysval" id="rcSysState" style="font-size:var(--fs-md)">--</span></div><div class="rc-sysdesc">autonomous system state machine</div></div>
         </div>
         <div class="rc-sysbottom">
