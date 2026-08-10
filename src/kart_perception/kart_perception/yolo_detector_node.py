@@ -186,11 +186,13 @@ class YoloDetectorNode(Node):
                 continue
 
             header = msg.header
+            t_decode0 = time.monotonic()
             frame_bgr = self.bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
 
             # Crop top portion (sky) to focus YOLO resolution on the ground
             crop_y = int(frame_bgr.shape[0] * self.crop_top)
             cropped = frame_bgr[crop_y:] if crop_y > 0 else frame_bgr
+            t_decode = time.monotonic() - t_decode0
 
             t0 = time.monotonic()
             results = self.model(
@@ -202,6 +204,16 @@ class YoloDetectorNode(Node):
                 verbose=False,
             )
 
+            t_model = time.monotonic() - t0
+
+            # Ultralytics reports its own internal split in ms. `inference` is the
+            # GPU forward pass; `preprocess` (letterbox/resize) and `postprocess`
+            # (NMS + Results construction) run on the CPU around it. Without this
+            # split a slow frame cannot be attributed to the GPU or to the Python
+            # wrapper — see the 2026-08-10 investigation in history.md.
+            speed = getattr(results[0], "speed", {}) if results else {}
+
+            t_ros0 = time.monotonic()
             detections = Detection2DArray()
             detections.header = header
 
@@ -229,7 +241,7 @@ class YoloDetectorNode(Node):
                     detections.detections.append(detection)
 
             self.publisher.publish(detections)
-            t_infer = time.monotonic() - t0
+            t_ros = time.monotonic() - t_ros0
 
             # FPS logging + publish
             self._fps_count += 1
@@ -238,7 +250,11 @@ class YoloDetectorNode(Node):
             if elapsed >= 2.0:
                 fps = self._fps_count / elapsed
                 self.get_logger().info(
-                    f"YOLO: {fps:.1f} Hz  infer={t_infer*1000:.1f}ms"
+                    f"YOLO: {fps:.1f} Hz  model={t_model*1000:.1f}ms "
+                    f"(pre={speed.get('preprocess', float('nan')):.1f} "
+                    f"gpu={speed.get('inference', float('nan')):.1f} "
+                    f"post={speed.get('postprocess', float('nan')):.1f}) "
+                    f"decode={t_decode*1000:.1f}ms ros={t_ros*1000:.1f}ms"
                 )
                 self.fps_publisher.publish(Float32(data=fps))
                 self._fps_count = 0
