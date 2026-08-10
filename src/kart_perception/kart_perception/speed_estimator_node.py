@@ -6,8 +6,6 @@ geometry and the filter live in speed_model.py; this node is only the ROS plumbi
 around them.
 
   in:  /perception/cones_3d      (vision_msgs/Detection3DArray)
-  in:  /kart/cmd_vel_muxed       (geometry_msgs/Twist, optional — enables the
-                                  zero-speed correction when the throttle is shut)
   out: /kart/speed               (std_msgs/Float32, m/s)
 
 Nothing is published while the estimate is not backed by recent cone evidence. The
@@ -20,7 +18,6 @@ it into any controller.
 """
 
 import rclpy
-from geometry_msgs.msg import Twist
 from rclpy.node import Node
 from std_msgs.msg import Float32
 from vision_msgs.msg import Detection3DArray
@@ -35,7 +32,6 @@ class SpeedEstimatorNode(Node):
         super().__init__("speed_estimator")
 
         self.declare_parameter("detections_topic", "/perception/cones_3d")
-        self.declare_parameter("cmd_topic", "/kart/cmd_vel_muxed")
         self.declare_parameter("speed_topic", "/kart/speed")
         self.declare_parameter("publish_rate_hz", 20.0)
         # How hard the kart is assumed able to accelerate. Sets how quickly the
@@ -43,18 +39,10 @@ class SpeedEstimatorNode(Node):
         self.declare_parameter("process_accel", 3.0)
         # Above this uncertainty the estimate stops being published at all.
         self.declare_parameter("max_valid_stddev", 2.0)
-        # Enables the zero-speed correction, which assumes the kart really does stop
-        # when the throttle is shut. That holds on the flat; on a slope it would
-        # teach the filter that rolling away is standing still.
-        self.declare_parameter("use_zero_speed_update", True)
 
         det_topic = str(self.get_parameter("detections_topic").value)
-        cmd_topic = str(self.get_parameter("cmd_topic").value)
         speed_topic = str(self.get_parameter("speed_topic").value)
         rate = float(self.get_parameter("publish_rate_hz").value)
-        self.use_zero_speed_update = bool(
-            self.get_parameter("use_zero_speed_update").value
-        )
 
         self.tracker = ConeTracker()
         self.filter = SpeedFilter(
@@ -63,7 +51,6 @@ class SpeedEstimatorNode(Node):
         )
 
         self._last_predict_time = self._now()
-        self._throttle_shut_since: float | None = self._now()
         self._frames_with_measurement = 0
         self._frames_without = 0
 
@@ -71,25 +58,16 @@ class SpeedEstimatorNode(Node):
         self.create_subscription(
             Detection3DArray, det_topic, self._on_detections, 10
         )
-        self.create_subscription(Twist, cmd_topic, self._on_cmd, 10)
         self.create_timer(1.0 / rate, self._publish_tick)
         self.create_timer(10.0, self._log_stats)
 
         self.get_logger().info(
-            f"speed_estimator up: {det_topic} → {speed_topic} "
-            f"(zero_speed_update={self.use_zero_speed_update}). "
+            f"speed_estimator up: {det_topic} → {speed_topic}. "
             "Output is UNVALIDATED — do not close a control loop on it yet."
         )
 
     def _now(self) -> float:
         return self.get_clock().now().nanoseconds / 1e9
-
-    def _on_cmd(self, msg: Twist) -> None:
-        """Track how long the throttle has been shut, for the zero-speed correction."""
-        if msg.linear.x > 0.01:
-            self._throttle_shut_since = None
-        elif self._throttle_shut_since is None:
-            self._throttle_shut_since = self._now()
 
     def _on_detections(self, msg: Detection3DArray) -> None:
         """Match this frame's cones against the last and fold the result into the filter.
@@ -122,19 +100,7 @@ class SpeedEstimatorNode(Node):
 
     def _publish_tick(self) -> None:
         """Publish the current estimate, or nothing if it is no longer evidence-backed."""
-        now = self._now()
-        self._advance_to(now)
-
-        # The kart is taken to be stopped only after the throttle has been shut for
-        # long enough that it cannot still be rolling. Applying this too eagerly
-        # would drag the estimate to zero during a brief lift mid-corner.
-        if (
-            self.use_zero_speed_update
-            and self._throttle_shut_since is not None
-            and now - self._throttle_shut_since > 2.0
-        ):
-            self.filter.update_stationary()
-
+        self._advance_to(self._now())
         if not self.filter.is_valid:
             return
         self.speed_pub.publish(Float32(data=float(self.filter.speed)))

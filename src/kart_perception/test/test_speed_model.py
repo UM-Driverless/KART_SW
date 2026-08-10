@@ -354,16 +354,33 @@ def test_a_confident_measurement_moves_the_estimate_more_than_a_vague_one():
     assert confident.speed > vague.speed
 
 
-def test_zero_speed_update_pulls_a_drifted_estimate_back():
-    f = SpeedFilter()
-    for _ in range(20):
-        f.predict(0.05)
-        f.update(6.0, 0.3)
+def test_there_is_no_zero_speed_shortcut():
+    """A coasting kart must not be assumed stopped.
 
+    An earlier version injected a zero-speed measurement once the throttle had been
+    shut for two seconds, at a confidence nine times tighter than the cone
+    measurements. A kart coasting with cones in full view was dragged to zero while
+    perception watched it move. Nothing may reintroduce a speed the camera did not
+    see; if an IMU ever makes a zero-speed update worth having again, it must be
+    driven by cone ranges holding steady, not by the throttle.
+    """
+    assert not hasattr(SpeedFilter, "update_stationary")
+
+
+def test_a_coasting_kart_keeps_its_speed_while_cones_confirm_it():
+    """With the throttle shut but cones still visible, the cones decide, not the pedal."""
+    kart = VirtualKart(cone_field())
+    tracker = ConeTracker()
+    f = SpeedFilter()
+    t = 0.0
     for _ in range(20):
         f.predict(0.05)
-        f.update_stationary()
-    assert f.speed == pytest.approx(0.0, abs=0.1)
+        m = tracker.update(kart.visible_cones(), t)
+        if m is not None:
+            f.update(m.speed, m.stddev)
+        kart.drive(6.0, 0.0, 0.05)
+        t += 0.05
+    assert f.speed == pytest.approx(6.0, abs=0.3)
 
 
 def test_uncertainty_grows_faster_for_a_more_agile_kart():

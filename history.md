@@ -1834,3 +1834,34 @@ track, or perception itself has degraded.
 
 Not yet done, and the thing that decides whether any of this is usable: a run at a
 known speed. Nothing on the kart steers or brakes on this figure until then.
+
+## 2026-08-10 — Removed the zero-speed update; the throttle does not say the kart stopped
+
+Rubén challenged the zero-speed correction added earlier the same day: it injected a
+"speed is 0" measurement once the throttle had been shut for two seconds, and he
+pointed out that throttle off does not mean stopped — ten seconds might, two does not.
+
+Checking it, the problem was worse than the timeout. `update_stationary` used a
+stddev of 0.05 m/s against the cone measurements' 0.15 m/s floor, so the assumption
+was nine times more trusted than the camera watching the kart move. The gain worked
+out near 0.9 and it fired at 20 Hz, so a coasting kart with cones in full view would
+have been pulled to zero within a tick or two — a confident false reading, which is
+the exact failure the repo already has a standing rule about.
+
+It was also incapable of helping. While cones are visible the real measurements are
+strictly better than an assumption; once cones stop, the filter reaches its validity
+limit and the node stops publishing after about 0.65 s, well before a two-second timer
+could fire. Its usual purpose — pinning down accumulated accelerometer bias — does not
+apply here at all, because the one-state filter has no IMU, nothing integrates, and so
+nothing drifts. It had been carried over from the earlier design that did include an
+IMU and kept without rechecking whether it still had a job.
+
+So it was deleted rather than retuned, along with the node's `/kart/cmd_vel_muxed`
+subscription and its `use_zero_speed_update` parameter. `speed_model.py` keeps a note
+where it used to be, saying what it would need to be correct if an IMU is ever added:
+evidence from cone ranges holding steady, not an inference from the throttle.
+
+Worth correcting one earlier claim in this log: the stationary reading of about
+0.01 m/s observed on deployment was produced by the cone measurements, not by this
+correction. Cones were visible for 100% of frames in that sample, so the zero-speed
+update was contributing nothing to the number it appeared to explain.

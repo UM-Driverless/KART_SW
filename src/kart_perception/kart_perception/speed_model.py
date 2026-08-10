@@ -407,12 +407,23 @@ class SpeedFilter:
         self.speed += gain * (measured_speed - self.speed)
         self.variance *= 1.0 - gain
 
-    def update_stationary(self, stddev: float = 0.05) -> None:
-        """Apply a zero-speed measurement.
-
-        Used when the kart is known to be stopped — no throttle, and the cones in view
-        are not changing range. This is the cheapest correction available and the one
-        that stops a long run of coasting from wandering, because it is the only time
-        the true speed is known exactly without measuring anything.
-        """
-        self.update(0.0, stddev)
+    # There is deliberately no zero-speed update here.
+    #
+    # An earlier version injected a "speed is 0" measurement once the throttle had
+    # been shut for two seconds. That was wrong twice over. A kart with the throttle
+    # off is coasting, not stopped — two seconds is nowhere near enough to assume
+    # otherwise, and the injected measurement was given a 0.05 m/s noise figure
+    # against the cone measurements' 0.15 m/s floor, making the assumption NINE TIMES
+    # more trusted than the camera actually watching the kart move. A coasting kart
+    # with cones in full view would have been dragged to zero within a tick.
+    #
+    # It could not have helped even when correct. While cones are visible the real
+    # measurements are strictly better; once they stop, this filter goes invalid and
+    # the node stops publishing after about 0.65 s, long before any such timer fires.
+    # Its usual purpose — pinning down accumulated accelerometer bias — does not apply
+    # to a one-state filter with no IMU, because nothing here integrates and so nothing
+    # drifts. It was carried over from a design that had an IMU and kept out of habit.
+    #
+    # If an IMU is ever added, a zero-speed update becomes worth having again. It would
+    # then need real evidence the kart is stopped — cone ranges holding steady is the
+    # obvious source — rather than an inference from the throttle.
