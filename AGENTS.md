@@ -167,9 +167,11 @@ Used everywhere — YOLO class names, Detection messages, visualization:
 
 ## Task Management
 - **`TODO.md`** — Human-curated roadmap. High-level goals and priorities. Agents read this for context but do **NOT edit it** unless explicitly asked.
-- **`tasks.md`** (repo root) — The task board. Concrete, actionable work items derived from TODO.md. There is intentionally NO `.agents/tasks.md` in this repo — never create one.
+- **`tasks.md`** (repo root) — The task board. Concrete, actionable work items derived from TODO.md. There is intentionally NO `.agents/tasks.md` in this repo — never create one. Holds only live work — see the done-archive convention below.
+- **`tasks/done-archive.md`** — Completed work, moved out of `tasks.md` once closed. Holds nothing actionable; read only when you need the history of a shipped item. `tasks/archive_done.py` does the split mechanically (dry run by default, `--apply` to write).
 - When starting work, check `tasks.md` first. If empty or stale, derive tasks from `TODO.md`.
-- Status lives in an inline marker, not in which section a task sits under — claiming, blocking, or finishing a task means flipping the marker in place, never moving the line: `- [ ]` ready, `- [→ YYYY-MM-DD agent:id]` in progress, `- [⏸ reason]` blocked, `- [x YYYY-MM-DD]` done. Existing `## Ready` / `## In Progress` / `## Blocked` / `## Done` headers are loose thematic grouping, not a requirement to relocate a task when its status changes.
+- Status lives in an inline marker while a task is open — claiming or blocking a task means flipping the marker in place, never moving the line: `- [ ]` ready, `- [→ YYYY-MM-DD agent:id]` in progress, `- [⏸ reason]` blocked. Existing `## Ready` / `## In Progress` / `## Blocked` / `## Done` headers are loose thematic grouping, not a requirement to relocate an open task when its status changes.
+- **Done items do not stay on the board.** When an item closes, move it — with its date and closing note, verbatim, no rewording — to `tasks/done-archive.md`. **Exception: a done step of a task that is still open stays on the board.** A `- [x]` bullet nested under a `###` cluster heading is a finished step, not a finished task — it stays until the whole cluster's last step closes, because archiving it strips the remaining open step of the context that says what was already settled. Only a `- [x]` sitting directly under a `##` heading (standalone, not nested in a cluster) moves on its own.
 
 ### Subagent Task Protocol
 When the user says "work on tasks" (or similar), launch subagents to execute tasks from `tasks.md`:
