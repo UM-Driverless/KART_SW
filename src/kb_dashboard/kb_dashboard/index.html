@@ -514,12 +514,8 @@ function updateMissionUI() {
 function updateAlgoButtons() {
   document.querySelectorAll('.algo-dropdown:not(.speed-algo-dropdown):not(.svo-dropdown):not(#targetSpeedInput)').forEach(sel => sel.value = currentControllerType);
   document.querySelectorAll('.speed-algo-dropdown').forEach(sel => sel.value = currentSpeedControllerType);
-  // The setpoint stays visible and settable in every speed mode; only the label
-  // changes, so it is clear when nothing is acting on the number.
-  const lbl = $('targetSpeedLabel');
-  if (lbl) lbl.textContent = currentSpeedControllerType === 'constant_speed'
-    ? 'Target speed (km/h)'
-    : 'Target speed (km/h) — Constant Speed only';
+  const row = $('targetSpeedRow');
+  if (row) row.style.display = currentSpeedControllerType === 'constant_speed' ? '' : 'none';
 }
 // The kart is commanded in m/s; the box asks for km/h because that is what a
 // speed reads as to the person standing next to it.
@@ -2638,10 +2634,9 @@ body{
           <div class="algo-select svo-select" style="display:none"><div class="algo-label">Video Input</div><select class="algo-dropdown svo-dropdown" onchange="onSvoChange(this)"><option value="live">Live Camera</option></select></div>
           <div class="algo-select"><div class="algo-label">Steering</div><select class="algo-dropdown" onchange="onAlgoChange(this)"><option value="geometric">Geometric</option><option value="pure_pursuit">Pure Pursuit</option><option value="stanley">Stanley</option><option value="neural_v2">Neural V2</option><option value="mpc">MPC</option><option value="none">None</option></select></div>
           <div class="algo-select"><div class="algo-label">Speed</div><select class="algo-dropdown speed-algo-dropdown" onchange="onSpeedAlgoChange(this)"><option value="curve_factor">Curve Factor</option><option value="constant_throttle">Constant Throttle (needs cones)</option><option value="constant_throttle_blind">Constant Throttle (blind)</option><option value="constant_throttle_stop">Constant Throttle + Stop</option><option value="constant_speed">Constant Speed (closed loop)</option><option value="neural_v2">Neural V2</option><option value="zero">Zero</option></select></div>
-          <!-- Setpoint for the closed loop. Always shown, including under the speed
-               modes that ignore it: a row that appears and disappears with the
-               dropdown reads as a missing feature, and the label says who uses it. -->
-          <div class="algo-select" id="targetSpeedRow"><div class="algo-label" id="targetSpeedLabel">Target speed (km/h)</div><input class="algo-dropdown" id="targetSpeedInput" type="number" step="0.5" min="0" max="18" value="1" onchange="onTargetSpeedChange(this)"></div>
+          <!-- Setpoint for the closed loop only; every other speed mode ignores it,
+               so the row appears with that mode and nowhere else. -->
+          <div class="algo-select" id="targetSpeedRow" style="display:none"><div class="algo-label">Target speed (km/h)</div><input class="algo-dropdown" id="targetSpeedInput" type="number" step="0.5" min="0" max="18" value="1" onchange="onTargetSpeedChange(this)"></div>
         </div>
         <div class="rc-panel rc-mpanel" id="rcCtrlPane">
           <span class="rc-label">Controls</span>
