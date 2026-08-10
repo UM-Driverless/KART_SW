@@ -201,11 +201,17 @@ def decode_health_flags(payload) -> dict:
 def decode_health_data(payload) -> dict:
     """@brief Decode the numeric health payload from /esp32/health/data.
 
-    kb_coms_micro currently forwards only [agc, heap_kb, i2c_errors]; the
-    firmware's appended steering frame counters are dropped before they get
-    here, so those are not decodable from this topic yet.
+    kb_coms_micro forwards every field of the firmware's health frame except the
+    leading flags word. It used to copy exactly three, which silently dropped the
+    steering frame counters the firmware had been sending all along; it now
+    copies the whole tail, so anything the firmware appends arrives here.
 
-    @param payload List of int32: [agc, heap_kb, i2c_errors].
+    Each field is optional and decoded positionally, so an older firmware sending
+    a shorter frame still decodes — the keys for the missing tail are simply
+    absent rather than wrong.
+
+    @param payload List of int32: [agc, heap_kb, i2c_errors, steer_frames,
+                   steer_rejects, steer_trip_age_s].
     @return Dict of the numeric health fields present.
     """
     out = {}
@@ -215,6 +221,17 @@ def decode_health_data(payload) -> dict:
         out["health_heap_kb"] = payload[1]
     if len(payload) >= 3:
         out["health_i2c_errors"] = payload[2]
+    if len(payload) >= 4:
+        out["health_steer_frames"] = payload[3]
+    if len(payload) >= 5:
+        out["health_steer_rejects"] = payload[4]
+    if len(payload) >= 6:
+        # Seconds since the steering fault latched, or -1 while it is clear. The
+        # latch survives until the ESP32 reboots, so the trip flag alone cannot
+        # distinguish a live fault from one latched during an earlier boot — the
+        # ambiguity that made a stale latch look like a sensor failure on
+        # 2026-08-08. None here means the firmware predates the field.
+        out["health_steer_trip_age_s"] = payload[5]
     return out
 
 

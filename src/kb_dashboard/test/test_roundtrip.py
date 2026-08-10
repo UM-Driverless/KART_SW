@@ -244,6 +244,19 @@ class TestHealthRoundTrip:
         assert data["health_heap_kb"] == 200
         assert data["health_i2c_errors"] == 0
 
+        # kb_coms_micro used to copy exactly three fields onto /esp32/health/data,
+        # so everything the firmware appended was dropped before reaching the
+        # dashboard. It now forwards the whole tail; these are the appended fields.
+        full = decode_health_data([0, 200, 0, 993, 0, 47])
+        assert full["health_steer_frames"] == 993
+        assert full["health_steer_rejects"] == 0
+        assert full["health_steer_trip_age_s"] == 47
+
+        # -1 is the firmware's "latch is clear", distinct from the key being
+        # absent, which means firmware older than the field.
+        assert decode_health_data([0, 200, 0, 993, 0, -1])["health_steer_trip_age_s"] == -1
+        assert "health_steer_trip_age_s" not in decode_health_data([0, 200, 0, 993, 0])
+
         # the failure this guards: the whole-frame decoder on a flags-only payload
         assert decode_health([0x0c])["health_steer_ok"] is False
 

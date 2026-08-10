@@ -211,10 +211,12 @@ void KB_coms_micro::kb_coms_RXcallback(const SerialDriver::Frame &frame_esp) {
     }
 
     case kb_interfaces::msg::Frame::ESP_HEALTH_STATUS: {
-        // ESP32 sends 4 int32s: [flags, agc, heap_kb, i2c_errors]
+        // ESP32 sends at least 4 int32s: [flags, agc, heap_kb, i2c_errors], and
+        // appends more over time — currently [steer_frames, steer_rejects,
+        // steer_trip_age_s]. Four is the minimum this can split, not the count.
         if (frame_esp.payload.size() < 4) {
             RCLCPP_WARN(this->get_logger(),
-                "ESP_HEALTH_STATUS: expected 4 int32s, got %zu",
+                "ESP_HEALTH_STATUS: expected at least 4 int32s, got %zu",
                 frame_esp.payload.size());
             break;
         }
@@ -229,12 +231,15 @@ void KB_coms_micro::kb_coms_RXcallback(const SerialDriver::Frame &frame_esp) {
         };
         esp_health_flags_pub_->publish(health_flags_msg);
 
-        // agc, heap_kb, i2c_errors
-        health_data_msg.payload = {
-            frame_esp.payload[1],
-            frame_esp.payload[2],
-            frame_esp.payload[3]
-        };
+        // Everything except the flags word: agc, heap_kb, i2c_errors, then
+        // whatever the firmware has appended since. Copied wholesale rather than
+        // field by field, because the previous three-element literal silently
+        // dropped every appended field — the steering frame counters never
+        // reached the dashboard despite the firmware sending them, and the same
+        // would have happened to steer_trip_age_s. Downstream decoding is
+        // positional and length-guarded, so extra trailing fields are safe.
+        health_data_msg.payload.assign(frame_esp.payload.begin() + 1,
+                                       frame_esp.payload.end());
         esp_health_data_pub_->publish(health_data_msg);
         break;
     }
