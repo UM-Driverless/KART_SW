@@ -593,3 +593,38 @@ that mode. Reaching for a rule that endorses the change already decided on is no
 deliberately produces that state under a known condition, first find out whether that condition was
 met. Say what the condition is and ask. Changing behaviour that was designed on purpose needs the
 diagnosis first, not the user's phrasing as a spec.
+
+## 2026-08-10 — Three wrong causes named for the YOLO rate drop before anything was measured (Claude Opus 5)
+
+**What happened.** Asked why cone detection was running at ~33 Hz instead of its usual rate, three
+causes were asserted in turn, each with supporting evidence, and all three were wrong:
+
+1. *Other ROS nodes competing for CPU.* Backed by `top` showing nine nodes and a load average of
+   11.7. Wrong — the machine was 35% idle and the bottleneck was inside a single thread.
+2. *`jetson_clocks.service` missing.* Backed by the service genuinely not existing and the governor
+   being `schedutil`. Wrong as a cause — CPU and GPU were already at their `MODE_50W` caps. (The
+   missing unit is real and is now filed in `tasks.md`, but it was not costing anything.)
+3. *The ultralytics Python wrapper's letterbox and NMS.* Backed by the process sitting at exactly
+   100.0% of one core. Wrong — those measured 1.9 ms and 5.5 ms of a 30 ms frame.
+
+The actual cause was the ROS publish loop reading three CUDA tensor attributes per detection, which
+had been explicitly dismissed as negligible while theory 3 was being argued. It was found in one
+step the moment the per-stage timing was logged, and the fix took the rate from 33 Hz to 67–72 Hz.
+Full write-up in `history.md` under the same date.
+
+**Root cause.** The node emitted one lumped number (`infer=28ms`) covering five stages, and that
+number was treated as sufficient evidence to reason from. Each theory was built by pattern-matching
+a plausible mechanism to an ambient symptom — a high load average, a missing service, a pegged core
+— rather than by splitting the measurement. Every one of those symptoms was independently true,
+which is what made them convincing; none of them was load-bearing.
+
+**Contributing.** Two of the three theories were volunteered before the user's own hypothesis
+("shouldn't this be on the GPU?") had been checked against the running system, so effort went into
+defending a diagnosis instead of narrowing one.
+
+**Prevention.** The global rule for this already exists and was simply not applied: *binary-search
+debugging — find the test that splits the pipeline in half rather than testing end to end.* Adding
+another rule would not have helped. Concretely, for this stack: when a rate regresses, split the
+frame budget before naming a cause. `yolo_detector_node.py` now logs
+`decode / pre / gpu / post / ros` on every FPS line, so the split is free — read it first.
+`sudo py-spy top --pid <pid>` also attaches to a running node with no restart and no code change.
