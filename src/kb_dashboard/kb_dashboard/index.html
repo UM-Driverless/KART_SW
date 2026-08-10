@@ -194,42 +194,45 @@ body {
 
 <div id="app"></div>
 
-<!-- Gamepad Control Widget (Hidden unless mission is remote_control) -->
-<div id="manualWidget" style="display:none;max-width:480px;margin:8px auto;padding:12px;background:#14141f;border:1px solid #2a2a3a;border-radius:12px;color:#e0e0e8;font-family:'Inter',sans-serif;">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:#888;">
-    <span>🎮 Gamepad Control</span>
-    <span id="gpStatus" style="color:#e74c3c">Disconnected</span>
-  </div>
+<!-- Gamepad readout and the steering-command toggle. Shown only while the mission is
+     remote_control, which is the only mission where either does anything.
+     This used to be hidden outright by the race skin while updateGamepadUI() kept polling
+     the gamepad and sending manual_control — a control that drove the kart with its own
+     readout rendering nowhere, and with the Angle/PWM toggle unreachable from any screen.
+     The race skin relocates this block into the Remote control pane next to the touch pad
+     (see skinRace.init), the same way it relocates the pad itself. -->
+<div id="manualWidget" class="gp-block">
+  <div class="gp-hdr"><span class="rc-label">Gamepad</span><span id="gpStatus" class="gp-off">No gamepad connected</span></div>
 
-  <div style="display:flex;gap:12px;margin-bottom:12px;align-items:center;">
-    <div style="font-size:10px;color:#aaa;">Steer Target:</div>
-    <div style="display:flex;background:#0a0a0f;border-radius:6px;overflow:hidden;border:1px solid #2a2a3a;">
-      <button id="btnSteerAngle" style="padding:6px 12px;border:none;background:#4a9eff;color:#fff;font-size:10px;font-weight:600;cursor:pointer;">Angle</button>
-      <button id="btnSteerPWM" style="padding:6px 12px;border:none;background:transparent;color:#888;font-size:10px;font-weight:600;cursor:pointer;">PWM</button>
-    </div>
-  </div>
-
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+  <div class="gp-axes">
     <div>
-      <div style="font-size:9px;color:#6a6a7a;margin-bottom:4px;text-transform:uppercase;">Steering Axis (L-Stick)</div>
-      <div style="height:4px;background:#0a0a0f;border-radius:2px;position:relative;overflow:hidden;">
-        <div id="gpSteerFill" style="position:absolute;top:0;height:100%;width:0%;left:50%;background:#4a9eff;"></div>
-      </div>
-      <div id="gpSteerVal" style="font-size:11px;margin-top:4px;text-align:center;font-family:monospace;">0.00</div>
+      <div class="gp-cap">Steering — left stick</div>
+      <div class="gp-track"><div id="gpSteerFill"></div></div>
+      <div class="gp-num" id="gpSteerVal">0.00</div>
     </div>
     <div>
-      <div style="font-size:9px;color:#6a6a7a;margin-bottom:4px;text-transform:uppercase;">Accel (R-Trig) / Brake (L-Trig)</div>
-      <div style="height:4px;background:#0a0a0f;border-radius:2px;position:relative;overflow:hidden;display:flex;">
-        <div id="gpBrakeFill" style="height:100%;width:0%;background:#e74c3c;margin-left:auto;"></div>
-        <div id="gpAccelFill" style="height:100%;width:0%;background:#2ecc71;"></div>
+      <!-- Brake left, accel right, matching the real pedals and the pedals dial on the
+           Telemetry page. Each fill grows out from the centre line. -->
+      <div class="gp-cap">Brake / accel — triggers</div>
+      <div class="gp-track gp-split">
+        <div class="gp-half gp-half-l"><div id="gpBrakeFill"></div></div>
+        <div class="gp-half"><div id="gpAccelFill"></div></div>
       </div>
-      <div style="display:flex;justify-content:space-between;font-size:11px;margin-top:4px;font-family:monospace;">
-        <span id="gpBrakeVal" style="color:#e74c3c">0%</span>
-        <span id="gpAccelVal" style="color:#2ecc71">0%</span>
-      </div>
+      <div class="gp-nums"><span id="gpBrakeVal" class="gp-brk">0%</span><span id="gpAccelVal" class="gp-acc">0%</span></div>
     </div>
   </div>
 
+  <!-- What the steering number in every manual_control message means to the firmware:
+       an angle for the ESP32's PID to chase, or a raw motor drive with no PID at all.
+       Raw PWM bypasses the position loop, so it moves the column for as long as it is
+       held and does not stop at an angle — that is why it says so on the button. -->
+  <div class="gp-mode">
+    <span class="gp-cap">Steering command sent to the ESP32</span>
+    <div class="gp-seg">
+      <button id="btnSteerAngle" class="sel">Angle (PID holds it)</button>
+      <button id="btnSteerPWM">Raw PWM (no PID)</button>
+    </div>
+  </div>
 </div>
 <div style="max-width:480px;margin:4px auto;text-align:center">
   <img id="hudStream" style="width:100%;border-radius:6px" alt="HUD">
@@ -458,13 +461,12 @@ let gamepadLoop = null;
 function updateGamepadUI() {
   const gpWidget = $('manualWidget');
   if (!gpWidget) return;
-  
-  if (currentMission === 'remote_control') {
-    gpWidget.style.display = 'block';
-  } else {
-    gpWidget.style.display = 'none';
-    return;
-  }
+
+  // Visible only in remote_control, which is also the only mission where the polling below
+  // is allowed to send anything. Both halves are gated on the same condition on purpose:
+  // the block must never be hidden while the loop is still driving.
+  gpWidget.classList.toggle('on', currentMission === 'remote_control');
+  if (currentMission !== 'remote_control') return;
 
   const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
   let gp = null;
@@ -474,13 +476,13 @@ function updateGamepadUI() {
 
   const status = $('gpStatus');
   if (!gp) {
-    status.textContent = 'Disconnected';
-    status.style.color = '#e74c3c';
+    status.textContent = 'No gamepad connected';
+    status.className = 'gp-off';
     return;
   }
 
-  status.textContent = 'Connected: ' + gp.id.substring(0, 15);
-  status.style.color = '#2ecc71';
+  status.textContent = 'Driving: ' + gp.id.substring(0, 20);
+  status.className = 'gp-on';
 
   // Typical mappings: Left stick X = axis 0, Left Trigger = button 6, Right Trigger = button 7
   // Fallback to axis 2/5 for triggers depending on OS/Browser
@@ -530,22 +532,14 @@ function startGamepadLoop() {
 
 // Steer type buttons
 window.addEventListener('DOMContentLoaded', () => {
-  $('btnSteerAngle').onclick = () => {
-    manualSteerType = 'angle';
-    $('btnSteerAngle').style.background = '#4a9eff';
-    $('btnSteerAngle').style.color = '#fff';
-    $('btnSteerPWM').style.background = 'transparent';
-    $('btnSteerPWM').style.color = '#888';
-    wsSend({ action: 'set_steer_mode', mode: 'pid' });
+  const setSteerMode = (type) => {
+    manualSteerType = type;
+    $('btnSteerAngle').classList.toggle('sel', type === 'angle');
+    $('btnSteerPWM').classList.toggle('sel', type === 'pwm');
+    wsSend({ action: 'set_steer_mode', mode: type === 'angle' ? 'pid' : 'pwm' });
   };
-  $('btnSteerPWM').onclick = () => {
-    manualSteerType = 'pwm';
-    $('btnSteerPWM').style.background = '#4a9eff';
-    $('btnSteerPWM').style.color = '#fff';
-    $('btnSteerAngle').style.background = 'transparent';
-    $('btnSteerAngle').style.color = '#888';
-    wsSend({ action: 'set_steer_mode', mode: 'pwm' });
-  };
+  $('btnSteerAngle').onclick = () => setSteerMode('angle');
+  $('btnSteerPWM').onclick = () => setSteerMode('pwm');
   startGamepadLoop();
 });
 
@@ -1539,8 +1533,42 @@ body{
 /* global widgets this skin replaces or relocates */
 /* #healthInfo is deliberately NOT hidden here any more — it is the topbar's SYS popover and
    toggles on its own inline display. #healthBar is gone; its readouts live inside that popover. */
-#dbgConsole,#manualWidget{ display:none !important; }
+#dbgConsole{ display:none !important; }
+/* #manualWidget is NOT hidden here: it is the gamepad readout plus the Angle/PWM toggle, and
+   this skin relocates it into the Remote control pane. It was hidden with a !important rule
+   while its polling loop kept driving the kart, so the gamepad steered with no feedback and
+   the steering-command toggle could not be reached from any screen. */
 #manualWidget + div{ display:none !important; } /* empty home of the relocated #hudStream */
+
+/* Gamepad readout, in the Remote control pane under the touch pad. */
+.gp-block{ display:none; flex:0 0 auto; width:100%; margin-top:var(--sp-2); }
+.gp-block.on{ display:flex; flex-direction:column; gap:var(--sp-2); }
+.gp-hdr{ display:flex; align-items:baseline; justify-content:space-between; gap:var(--sp-2); }
+#gpStatus{ font-size:var(--fs-sm); }
+#gpStatus.gp-off{ color:var(--rc-label); }
+#gpStatus.gp-on{ color:var(--rc-green); }
+.gp-axes{ display:grid; grid-template-columns:1fr 1fr; gap:var(--sp-3); }
+/* One line, clipped rather than wrapped: a caption that wraps in one column and not the other
+   pushes that column's bar down and the two axes stop reading as a pair. */
+.gp-cap{ font-size:var(--fs-sm); color:var(--rc-label); text-transform:uppercase;
+  letter-spacing:.06em; margin-bottom:4px; white-space:nowrap; overflow:hidden;
+  text-overflow:ellipsis; }
+.gp-track{ height:6px; background:#0a0a0c; border:1px solid #2c2c2f; border-radius:3px;
+  position:relative; overflow:hidden; display:flex; }
+.gp-track > #gpSteerFill{ position:absolute; top:0; bottom:0; left:50%; width:0%; background:#4a9eff; }
+.gp-half{ flex:1 1 50%; display:flex; }
+.gp-half-l{ justify-content:flex-end; }          /* brake grows leftward from the centre */
+#gpBrakeFill{ width:0%; background:var(--rc-red); }
+#gpAccelFill{ width:0%; background:var(--rc-green); }
+.gp-num{ font-family:'Orbitron',sans-serif; font-size:var(--fs-sm); text-align:center; margin-top:4px; }
+.gp-nums{ display:flex; justify-content:space-between; font-family:'Orbitron',sans-serif;
+  font-size:var(--fs-sm); margin-top:4px; }
+.gp-brk{ color:var(--rc-red); }
+.gp-acc{ color:var(--rc-green); }
+.gp-seg{ display:flex; border:1px solid #2c2c2f; border-radius:var(--r-sm); overflow:hidden; }
+.gp-seg button{ flex:1 1 50%; padding:6px 8px; border:none; background:transparent;
+  color:var(--rc-label); font:inherit; font-size:var(--fs-sm); cursor:pointer; }
+.gp-seg button.sel{ background:#4a9eff; color:#fff; }
 
 /* topbar restyled as the mockup's, hazard stripe below */
 /* Fixed height, so the bar is NOT driven by its tallest child. Without this a 48px power
@@ -2185,6 +2213,8 @@ body{
         <div class="rc-panel rc-mpanel rc-joypane" id="rcJoyPane" style="display:none">
           <span class="rc-label">Remote control</span>
           <div id="rcJoySlot"></div>
+          <!-- home of the relocated gamepad readout + Angle/PWM toggle (#manualWidget) -->
+          <div id="rcGpSlot"></div>
           <button class="ctrl-btn pid-open" id="btnPidOpen">Steering PID</button>
           <!-- Live steering PID tuning, so a gain can be tried without reflashing the ESP32.
                A panel over the pad rather than a block under it: the pad wants the whole pane
@@ -2476,11 +2506,14 @@ body{
     // relocate the global HUD stream + remote-control joystick into this skin's
     // pages (keeps their listeners/stream alive); restored on skin switch
     const hud = $('hudStream'), joy = $('manualWidgetJoystick'), dbg = $('dbgConsole');
+    const gp = $('manualWidget');
     const hudHome = { parent: hud.parentElement, next: hud.nextSibling };
     const joyHome = { parent: joy.parentElement, next: joy.nextSibling };
+    const gpHome = { parent: gp.parentElement, next: gp.nextSibling };
     const dbgHome = dbg ? { parent: dbg.parentElement, next: dbg.nextSibling } : null;
     $('rcHudSlot').appendChild(hud);
     $('rcJoySlot').appendChild(joy);
+    $('rcGpSlot').appendChild(gp);
     updateMissionUI();   // set the Algorithms/Joystick pane visibility for the current mission on load
     if (dbg) { $('rcDbgSlot').appendChild(dbg); if (!dbgOpen) toggleDbg(); }  // show it expanded on the System page
     drawCenital($('rcCenital'), []);
@@ -2498,6 +2531,7 @@ body{
     return () => {
       hudHome.parent.insertBefore(hud, hudHome.next);
       joyHome.parent.insertBefore(joy, joyHome.next);
+      gpHome.parent.insertBefore(gp, gpHome.next);
       if (dbgHome) { if (dbgOpen) toggleDbg(); dbgHome.parent.insertBefore(dbg, dbgHome.next); }  // restore + collapse
       rcPwr.innerHTML = rcPwrHtml;
     };
