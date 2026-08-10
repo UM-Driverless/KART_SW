@@ -1679,3 +1679,31 @@ then treats the profile as manually deactivated and nothing on the Orin autoconn
 
 Untested and left open: the cold-boot path itself (needs a real power cycle with no phone attached),
 and whether the report-only probe ever fires.
+
+### Cold-boot fallback, first real observation (2026-08-10, same day as the change)
+
+A genuine power cycle with no phone attached, which is the scenario the 2026-08-08 outage came from.
+Journal for that boot:
+
+    10:18:58  started (radio=wlP1p1s0, ap=kart-ap)
+    10:19:00  radio is 'unavailable' with no connection -- falling back to the kart-ap AP
+    10:19:09  USB tether is gone and nobody is associated to the kart-ap AP
+    10:19:09  releasing the kart-ap AP to look for a known network
+    10:19:17  joined 'Ruben's iPhone' -- internet is back
+
+19 s from watchdog start to internet, and the Cloudflare tunnel was answering immediately after. The
+old code stopped at the second line and stayed there, which is exactly the reported outage.
+
+Two consequences visible in the same log, both expected but worth having written down:
+
+- **It joined Rubén's iPhone hotspot over Wi-Fi (metric 600), not the lab's `Robots_urjc` (700).** That
+  follows the priority order Rubén specified, but at the workshop it spends cellular data where the
+  lab network is free. Whether the client-role order should differ from the USB order is open.
+- **`kart` was down for the whole time the radio was in client mode** (`type managed`), so there was no
+  dashboard at `10.42.0.1`. Plugging a tether in restores it within about 5 s.
+
+**A timing hole this confirms.** The client attempt fired 11 s after the watchdog started. The
+"never drop the AP while a station is associated" guard is therefore useless at boot — no human can
+join `kart` in eleven seconds, so someone standing at the kart when it powers up loses the dashboard
+anyway. A boot grace period of 60-90 s before spending the attempt would close it, at the cost of a
+bench boot getting remote access a minute later. Not yet implemented.
