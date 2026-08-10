@@ -585,7 +585,8 @@ class DashboardNode(Node):
     def publish_controller_type(self, ctrl_type: str):
         """@brief Publish controller type change to cone_follower.
 
-        @param ctrl_type One of: geometric, pure_pursuit, neural_v2, mpc.
+        @param ctrl_type One of: geometric, pure_pursuit, stanley, neural_v2, mpc,
+               none ("none" leaves the steering motor unpowered so a human steers).
         """
         msg = String()
         msg.data = ctrl_type

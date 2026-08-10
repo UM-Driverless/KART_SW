@@ -25,6 +25,11 @@ Supports four controller types (selected via the ``controller_type`` param):
     * ``mpc_w_heading``     – heading-error weight     (default 2.0)
     * ``mpc_lookahead``     – max path distance used   (default 8.0 m)
 
+**none**
+    No steering control at all. Speed is still computed and published, but the
+    steering motor is left unpowered (direct-PWM mode, 0 output) so a human can
+    turn the wheel by hand while the kart drives itself forward.
+
 All controllers receive Detection3DArray in the camera *optical* frame
 (Z=forward, X=right, Y=down) and publish Twist on ``/kart/cmd_vel``.
 """
@@ -43,6 +48,7 @@ from std_msgs.msg import Float32, String
 
 # from std_msgs.msg import Float32    # removed: kart has no speed sensor
 from vision_msgs.msg import Detection3DArray
+from kb_interfaces.msg import Frame
 
 try:
     from scipy.optimize import minimize as scipy_minimize
@@ -333,6 +339,13 @@ class ConeFollowerNode(Node):
         # Set by each controller after it picks its aim point.
         self._last_target = None
         self.target_pub = self.create_publisher(PointStamped, "/kart/target", 10)
+        # Steering mode (0=PID angle, 1=direct PWM). Only used by the "none"
+        # controller, to leave the motor unpowered. Repeated for 1 s after a
+        # change because the frame goes out over UART with no acknowledgement.
+        self.steer_mode_pub = self.create_publisher(Frame, "/orin/steer_mode", 10)
+        self._steer_mode_frame = None
+        self._steer_mode_repeats = 0
+        self.create_timer(0.01, self._send_steer_mode)
         self.last_detection_time = self.get_clock().now()
         self.timer = self.create_timer(0.1, self._safety_check)
         self.create_subscription(
@@ -352,18 +365,37 @@ class ConeFollowerNode(Node):
     def _on_controller_type(self, msg: String):
         """@brief Callback for runtime controller type changes from the dashboard."""
         new_type = msg.data
-        valid = ("geometric", "pure_pursuit", "neural_v2", "mpc", "stanley")
+        valid = ("geometric", "pure_pursuit", "neural_v2", "mpc", "stanley", "none")
         if new_type in valid and new_type != self.controller_type:
             self.get_logger().info(
                 f"Controller type: {self.controller_type} → {new_type}"
             )
             self.controller_type = new_type
+            # "none" means the steering motor must not be driven at all. A PID
+            # target of 0 rad would hold the wheel straight and fight the
+            # driver, so switch the ESP32 to direct PWM, where 0 is no drive.
+            # Any other controller needs the PID back.
+            self._request_steer_mode(1 if new_type == "none" else 0)
             if new_type == "mpc" and not HAS_SCIPY:
                 self.get_logger().error("scipy not installed – cannot switch to mpc")
                 self.controller_type = "geometric"
                 return
             if new_type in ("neural", "neural_v2") and self._nn_W1 is None:
                 self._load_neural_weights()
+
+    def _request_steer_mode(self, mode: int):
+        """@brief Queue a steering-mode frame for the ESP32. 0=PID angle, 1=direct PWM."""
+        frame = Frame()
+        frame.type = Frame.ORIN_STEER_MODE
+        frame.payload = [mode]
+        self._steer_mode_frame = frame
+        self._steer_mode_repeats = 100  # 1 s at the 100 Hz timer below
+
+    def _send_steer_mode(self):
+        """@brief Timer callback: resend a pending steering-mode frame until the repeats run out."""
+        if self._steer_mode_frame is not None and self._steer_mode_repeats > 0:
+            self.steer_mode_pub.publish(self._steer_mode_frame)
+            self._steer_mode_repeats -= 1
 
     # Old names for the constant-throttle modes, still accepted so a browser tab
     # left open across the rename keeps working instead of being ignored.
@@ -582,7 +614,11 @@ class ConeFollowerNode(Node):
             cones.append((class_id, fwd, left))
 
         nn_out = None
-        if self.controller_type in ("neural", "neural_v2"):
+        if self.controller_type == "none":
+            # Human steers. 0 here is a direct-PWM 0 (see _on_controller_type),
+            # i.e. no drive to the steering motor, not a PID target of straight.
+            steer = 0.0
+        elif self.controller_type in ("neural", "neural_v2"):
             steer, _, nn_out = self._control_neural(cones)
         elif self.controller_type == "pure_pursuit":
             steer, _ = self._control_pure_pursuit(cones)
