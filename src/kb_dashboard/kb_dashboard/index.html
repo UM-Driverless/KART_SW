@@ -1958,7 +1958,7 @@ body{
    it is exactly the room left over once the label and the LON/LAT caption have taken theirs.
    At 844x390 that room is smaller than the dial had in the minis grid; the alternative was
    shrinking the speedo, which is the one thing this change was asked to leave alone. */
-.rc-ggwrap{ flex:1 1 0; min-height:0; width:100%; display:flex; align-items:center; justify-content:center; }
+.rc-ggwrap{ flex:1 1 0; min-height:0; width:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:var(--sp-2); }
 /* On a phone in landscape the panel is ~315px tall and the speedo takes half of it, so the dial
    gets whatever is left — 61px, against 123px in the old grid. Rather than shrink the speedo
    (explicitly not wanted), the two pieces of chrome around the dial give their height back: the
@@ -1981,7 +1981,7 @@ body{
    minis grid. 59% would reproduce that old diameter exactly; 50% is a deliberate step under it,
    so the dial reads as secondary to the speedo above. max-height then bounds it on a short
    viewport, which works because .rc-ggwrap has a real height to be a percentage of. */
-.rc-speeddial #ggCanvas{ max-width:50%; max-height:100%; width:auto; height:auto; }
+.rc-speeddial #ggCanvas{ max-width:50%; max-height:calc(100% - 40px); width:auto; height:auto; }
 /* auto-flow:column so the two square dials stack in the left track and the pedals take the
    right one whole — row-major placement would have put them side by side instead. */
 .rc-minis{ display:grid; grid-auto-flow:column; grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr; gap:var(--sp-2); height:100%; min-height:0; }
@@ -2580,8 +2580,10 @@ body{
                it without either dial changing size. -->
           <div class="rc-ggblock">
             <span class="rc-gglbl">G</span>
-            <div class="rc-ggwrap"><canvas id="ggCanvas" width="280" height="280"></canvas></div>
-            <div class="rc-gcap" id="rcGCap"><span id="rcGCapLon">LON 0.00 g</span><span id="rcGCapLat">LAT 0.00 g</span></div>
+            <div class="rc-ggwrap">
+              <canvas id="ggCanvas" width="280" height="280"></canvas>
+              <div class="rc-gcap" id="rcGCap"><span id="rcGCapLon">LON 0.00 g</span><span id="rcGCapLat">LAT 0.00 g</span></div>
+            </div>
           </div>
         </div>
         <div class="rc-panel rc-steer">
