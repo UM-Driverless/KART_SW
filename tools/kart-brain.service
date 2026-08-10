@@ -10,11 +10,29 @@ Environment=DISPLAY=:1
 Environment=XAUTHORITY=/run/user/1000/gdm/Xauthority
 ExecStartPre=/bin/sleep 10
 ExecStartPre=/bin/bash -c 'python3 -c "import serial; s=serial.Serial(\"/dev/ttyUSB0\", 115200); s.setDTR(False); import time; time.sleep(0.1); s.setDTR(True); time.sleep(0.5); s.close()" 2>/dev/null || true'
+# `exec` matters, and its absence was a real bug. Without it, bash forks the launch
+# and stays alive as the service's main process. A non-interactive bash does not
+# forward signals to its children, so on `systemctl stop` bash took the SIGTERM and
+# exited on its own; systemd then saw the main process gone, declared the service
+# stopped, and SIGKILLed everything still in the cgroup. Every node in the stack was
+# therefore killed outright, and SIGKILL cannot be handled — no node ever got to run
+# its shutdown code. `exec` replaces bash with the launch process, so systemd's
+# SIGTERM arrives at ros2 launch, which shuts its children down in order.
+#
+# Symptom that exposed it: kb_bms was dropping its Bluetooth link to the battery
+# without disconnecting, leaving BlueZ convinced the pack was still connected. While
+# BlueZ believes that, the pack cannot be reached at all — connecting by address hits
+# the stale entry, and scanning cannot see it either, because a peripheral holding a
+# connection stops advertising. Recovery took about two minutes of missing battery
+# data on every restart.
 ExecStart=/bin/bash -c '\
   source /opt/ros/humble/setup.bash && \
   source ~/kart-brain/install/setup.bash && \
-  ros2 launch kart_bringup launch.py'
-TimeoutStopSec=10
+  exec ros2 launch kart_bringup launch.py'
+# Long enough for an orderly shutdown of the whole stack: the ZED node takes a few
+# seconds to release the camera, and kb_bms waits up to 6 s to disconnect from the
+# pack. The previous 10 s was inherited from when nothing shut down gracefully anyway.
+TimeoutStopSec=45
 Restart=on-failure
 RestartSec=5
 
