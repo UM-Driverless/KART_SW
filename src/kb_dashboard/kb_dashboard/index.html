@@ -97,6 +97,18 @@ body {
   font-family:'Inter',-apple-system,sans-serif; }
 #poDismiss:active { background:#1a1a2e; }
 
+/* Global EBS Button */
+.global-ebs {
+  border:none; border-radius:100px; font-size:11px; font-weight:700; letter-spacing:1.5px;
+  padding:6px 14px; cursor:pointer; font-family:'Inter',-apple-system,sans-serif;
+  margin-right:8px; transition: all 0.2s;
+  background:#e2001a; color:#fff; box-shadow:0 0 12px rgba(226,0,26,.4);
+}
+.global-ebs.on {
+  background:linear-gradient(180deg,#ffc247,#e0920a); color:#08080a;
+  box-shadow:0 0 12px rgba(255,176,32,.5);
+}
+
 /* Confirmation dialog. Replaces window.confirm(), which was wrong here for three reasons:
    it renders in the browser's chrome rather than the skin, it names the page's host in the
    title bar, and on the iOS Home Screen it can appear behind the standalone status bar. It
@@ -160,7 +172,7 @@ body {
       </div>
     </div>
     <div class="conn-dot" id="connDot"></div>
-    <button class="ctrl-btn ebs global-ebs" data-st="ebs" onclick="wsSend({action:'set_state',state:'ebs'})" title="Trigger Emergency Brake System" style="background:#e2001a;border:none;color:#fff;border-radius:100px;font-size:11px;font-weight:700;letter-spacing:1.5px;padding:6px 14px;cursor:pointer;font-family:'Inter',-apple-system,sans-serif;box-shadow:0 0 12px rgba(226,0,26,.4);margin-right:8px;">EBS</button>
+    <button class="ctrl-btn global-ebs" data-st="ebs" onclick="wsSend({action:'set_state',state:'ebs'})" title="Trigger Emergency Brake System">EBS</button>
     <button id="powerOffBtn"
             onclick="requestPowerOff()"
             title="Power off the Orin computer (NOT the kart safety shutdown loop / EBS)"
