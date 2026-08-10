@@ -1306,7 +1306,13 @@ function rcDrawPedals(canvas, thr, thrTgt, brkReal, brkTgt) {
   const rr = (x, y, w, h, r) => { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); };
 
   // layout: labels on top, bars in the middle, numbers + legend at the bottom
-  const trackTop = H * 0.10, botPad = H * 0.18;
+  // Type and the margins that hold it scale with WIDTH, not height. This canvas is no longer a
+  // fixed shape: it went from 240x400 to 260x620 when the pedals took a full column, and every
+  // font tied to H grew 55% while the bars they label grew 8% wider — "BRAKE ACCEL" ran into
+  // the panel edge and TARGET was clipped. The fractions below are the old H-based sizes
+  // re-expressed against the old width (H*0.06 of 400 = 24px = W*0.10 of 240), so the dial is
+  // unchanged at its original shape and merely stops inflating as it gets taller.
+  const trackTop = W * 0.167, botPad = W * 0.30;
   const trackH = H - trackTop - botPad, trackBot = trackTop + trackH;
   const bw = W * 0.30, gap = W * 0.10, x0 = (W - (bw * 2 + gap)) / 2;
   const brkX = x0, thrX = x0 + bw + gap;   // real pedal placement: brake left, accelerator right
@@ -1347,13 +1353,13 @@ function rcDrawPedals(canvas, thr, thrTgt, brkReal, brkTgt) {
 
   // labels above each bar
   ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
-  ctx.font = '700 ' + Math.round(H * 0.06) + 'px Rajdhani, system-ui, sans-serif';
-  ctx.fillStyle = '#2ecc71'; ctx.fillText('ACCEL', thrX + bw / 2, trackTop - H * 0.04);
-  ctx.fillStyle = '#e74c3c'; ctx.fillText('BRAKE', brkX + bw / 2, trackTop - H * 0.04);
+  ctx.font = '700 ' + Math.round(W * 0.10) + 'px Rajdhani, system-ui, sans-serif';
+  ctx.fillStyle = '#2ecc71'; ctx.fillText('ACCEL', thrX + bw / 2, trackTop - W * 0.067);
+  ctx.fillStyle = '#e74c3c'; ctx.fillText('BRAKE', brkX + bw / 2, trackTop - W * 0.067);
 
   // numeric readouts below each bar
-  ctx.font = '700 ' + Math.round(H * 0.10) + 'px Orbitron, sans-serif'; ctx.fillStyle = '#c8c8ce';
-  const numY = trackBot + H * 0.10;
+  ctx.font = '700 ' + Math.round(W * 0.167) + 'px Orbitron, sans-serif'; ctx.fillStyle = '#c8c8ce';
+  const numY = trackBot + W * 0.167;
   ctx.fillText(Math.round(clamp01(thr) * 100), thrX + bw / 2, numY);
   ctx.fillText(Math.round(clamp01(brkReal) * 100), brkX + bw / 2, numY);
 
@@ -1362,8 +1368,8 @@ function rcDrawPedals(canvas, thr, thrTgt, brkReal, brkTgt) {
   // accel bar and the red fill on the brake bar — a single-colour dot would
   // contradict one of them.
   ctx.textBaseline = 'middle';
-  ctx.font = '700 ' + Math.round(H * 0.05) + 'px Rajdhani, system-ui, sans-serif';
-  const ly = trackBot + H * 0.16, dotR = H * 0.02, dgap = H * 0.025, mid = H * 0.055;
+  ctx.font = '700 ' + Math.round(W * 0.083) + 'px Rajdhani, system-ui, sans-serif';
+  const ly = trackBot + W * 0.267, dotR = W * 0.033, dgap = W * 0.042, mid = W * 0.092;
   const wReal = ctx.measureText('REAL').width, wTgt = ctx.measureText('TARGET').width;
   let lx = W / 2 - (dotR * 4 + dgap * 2 + wReal + wTgt + mid) / 2;
   ctx.textAlign = 'left';
@@ -1720,13 +1726,37 @@ body{
    Its old tag was positioned against the mini cell it used to sit in, so reusing that rule here
    would have parked the letter next to the "Speed" label instead. */
 .rc-ggblock{ position:relative; display:flex; flex-direction:column; align-items:center; gap:var(--sp-1);
-  width:100%; min-height:0; }
-.rc-gglbl{ position:absolute; top:0; left:6px; font-size:var(--fs-xs); letter-spacing:.18em;
+  width:100%; min-height:0; flex:1 1 auto; }
+/* The dial is bounded on both axes so it keeps its circle: max-width caps it on a wide panel,
+   max-height on a short one. The height percentage needs a parent whose height is a real number
+   rather than its own content, which is what flex:1 1 0 + min-height:0 makes this wrapper —
+   it is exactly the room left over once the label and the LON/LAT caption have taken theirs.
+   At 844x390 that room is smaller than the dial had in the minis grid; the alternative was
+   shrinking the speedo, which is the one thing this change was asked to leave alone. */
+.rc-ggwrap{ flex:1 1 0; min-height:0; width:100%; display:flex; align-items:center; justify-content:center; }
+/* On a phone in landscape the panel is ~315px tall and the speedo takes half of it, so the dial
+   gets whatever is left — 61px, against 123px in the old grid. Rather than shrink the speedo
+   (explicitly not wanted), the two pieces of chrome around the dial give their height back: the
+   "G" tag is redundant next to a dial already labelled ACC/BRK/L/R, and the caption fits on one
+   line. That is ~30px, all of it straight into the diameter. */
+@media (max-height:520px){
+  .rc-speeddial .rc-gglbl{ display:none; }
+  .rc-speeddial .rc-gcap{ flex-direction:row; gap:var(--sp-2); }
+}
+/* In flow and centred, not pinned to a corner: the block spans the full panel width, so an
+   absolute tag sat against the panel edge with the dial floating far to its right. */
+.rc-gglbl{ font-size:var(--fs-xs); letter-spacing:.18em;
   color:var(--rc-label-dim); text-transform:uppercase; font-weight:700; }
 /* Sized to land at roughly the diameter it had in the minis grid: that cell was ~half of the
    1.25fr column, this panel is a whole 1fr one, so the percentage has to be smaller to keep the
    dial the same size on screen. */
-.rc-speeddial #ggCanvas{ max-width:62%; max-height:34%; width:auto; height:auto; }
+/* Two bounds, and both matter. max-width must be a percentage of the PANEL: an earlier attempt
+   capped the height against .rc-ggblock, whose own height is set by this canvas, so the dial came
+   out limited to a fraction of itself — 34% rendered it at 83px against the 204px it had in the
+   minis grid. 59% would reproduce that old diameter exactly; 50% is a deliberate step under it,
+   so the dial reads as secondary to the speedo above. max-height then bounds it on a short
+   viewport, which works because .rc-ggwrap has a real height to be a percentage of. */
+.rc-speeddial #ggCanvas{ max-width:50%; max-height:100%; width:auto; height:auto; }
 /* auto-flow:column so the two square dials stack in the left track and the pedals take the
    right one whole — row-major placement would have put them side by side instead. */
 .rc-minis{ display:grid; grid-auto-flow:column; grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr; gap:var(--sp-2); height:100%; min-height:0; }
@@ -2172,7 +2202,7 @@ body{
                it without either dial changing size. -->
           <div class="rc-ggblock">
             <span class="rc-gglbl">G</span>
-            <canvas id="ggCanvas" width="280" height="280"></canvas>
+            <div class="rc-ggwrap"><canvas id="ggCanvas" width="280" height="280"></canvas></div>
             <div class="rc-gcap" id="rcGCap"><span id="rcGCapLon">LON 0.00 g</span><span id="rcGCapLat">LAT 0.00 g</span></div>
           </div>
         </div>
