@@ -250,7 +250,12 @@ body {
     </div>
   </div>
 </div>
-<div style="max-width:480px;margin:4px auto;text-align:center">
+<!-- The skin moves #hudStream into its own slot and puts it back on teardown, which leaves this
+     wrapper in the body with no content but with its 4px margins — 8px of dead band under the
+     page, measured at the bottom of every screen. The class lets the active skin hide the empty
+     wrapper; hiding it from the skin's stylesheet rather than from JS means it comes back by
+     itself if the skin is ever swapped out, at the same moment the image returns to it. -->
+<div class="hud-home" style="max-width:480px;margin:4px auto;text-align:center">
   <img id="hudStream" style="width:100%;border-radius:6px" alt="HUD">
 </div>
 <div id="dbgConsole" style="max-width:480px;margin:4px auto">
@@ -1819,6 +1824,10 @@ body{
 }
 
 #app{ flex:1; min-height:0; display:flex; flex-direction:column; margin-top:5px; }
+/* The HUD image lives in this skin's Vision page, so its original wrapper sits empty in the
+   body — and an empty div with 4px margins is still 8px of page. That was the band of unused
+   space along the bottom edge on every screen. */
+.hud-home{ display:none; }
 .race-rotate{ display:none; flex:1; align-items:center; justify-content:center; flex-direction:column; gap:var(--sp-4);
   text-align:center; padding:24px; color:var(--rc-label); font-size:var(--fs-md); letter-spacing:.08em;
   text-transform:uppercase; font-weight:700; }
@@ -1994,9 +2003,40 @@ body{
 .rc-joypane #rcJoySlot{ flex:1 1 auto; min-height:0; min-width:0; display:flex; align-items:stretch; justify-content:center; }
 /* 430px = the 140px control column, its gap, and enough left for the pad to be at least as
    wide as the pane is tall — below that, seating them side by side would shrink the pad. */
+/* Pad left, everything else in ONE column on the right. Two things made that awkward. The pad
+   is square and sized by height, so anything stacked above or below it eats the only axis it
+   grows on. And the controls come from two places in the markup — the readouts belong to the
+   relocated joystick widget, the Angle/PWM toggle and the PID button to this pane — so they
+   laid out as two separate stacks at different heights, which reads as a mistake.
+   The fix is one grid inside the widget, with the other two controls moved into it at init
+   (see skinRace.init). display:contents was tried first and collapses the pad: with every row
+   min-content sized there is no height for a row-spanning square to be a percentage of. */
 @container (min-width:430px){
-  .rc-joypane .joy-row{ flex-direction:row; }
-  .rc-joypane .joy-side{ width:140px; }
+  .rc-joypane .js-widget.on{
+    /* 172px, not 150: at 150 the readouts clipped their own words ("CENTRED" came out "CE…"). */
+    display:grid; grid-template-columns:1fr 172px; grid-template-rows:auto auto auto auto 1fr;
+    column-gap:var(--sp-3); row-gap:var(--sp-2); }
+  /* align-self:stretch is load-bearing against the row sizing above, which otherwise
+     shrink-wraps this to its content — and its content is a pad sized as a percentage of it,
+     so the pair collapses to nothing (measured: a 2x2 pad). */
+  .rc-joypane .js-padwrap{ grid-column:1; grid-row:1 / -1; min-height:0; align-self:stretch; }
+  .rc-joypane .js-hdr,
+  .rc-joypane .js-take,
+  .rc-joypane .js-readout,
+  .rc-joypane #rcGpSlot,
+  .rc-joypane .pid-open{ grid-column:2; align-self:start; }
+  /* One per row rather than auto-fit: the column is 172px and auto-fit's 150px minimum would
+     keep them side by side at exactly the width where they stop fitting. */
+  .rc-joypane .js-readout{ grid-template-columns:1fr; }
+  .rc-joypane .pid-open{ margin-top:0; width:auto; }
+  /* Label above, number and state below. In one line the 172px column clipped the state to
+     "CENTRE…" — and that word is the reading, not decoration: it is what says which way the
+     wheels are pointed. Two rows fit it whole and keep the number the biggest thing there. */
+  /* The pad may not push the column off the pane: it is the one thing here that can give back
+     height, and a control that has scrolled out of reach is worse than a smaller pad. Laying
+     the readouts on two rows instead was tried and is what caused that — the column came to
+     336px against the 323px the pane has, and the PID button fell off the bottom edge. */
+  .rc-joypane .js-widget.on{ max-height:100%; }
 }
 /* Steering PID. The four gains are set once a session while the pad is wanted the whole time,
    so they live behind a button in a panel that covers the pane, and Apply closes it again. */
@@ -2057,15 +2097,19 @@ body{
 /* .on is the name under the centre slot — a candidate, not the mission. .cur is the mission
    the kart is actually in. Keeping them different colours is the whole point of the two-step:
    at a glance you can see that the wheel is parked somewhere the kart is not. */
+/* .on is the name under the centre slot and .cur is the mission the kart is in. A tap sets
+   both at once, so they normally coincide; they only differ for the ~220ms the wheel takes to
+   animate, and while a mission set from somewhere else is on its way back from the Orin. */
 .mis-tab.on{ color:var(--rc-white); }
 .mis-tab.cur{ color:var(--rc-red); text-shadow:0 0 8px rgba(226,0,26,.5); }
-.mis-set{ flex:none; margin-top:var(--sp-2); border:1px solid var(--rc-red); color:#fff;
-  background:linear-gradient(180deg,#8a0012,#5c000c); font-family:'Rajdhani',sans-serif;
-  font-weight:700; font-size:var(--fs-sm); letter-spacing:.1em; text-transform:uppercase;
-  padding:var(--sp-2) var(--sp-1); cursor:pointer;
-  clip-path:polygon(0 0, calc(100% - var(--cut-sm)) 0, 100% var(--cut-sm), 100% 100%, var(--cut-sm) 100%, 0 calc(100% - var(--cut-sm))); }
-.mis-set:active{ filter:brightness(1.2); }
-.mis-set[hidden]{ display:none; }
+/* Centred over the wheel rather than left-aligned like the other pane labels: this pane is a
+   narrow track and everything in it — the names, the centre slot — is centred on one axis.
+   position:absolute is what makes the two wheels CONCENTRIC. Both centre slots sit at 50% of
+   their own box; the page rail's box is the full height of the stage, so as long as this pane's
+   wheel also fills its box, the two centres line up and a name is always level with the section
+   it belongs to. In flow the label was ~20px of the box and pushed this wheel's centre down by
+   half of that — close enough to look like a mistake rather than a decision. */
+.rc-mislabel{ position:absolute; top:var(--sp-3); left:0; right:0; text-align:center; }
 /* Read-only status readouts: rounded, flat, with a glowing LED dot — deliberately
    NOT button-shaped so they are never mistaken for the controls below. */
 .spill{ flex:1; display:flex; align-items:center; justify-content:center; gap:var(--sp-2); padding:var(--sp-2) var(--sp-2); cursor:default;
@@ -2222,7 +2266,24 @@ body{
 .rc-sysgrid{ display:grid; grid-template-columns:repeat(4,1fr); grid-auto-rows:minmax(min-content,1fr); gap:var(--sp-3); flex:1.6; min-height:0; overflow-y:auto; }
 /* tighter than a card elsewhere: eight of these have to stack two-deep above the console on a
    339px-tall page, and the vertical padding is the cheapest place to find the room */
-.rc-sysgrid .rc-card{ flex:none; padding:var(--sp-2) var(--sp-4); }
+/* The eight cards are sized to FIT, not to scroll. They used to be laid out at the page's
+   largest type step and then allowed to scroll when they did not fit, which at 844x390 meant
+   both bars on and a card sliced in half at the fold — eight readouts whose whole job is to be
+   taken in at a glance, behind a scroll. One step down the scale and tighter padding puts the
+   two rows inside the box, and the value is still the biggest thing on the card. */
+.rc-sysgrid .rc-card{ flex:none; padding:var(--sp-1) var(--sp-3); min-width:0; }
+.rc-sysgrid .rc-card .val{ font-size:var(--fs-md); }
+/* Long names like "ESP32 SPARE TASK MEMORY" are what pushed the grid wider than its box and
+   turned on the horizontal bar; let them wrap instead. */
+.rc-sysgrid .rc-card .rc-label{ white-space:normal; overflow-wrap:anywhere; }
+/* The per-card description is what actually set the row height: at four columns it wraps to
+   four or five lines, and two rows of that came to 305px in a 244px box. Tightening its
+   leading and dropping one step of type keeps every word on screen — nothing is clamped or
+   hidden — and brings both rows inside the box. */
+.rc-sysgrid .rc-sysdesc{ font-size:9px; line-height:1.18; }
+.rc-sysgrid .rc-card .row1{ gap:0; }
+/* The gap is between the two rows only, so every pixel here is a pixel of card. */
+.rc-sysgrid{ gap:var(--sp-2); }
 /* Sized as a share of the page rather than by flex weight, with a floor. As a flex sibling it
    competed with the grid for the same pixels: whichever was allowed to shrink lost everything,
    so the console was either crushed to one line or greedily took half the page and left the
@@ -2472,18 +2533,17 @@ body{
       <div class="race-page rc-mission">
         <!-- Mission picker. A wheel rather than the 8-button grid it replaces: the grid took a
              full column of this page for a control that is touched once per run, and the pad
-             next to it is the one that gets used while driving. Turning the wheel only moves
-             the highlight — the mission changes when the centred name is tapped a second time,
-             or via the SET button that appears while the two disagree. -->
+             next to it is the one that gets used while driving. Drag to scroll the names, tap
+             one to select it; the tap also centres it, so the centre slot is always the
+             mission the kart is in. -->
         <div class="rc-panel rc-mpanel rc-mispanel">
-          <span class="rc-label">Mission</span>
+          <span class="rc-label rc-mislabel">Mission</span>
           <div class="mis-wheel" id="misWheel">
             <div class="mis-wheel-win" id="misWheelWin">
               <div class="mis-wheel-mid"></div>
               <div class="mis-wheel-list" id="misGrid"><button class="mis-tab" data-m="manual">Manual</button><button class="mis-tab" data-m="remote_control">Remote</button><button class="mis-tab" data-m="inspection">Inspect</button><button class="mis-tab" data-m="autonomous">Auto</button><button class="mis-tab" data-m="acceleration">Accel</button><button class="mis-tab" data-m="skidpad">Skidpad</button><button class="mis-tab" data-m="autocross">Autocross</button><button class="mis-tab" data-m="trackdrive">Trackdrive</button></div>
             </div>
           </div>
-          <button class="mis-set" id="misSet" type="button" hidden>Set</button>
         </div>
         <div class="rc-panel rc-mpanel" id="rcAlgoPane">
           <span class="rc-label">Algorithms</span>
@@ -2782,47 +2842,33 @@ body{
       if (Math.abs(dy) > 45 && Math.abs(dy) > 1.5 * Math.abs(dx)) go(page + (dy < 0 ? 1 : -1));
     }, { passive: true });
     go(0, false);   // seat the ring without animating on first render
-    // Mission wheel. Two-step on purpose: turning parks a candidate under the centre slot,
-    // and only a tap on the name already there — or the SET button that appears while the
-    // candidate and the kart disagree — sends set_mission. A single-step wheel would let a
-    // knocked elbow put the kart into autonomous, which is not a risk the page rail carries.
+    // Mission wheel: drag to scroll the names, tap one to select it. The tap both sends the
+    // mission and brings that name to the centre, so the centre slot always shows what the
+    // kart is in — there is no separate "candidate" to reason about and no confirm button.
     const misTabs = [...document.querySelectorAll('.mis-tab')];
     const misNames = misTabs.map(t => t.dataset.m);
-    const misSetBtn = $('misSet');
-    let misCandidate = 0;      // index centred in the wheel
     let misCurrent = null;     // mission the kart reports; null until the first frame
-    const misRefresh = (pos, sel) => {
-      if (sel != null) misCandidate = sel;
-      misTabs.forEach(t => t.classList.toggle('cur', t.dataset.m === misCurrent));
-      // The button is the discoverable half of the two-step: the second tap is not something
-      // anyone would guess, so while the wheel is parked off the current mission there is a
-      // labelled control saying what committing would do.
-      const differs = misCurrent != null && misNames[misCandidate] !== misCurrent;
-      misSetBtn.hidden = !differs;
-      if (differs) misSetBtn.textContent = 'Set ' + misTabs[misCandidate].textContent;
-    };
-    const misCommit = () => {
-      const m = misNames[misCandidate];
-      if (m === misCurrent) return;   // already there; nothing to send
-      wsSend({ action: 'set_mission', mission: m });
-      if (m === 'inspection') wsSend({ action: 'list_svo' });
-    };
+    const misRefresh = () => misTabs.forEach(t => t.classList.toggle('cur', t.dataset.m === misCurrent));
     const misWheel = rcMakeWheel({
       rail: $('misWheel'), win: $('misWheelWin'), items: misTabs,
-      onPaint: misRefresh,
-      onTap: (idx, wasCentred) => { if (wasCentred) misCommit(); },
+      onTap: idx => {
+        const m = misNames[idx];
+        if (m === misCurrent) return;   // already there; nothing to send
+        wsSend({ action: 'set_mission', mission: m });
+        if (m === 'inspection') wsSend({ action: 'list_svo' });
+      },
     });
-    misSetBtn.addEventListener('click', misCommit);
-    // Called from updateMissions() on every frame. Parking the wheel on the kart's mission
-    // only happens the first time: after that the wheel is the operator's to leave wherever
-    // they like, and yanking it back under their finger would fight them.
+    // Called from updateMissions() on every frame. The wheel follows the kart: whatever the
+    // mission actually is ends up centred, whether it was changed from here, from another
+    // phone, or by the Orin itself. A tap has already animated the wheel there, so this is
+    // normally a no-op; it is what keeps the two in step when the change came from elsewhere.
     window.rcSetCurrentMission = m => {
       if (!m || m === misCurrent) return;
       const first = misCurrent === null;
       misCurrent = m;
       const i = misNames.indexOf(m);
-      if (first && i >= 0) misWheel.go(i, false);
-      misRefresh(null, null);
+      if (i >= 0 && i !== misWheel.sel()) misWheel.go(i, !first);
+      misRefresh();
     };
     wirePidControls();
     // relocate the global HUD stream + remote-control joystick into this skin's
@@ -2836,6 +2882,15 @@ body{
     $('rcHudSlot').appendChild(hud);
     $('rcJoySlot').appendChild(joy);
     $('rcGpSlot').appendChild(gp);
+    // Fold the Angle/PWM slot and the PID button INTO the joystick widget, so the pad and every
+    // control that belongs to it are children of one element and one grid can lay them out as
+    // a pad plus a single column (see the container query on .rc-joypane). Left as siblings
+    // they rendered as two stacks at different heights beside the pad. Same relocation trick
+    // this block already uses, and undone the same way on skin switch.
+    const gpSlotHome = { parent: $('rcGpSlot').parentElement, next: $('rcGpSlot').nextSibling };
+    const pidBtnHome = { parent: $('btnPidOpen').parentElement, next: $('btnPidOpen').nextSibling };
+    joy.appendChild($('rcGpSlot'));
+    joy.appendChild($('btnPidOpen'));
     updateMissionUI();   // set the Algorithms/Joystick pane visibility for the current mission on load
     if (dbg) { $('rcDbgSlot').appendChild(dbg); if (!dbgOpen) toggleDbg(); }  // show it expanded on the System page
     drawCenital($('rcCenital'), []);
@@ -2851,6 +2906,10 @@ body{
     rcDrawGauge($('rcPneuDial'), RC_DIAL_TANK, NaN);  // '-- bar' until the sensor reports
     rcDrawGauge($('rcPistDial'), RC_DIAL_PIST, NaN);
     return () => {
+      // Innermost first: the slot and the button have to come back out of the widget before
+      // the widget itself goes home, or they travel with it and the next skin loses them.
+      gpSlotHome.parent.insertBefore($('rcGpSlot'), gpSlotHome.next);
+      pidBtnHome.parent.insertBefore($('btnPidOpen'), pidBtnHome.next);
       hudHome.parent.insertBefore(hud, hudHome.next);
       joyHome.parent.insertBefore(joy, joyHome.next);
       gpHome.parent.insertBefore(gp, gpHome.next);
