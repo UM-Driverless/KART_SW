@@ -172,7 +172,7 @@ body {
       </div>
     </div>
     <div class="conn-dot" id="connDot"></div>
-    <button class="h-ctrl global-ebs" data-st="ebs" onclick="wsSend({action:'set_state',state:'ebs'})" title="Trigger Emergency Brake System">EBS</button>
+    <button class="h-ctrl global-ebs" data-st="ebs" onclick="wsSend({action:'set_state',state: this.classList.contains('on') ? 'idle' : 'ebs'})" title="Trigger Emergency Brake System">EBS</button>
     <button id="powerOffBtn"
             onclick="requestPowerOff()"
             title="Power off the Orin computer (NOT the kart safety shutdown loop / EBS)"
