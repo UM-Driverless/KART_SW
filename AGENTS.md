@@ -148,7 +148,6 @@ ros2 launch kart_sim simulation.launch.py
 | `src/kart_perception/` | Perception pipeline (YOLO + depth + viz) |
 | `src/kart_sim/` | Gazebo simulation package |
 | `src/kart_bringup/` | Launch files and config for real hardware |
-| `src/joy_to_cmd_vel/` | Joystick teleop (C++) |
 | `src/msgs_to_micro/` | ESP32 serial comms (C++) |
 | `models/perception/yolo/best_adri.pt` | YOLO weights |
 

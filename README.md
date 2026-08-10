@@ -67,7 +67,6 @@ source install/setup.bash
 | Launch file | Command | Description | Nodes |
 |---|---|---|---|
 | **launch.py** | `ros2 launch kart_bringup launch.py` | Full pipeline — camera, perception, control, comms, and dashboard. Use `perception:=false` for remote-control only | ZED camera, perception_3d (YOLO + depth localizer), steering_hud, cone_follower, cmd_vel_bridge, KB_Coms_micro, kb_dashboard |
-| **teleop.launch.py** | `ros2 launch kart_bringup teleop.launch.py` | Manual driving with a joystick. Requires gamepad at `/dev/input/js0` | joy_node, joy_to_cmd_vel, cmd_vel_bridge, KB_Coms_micro |
 | **dashboard.launch.py** | `ros2 launch kart_bringup dashboard.launch.py` | Comms + web dashboard only — safe for firmware testing, sends no commands to the kart | KB_Coms_micro, kb_dashboard |
 | **gui.launch.py** | `ros2 launch kart_bringup gui.launch.py` | HUD viewer window on Orin display (launch separately from autonomous) | hud_viewer |
 

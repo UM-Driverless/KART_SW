@@ -1,7 +1,8 @@
 # Remote control via the web dashboard.
 # Launches comms, state machine, cmd_vel bridge, and dashboard.
-# Use the dashboard's virtual gamepad (manual mission) to drive the kart.
-# No physical PS4 controller or perception nodes needed.
+# Drive from the dashboard's touch pad, with the mission set to remote_control.
+# No perception nodes needed. Gamepad support was removed on 2026-08-10 — the touch pad is
+# the only remote control, on the ROS side as well as in the browser.
 
 from launch import LaunchDescription
 from launch_ros.actions import Node

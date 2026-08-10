@@ -8,11 +8,9 @@ endif()
 # find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
-find_package(teleop_twist_joy REQUIRED)
 
 set(dependencies
   rclcpp
-  teleop_twist_joy
 )
 include_directories(include)
 

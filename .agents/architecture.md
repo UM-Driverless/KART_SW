@@ -39,15 +39,12 @@
 │   ├── kart_bringup/               (ament_cmake) Launch files only
 │   │   ├── launch/
 │   │   │   ├── launch.py                  Full pipeline (perception→control→comms→dashboard)
-│   │   │   ├── dashboard.launch.py        Dashboard + comms (no commands sent to kart)
-│   │   │   └── teleop.launch.py          Joystick teleop
-│   │   └── config/teleop_params.yaml
+│   │   │   └── dashboard.launch.py        Dashboard + comms (no commands sent to kart)
 │   │
 │   ├── kb_coms_micro/              (ament_cmake, C++) Serial bridge (ROS ↔ ESP32 UART)
 │   ├── kb_interfaces/              (ament_cmake) Custom msg/srv (Frame.msg)
 │   ├── kb_serial_driver_lib/       (ament_cmake, C++) Low-level serial driver
 │   ├── kb_dashboard/               (ament_python) Web dashboard (port 9090, public: kart.rubenayla.xyz)
-│   ├── joy_to_cmd_vel/             (ament_cmake, C++) Joystick → Twist
 │   └── ThirdParty/
 │
 ├── models/perception/yolo/nava_yolov11_2026_02.pt  YOLO weights (YOLOv11, primary)
