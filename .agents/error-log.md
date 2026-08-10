@@ -653,3 +653,34 @@ row was fine; presence in the DOM says nothing about visibility.
 **Prevention.** After adding an element to an existing CSS class, check that class's rules before
 writing its show/hide logic, and set an explicit display value. When a user reports a UI element is
 missing, read the computed style on the live page before proposing any explanation.
+
+## 2026-08-10 — "None" steering drove the column anyway: a safety claim shipped without checking who else owned the mode (Claude Opus 5)
+
+**What happened.** A "None" steering algorithm was added so a human can hold the wheel while the kart
+drives itself. Its whole mechanism is one claim: put the ESP32 in direct-PWM steering mode, where an
+output of 0 means no drive, because in PID mode a target of 0 rad means "hold the wheels centred" and
+the motor will fight the driver. `cone_follower` sent that mode frame once, as a 1 s burst, when the
+algorithm was selected. On the kart the steering motor still tried to move with "None" selected.
+
+**Root cause.** `/orin/steer_mode` has three publishers — `cone_follower`, `state_machine`, and the
+dashboard's Angle/PWM toggle — and the mode is last-writer-wins with no owner. `state_machine`
+forces PID mode every time an autonomous mission reaches `AS_READY`
+(`state_machine_node.py:94`). Selecting AUTO after selecting None, or any later mission change,
+silently reverted the one thing "None" does, and the column then drove to centre against whoever was
+holding the wheel. Not a race — a plain overwrite that happens on the ordinary path.
+
+**Why it shipped.** Only the topic being *published* was checked, never who else publishes it. The
+grep that would have found `state_machine`'s call was run earlier the same session, for a different
+question, and the line was read without connecting it to this feature. The change was then reported
+as deployed with the residual risk named as "check that direct-PWM 0 leaves the steering free" — the
+wrong risk, and stated in a way that implied the mode itself was settled.
+
+**Fix.** `cone_follower` now subscribes to `/orin/steer_mode` and re-asserts direct PWM whenever
+anything else sets PID while "None" is selected, plus a 1 Hz restatement so an ESP32 that rebooted
+into its flashed default is corrected too.
+
+**Prevention.** Before shipping anything whose safety depends on a setting, grep for every publisher
+of that setting and say in the change what happens when each of them writes it. A mode that anything
+may overwrite is not a guarantee — either take ownership of it or re-assert it continuously. And when
+a change moves an actuator a person may be touching, the verification is on the kart, not a build and
+a restart.
