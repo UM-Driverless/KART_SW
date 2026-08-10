@@ -1925,3 +1925,67 @@ command is in the fake-m/s units cmd_vel uses, and how those map to real speed o
 kart has never been measured, which is the very thing the run is for. Default target is
 2.0 m/s. If the first run is lively, lower `max_speed` on the cone_follower node in
 `kart_bringup/launch/launch.py` — it is the ceiling as well as the open-loop level.
+
+---
+
+## 2026-08-10 — YOLO was at 33 Hz instead of ~70 Hz: three CUDA syncs per cone in the ROS publish loop
+
+The Orin's cone detection had roughly halved against the 70–84 Hz recorded on 2026-07-07
+(see the dashboard-broadcast-rate entry above). It ran at 32–35 Hz.
+
+**Everything the obvious suspects would predict was already fine.** The camera published
+`/zed/zed_node/rgb/image_rect_color` at 81 Hz at VGA. The node loaded the FP16 TensorRT
+engine `ruben_yolov11n_2026_03_320_orin_trt10.engine` at `imgsz=320`, not the FP32 one
+from the 2026-03-21 error-log entry. The ZED's own object detection was off
+(`od_enabled=False`), point cloud disabled, depth on PERFORMANCE. No stale duplicate ROS
+processes. Inference was on `cuda:0` — `device=""` means auto-detect, and auto-detect
+picked CUDA.
+
+**The misleading signal was `top`:** the `yolo_detector` process sat at exactly 100.0% of
+one core while the machine as a whole was 35% idle, and the node's single log line
+(`infer=28ms`) lumped every stage together, so it could not say which stage.
+
+**What found it** was splitting that log line into `decode / pre / gpu / post / ros`,
+using ultralytics' own `results[0].speed` dict for the middle three (commit `8678aa8`):
+
+| Stage | Time | Runs on |
+|---|---|---|
+| cv_bridge decode + crop | 0.5 ms | CPU |
+| preprocess (letterbox) | 1.9 ms | CPU |
+| inference | 3.0 ms | GPU |
+| postprocess (NMS) | 5.5 ms | CPU |
+| Detection2DArray build + publish | 15–19 ms | CPU, blocked on GPU |
+
+**Root cause:** the publish loop read `box.xyxy[0].tolist()`, `float(box.conf[0])` and
+`int(box.cls[0])` per detection. Each of those is a separate device-to-host transfer off a
+CUDA tensor, so it is three GPU syncs per cone, and each sync blocks the thread until the
+GPU drains. At ~19 cones a frame that measured ~0.8 ms per cone. The CPU was not computing
+— it was waiting on the GPU, one cone at a time.
+
+**Fix (`ead57a3`):** `r.boxes.data.cpu().numpy()` once per frame, then loop over plain
+floats. `ros=` fell from 15–19 ms to 0.9 ms and the rate went **33 Hz → 67–72 Hz**,
+measured on the kart after `sudo systemctl restart kart-brain`.
+
+**Two things worth carrying forward:**
+
+1. **Twelve cores do not help a single-threaded pipeline.** Decode, preprocess, inference,
+   NMS and message building all run in `_inference_loop`, so the frame period is the *sum*
+   of every stage. That is why one core read 100.0% while the machine was a third idle.
+   "CPU-bound" here meant the CPU was the limiting stage, not that the model ran on CPU —
+   worth stating precisely, because the two readings suggest opposite fixes.
+2. **Never read ultralytics box attributes per box in a loop.** Pull the whole
+   `r.boxes.data` tensor across once. The per-box form is what the library's own examples
+   show, and it is fine on desktop where the sync is cheap; on Jetson's shared-memory GPU
+   it dominated the frame.
+
+**Profiling note for next time:** `sudo py-spy top --pid <yolo_detector pid>` attaches to
+the running node with no restart and no code change, and would have shown this directly.
+`tegrastats` gives the system-level GPU/CPU/EMC picture; `nsys` (ships with JetPack) shows
+the CUDA timeline against the CPU when the question is "who is waiting for whom".
+
+**Not the cause, but noted while looking:** the Orin runs `MODE_50W` (GPU capped at
+816 MHz, CPU at 1.4976 GHz), which is what `kart-docs` orin-setup.md prescribes. However
+`jetson_clocks.service` **does not exist** on the machine even though that doc's checklist
+(line 527) lists it as enabled, and the CPU governor is `schedutil`, not `performance`.
+Clocks happened to be at their caps when sampled, so this did not cost anything here — but
+the checklist item is not actually satisfied.
