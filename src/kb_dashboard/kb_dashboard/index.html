@@ -141,7 +141,7 @@ body {
   <b>ESP32</b> Topbar chip 3 — seconds since the ESP32 last said it is alive. Green while the messages keep arriving, red "ESP32 SILENT" once they stop, which means the dashboard is showing frozen numbers and nothing is driving the actuators. "ESP32 --" before the first message has been seen<br>
   <b>SYS</b> Topbar chip 4 — worst case of the readouts below, naming where the trouble is instead of only changing colour. Red for a steering sensor that is unreadable or was lost, an ESP32 out of memory, any task under 200 spare bytes, or a silent ESP32; amber for slow cone detection or a slow ESP32 link. The old I2C bus and magnet signal are left out on purpose — they are never populated on this board, so folding them in would peg the chip to a permanent false alarm<br>
   <br>
-  <b>STEER</b> Steering sensor (MT6701 read over PWM). OK, NO SIGNAL (missing right now), or SIGNAL LOST (was missing at some point — emergency brake fired, throttle blocked until the ESP32 reboots, even if the signal is back)<br>
+  <b>STEER</b> Steering sensor (MT6701 read over PWM). OK, NO SIGNAL (missing right now), or SIGNAL LOST (was missing at some point — emergency brake fired, throttle blocked until the ESP32 reboots, even if the signal is back). SIGNAL LOST carries how long ago it tripped and whether the signal has since returned, so a leftover trip from an earlier boot is distinguishable from one happening now<br>
   <b>OLD I2C SENSOR BUS</b> The bus the previous board used to read its steering sensor (an AS5600). This board does not use it, so "not used" is the normal reading and never means something is broken<br>
   <b>ESP32 FREE MEMORY</b> Memory the ESP32 still has spare, in kB. Turns red when it runs low, which is the warning before the firmware starts rebooting on its own<br>
   <b>MAGNET SIGNAL STRENGTH</b> How strongly the old AS5600 saw its magnet (0–255, healthy 20–235). Not measured on this board, for the same reason as the old I2C bus<br>
@@ -194,38 +194,15 @@ body {
 
 <div id="app"></div>
 
-<!-- Gamepad readout and the steering-command toggle. Shown only while the mission is
-     remote_control, which is the only mission where either does anything.
-     This used to be hidden outright by the race skin while updateGamepadUI() kept polling
-     the gamepad and sending manual_control — a control that drove the kart with its own
-     readout rendering nowhere, and with the Angle/PWM toggle unreachable from any screen.
-     The race skin relocates this block into the Remote control pane next to the touch pad
-     (see skinRace.init), the same way it relocates the pad itself. -->
+<!-- What the steering number in every manual_control message means to the firmware: an angle
+     for the ESP32's PID to chase, or a raw motor drive with no PID at all. Raw PWM bypasses
+     the position loop, so it moves the column for as long as it is held and does not stop at
+     an angle — that is why it says so on the button.
+     Applies to whatever is driving, which since 2026-08-10 is only the touch pad: gamepad
+     support was dropped, so this toggle and the pad are the whole of remote control.
+     Shown only in remote_control; the race skin relocates it into the Remote control pane
+     next to the pad (see skinRace.init), the same way it relocates the pad itself. -->
 <div id="manualWidget" class="gp-block">
-  <div class="gp-hdr"><span class="rc-label">Gamepad</span><span id="gpStatus" class="gp-off">No gamepad connected</span></div>
-
-  <div class="gp-axes">
-    <div>
-      <div class="gp-cap">Steering — left stick</div>
-      <div class="gp-track"><div id="gpSteerFill"></div></div>
-      <div class="gp-num" id="gpSteerVal">0.00</div>
-    </div>
-    <div>
-      <!-- Brake left, accel right, matching the real pedals and the pedals dial on the
-           Telemetry page. Each fill grows out from the centre line. -->
-      <div class="gp-cap">Brake / accel — triggers</div>
-      <div class="gp-track gp-split">
-        <div class="gp-half gp-half-l"><div id="gpBrakeFill"></div></div>
-        <div class="gp-half"><div id="gpAccelFill"></div></div>
-      </div>
-      <div class="gp-nums"><span id="gpBrakeVal" class="gp-brk">0%</span><span id="gpAccelVal" class="gp-acc">0%</span></div>
-    </div>
-  </div>
-
-  <!-- What the steering number in every manual_control message means to the firmware:
-       an angle for the ESP32's PID to chase, or a raw motor drive with no PID at all.
-       Raw PWM bypasses the position loop, so it moves the column for as long as it is
-       held and does not stop at an angle — that is why it says so on the button. -->
   <div class="gp-mode">
     <span class="gp-cap">Steering command sent to the ESP32</span>
     <div class="gp-seg">
@@ -427,6 +404,9 @@ function updateMissionUI() {
   if (algoPane) algoPane.style.display = (isAuto || currentMission === 'inspection') ? '' : 'none';
   const joyPane = $('rcJoyPane');
   if (joyPane) joyPane.style.display = currentMission === 'remote_control' ? '' : 'none';
+  // Angle/PWM toggle: only remote_control sends manual_control, so it is the only mission
+  // where the steering mode is worth setting.
+  $('manualWidget')?.classList.toggle('on', currentMission === 'remote_control');
   // Controls pane holds only .ctrl-row, which the loop above hides outside autonomous
   // missions — so in manual/remote it was a full grid column framing nothing. Hide the pane
   // itself on the same condition and the grid gives that width to the joystick instead.
@@ -455,80 +435,13 @@ function onSvoChange(sel) {
   wsSend({action:'set_svo', file: sel.value});
 }
 
-// Gamepad polling
-let gamepadLoop = null;
-
-function updateGamepadUI() {
-  const gpWidget = $('manualWidget');
-  if (!gpWidget) return;
-
-  // Visible only in remote_control, which is also the only mission where the polling below
-  // is allowed to send anything. Both halves are gated on the same condition on purpose:
-  // the block must never be hidden while the loop is still driving.
-  gpWidget.classList.toggle('on', currentMission === 'remote_control');
-  if (currentMission !== 'remote_control') return;
-
-  const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
-  let gp = null;
-  for (let i = 0; i < gamepads.length; i++) {
-    if (gamepads[i]) { gp = gamepads[i]; break; }
-  }
-
-  const status = $('gpStatus');
-  if (!gp) {
-    status.textContent = 'No gamepad connected';
-    status.className = 'gp-off';
-    return;
-  }
-
-  status.textContent = 'Driving: ' + gp.id.substring(0, 20);
-  status.className = 'gp-on';
-
-  // Typical mappings: Left stick X = axis 0, Left Trigger = button 6, Right Trigger = button 7
-  // Fallback to axis 2/5 for triggers depending on OS/Browser
-  let steerAxis = gp.axes[0] || 0;
-  
-  // Triggers are usually buttons[6] and [7]. value goes 0.0 to 1.0
-  let brakeVal = gp.buttons[6] ? gp.buttons[6].value : 0;
-  let accelVal = gp.buttons[7] ? gp.buttons[7].value : 0;
-
-  // Apply deadzones
-  if (Math.abs(steerAxis) < 0.1) steerAxis = 0;
-
-  // Update UI bars
-  const sf = $('gpSteerFill');
-  if (sf) {
-    if (steerAxis >= 0) {
-      sf.style.left = '50%';
-      sf.style.width = (steerAxis * 50) + '%';
-    } else {
-      sf.style.left = (50 + steerAxis * 50) + '%';
-      sf.style.width = (-steerAxis * 50) + '%';
-    }
-    $('gpSteerVal').textContent = steerAxis.toFixed(2);
-  }
-
-  if ($('gpBrakeFill')) {
-    $('gpBrakeFill').style.width = (brakeVal * 100) + '%';
-    $('gpAccelFill').style.width = (accelVal * 100) + '%';
-    $('gpBrakeVal').textContent = Math.round(brakeVal * 100) + '%';
-    $('gpAccelVal').textContent = Math.round(accelVal * 100) + '%';
-  }
-
-  // Send via WS
-  wsSend({
-    action: 'manual_control',
-    steering: steerAxis,
-    steer_type: manualSteerType,
-    throttle: accelVal,
-    brake: brakeVal
-  });
-}
-
-function startGamepadLoop() {
-  if (gamepadLoop) return;
-  gamepadLoop = setInterval(updateGamepadUI, 100); // 10Hz
-}
+// Gamepad support was removed on 2026-08-10: the dashboard's touch pad is the remote control,
+// and a second input path was worth neither the code nor its failure modes. What was here was a
+// 10 Hz poll of navigator.getGamepads() that sent manual_control whenever the mission was
+// remote_control and any gamepad was enumerated — including all-zero frames while nobody
+// touched it, which overrode the touch pad within 100 ms of every command it sent.
+// If gamepads are ever wanted back, take the controller token the way the touch pad does
+// rather than letting two sources write the same command.
 
 // Steer type buttons
 window.addEventListener('DOMContentLoaded', () => {
@@ -540,7 +453,6 @@ window.addEventListener('DOMContentLoaded', () => {
   };
   $('btnSteerAngle').onclick = () => setSteerMode('angle');
   $('btnSteerPWM').onclick = () => setSteerMode('pwm');
-  startGamepadLoop();
 });
 
 // Steering PID controls. Wired from skinRace.init() rather than DOMContentLoaded because
@@ -936,6 +848,15 @@ document.addEventListener('click', e => {
   }
 });
 
+// Compact age for the steering-trip readout: 47s, 14m 22s, 2h 05m. Kept coarse on
+// purpose — the question it answers is "did this just happen or is it left over from
+// an earlier boot", so the exact second stops mattering past a minute or two.
+function fmtTripAge(s) {
+  if (s < 60) return s + 's';
+  if (s < 3600) return Math.floor(s / 60) + 'm ' + String(s % 60).padStart(2, '0') + 's';
+  return Math.floor(s / 3600) + 'h ' + String(Math.floor((s % 3600) / 60)).padStart(2, '0') + 'm';
+}
+
 function updateHealth(d) {
   const ok='#2ecc71', bad='#e74c3c', dim='#888';
   const hm=$('hMag'), hi=$('hI2c'), hh=$('hHeap'), ha=$('hAgc'), hs=$('hStk');
@@ -946,7 +867,18 @@ function updateHealth(d) {
   // magnet/I2C/AGC values below belong to the older classic board and are never populated
   // here — they read N/A in grey rather than raising a permanent false alarm.
   const as5600Live = !!d.health_magnet_ok || !!d.health_i2c_ok || (d.health_agc || 0) > 0;
-  hm.textContent = d.health_steer_trip ? 'STEER SIGNAL LOST (reboot ESP32)' : (d.health_steer_ok ? 'STEER OK' : 'STEER NO SIGNAL');
+  // A latched trip survives until the ESP32 reboots, so the flag alone cannot say
+  // whether the fault is happening now or was left behind by an earlier boot — both
+  // render as LOST while the sensor pill reads healthy. Show how long ago it tripped
+  // and whether the signal is back, so a stale latch is obvious instead of looking
+  // like a live failure (that ambiguity cost hours on 2026-08-08).
+  // health_steer_trip_age_s is -1 while clear, and absent on firmware predating it.
+  const tripAge = d.health_steer_trip_age_s;
+  const agoTxt = (typeof tripAge === 'number' && tripAge >= 0) ? ' ' + fmtTripAge(tripAge) + ' ago' : '';
+  const nowTxt = d.health_steer_ok ? ' — signal OK now, reboot ESP32 to clear'
+                                   : ' — still no signal';
+  hm.textContent = d.health_steer_trip ? ('STEER SIGNAL LOST' + agoTxt + nowTxt)
+                                       : (d.health_steer_ok ? 'STEER OK' : 'STEER NO SIGNAL');
   hm.style.color = (d.health_steer_ok && !d.health_steer_trip) ? ok : bad;
   hi.textContent = !as5600Live ? 'OLD I2C SENSOR BUS not used' : (d.health_i2c_ok ? 'OLD I2C SENSOR BUS ok' : 'OLD I2C SENSOR BUS '+d.health_i2c_errors+' errors');
   hi.style.color = !as5600Live ? dim : (d.health_i2c_ok ? ok : bad);
@@ -1540,37 +1472,16 @@ body{
 /* #healthInfo is deliberately NOT hidden here any more — it is the topbar's SYS popover and
    toggles on its own inline display. #healthBar is gone; its readouts live inside that popover. */
 #dbgConsole{ display:none !important; }
-/* #manualWidget is NOT hidden here: it is the gamepad readout plus the Angle/PWM toggle, and
-   this skin relocates it into the Remote control pane. It was hidden with a !important rule
-   while its polling loop kept driving the kart, so the gamepad steered with no feedback and
-   the steering-command toggle could not be reached from any screen. */
+/* #manualWidget is NOT hidden here: it is the Angle/PWM steering-mode toggle, which this skin
+   relocates into the Remote control pane. It used to be hidden with a !important rule, which
+   left that firmware control unreachable from every screen. */
 #manualWidget + div{ display:none !important; } /* empty home of the relocated #hudStream */
 
-/* Gamepad readout, in the Remote control pane under the touch pad. */
+/* Steering-mode toggle, in the Remote control pane under the touch pad. */
 .gp-block{ display:none; flex:0 0 auto; width:100%; margin-top:var(--sp-2); }
 .gp-block.on{ display:flex; flex-direction:column; gap:var(--sp-2); }
-.gp-hdr{ display:flex; align-items:baseline; justify-content:space-between; gap:var(--sp-2); }
-#gpStatus{ font-size:var(--fs-sm); }
-#gpStatus.gp-off{ color:var(--rc-label); }
-#gpStatus.gp-on{ color:var(--rc-green); }
-.gp-axes{ display:grid; grid-template-columns:1fr 1fr; gap:var(--sp-3); }
-/* One line, clipped rather than wrapped: a caption that wraps in one column and not the other
-   pushes that column's bar down and the two axes stop reading as a pair. */
 .gp-cap{ font-size:var(--fs-sm); color:var(--rc-label); text-transform:uppercase;
-  letter-spacing:.06em; margin-bottom:4px; white-space:nowrap; overflow:hidden;
-  text-overflow:ellipsis; }
-.gp-track{ height:6px; background:#0a0a0c; border:1px solid #2c2c2f; border-radius:3px;
-  position:relative; overflow:hidden; display:flex; }
-.gp-track > #gpSteerFill{ position:absolute; top:0; bottom:0; left:50%; width:0%; background:#4a9eff; }
-.gp-half{ flex:1 1 50%; display:flex; }
-.gp-half-l{ justify-content:flex-end; }          /* brake grows leftward from the centre */
-#gpBrakeFill{ width:0%; background:var(--rc-red); }
-#gpAccelFill{ width:0%; background:var(--rc-green); }
-.gp-num{ font-family:'Orbitron',sans-serif; font-size:var(--fs-sm); text-align:center; margin-top:4px; }
-.gp-nums{ display:flex; justify-content:space-between; font-family:'Orbitron',sans-serif;
-  font-size:var(--fs-sm); margin-top:4px; }
-.gp-brk{ color:var(--rc-red); }
-.gp-acc{ color:var(--rc-green); }
+  letter-spacing:.06em; margin-bottom:4px; }
 .gp-seg{ display:flex; border:1px solid #2c2c2f; border-radius:var(--r-sm); overflow:hidden; }
 .gp-seg button{ flex:1 1 50%; padding:6px 8px; border:none; background:transparent;
   color:var(--rc-label); font:inherit; font-size:var(--fs-sm); cursor:pointer; }
@@ -2262,7 +2173,7 @@ body{
         <div class="rc-panel rc-mpanel rc-joypane" id="rcJoyPane" style="display:none">
           <span class="rc-label">Remote control</span>
           <div id="rcJoySlot"></div>
-          <!-- home of the relocated gamepad readout + Angle/PWM toggle (#manualWidget) -->
+          <!-- home of the relocated Angle/PWM steering-mode toggle (#manualWidget) -->
           <div id="rcGpSlot"></div>
           <button class="ctrl-btn pid-open" id="btnPidOpen">Steering PID</button>
           <!-- Live steering PID tuning, so a gain can be tried without reflashing the ESP32.
