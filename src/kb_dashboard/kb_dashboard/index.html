@@ -3027,14 +3027,28 @@ body{
     const yolo = d.yolo_fps || 0, esp = d.esp_fps || 0, heap = d.health_heap_kb || 0;
     rcDrawGauge($('rcDialYolo'), RC_DIAL_YOLO, yolo);
     // battery: SOC dial (charge left, colour zones, red = about to run out) + voltage number (live, shows sag)
-    const batV = d.battery_voltage, batSoc = d.battery_soc;
+    // The big number is the FUSED estimate, not the BMS's own state-of-charge byte. That byte
+    // is an open-loop coulomb count which only re-zeros at a full-charge termination or a
+    // low-voltage cutoff, so it drifts unchecked — it read 93% on a pack resting at 46.4 V,
+    // which on 13 series cells is 3.57 V/cell, roughly a quarter charged. kb_bms corrects the
+    // count with pack voltage and publishes the result on /battery/soc_fused. The raw byte
+    // stays on screen underneath rather than being dropped, so a disagreement is visible.
+    const batV = d.battery_voltage, batSocRaw = d.battery_soc;
+    const batFused = d.battery_soc_fused;
+    const haveFused = batFused != null && !isNaN(batFused);
+    const batSoc = haveFused ? batFused * 100 : batSocRaw;
     const haveBat = batV != null && !isNaN(batV);
     const socLow = batSoc != null && batSoc < 15;
     // Voltage goes in the dial's own bottom-label slot, where the YOLO dial puts "Hz", rather
     // than a caption div under it — a caption costs the dial height and made this one render
     // smaller than the dial beside it. Assigned before the draw because the label is a property
     // of the config the draw reads, and the voltage is not the value being plotted (SOC is).
-    RC_DIAL_SOC.label = haveBat ? batV.toFixed(1) + ' V' : '';
+    RC_DIAL_SOC.label = [
+      haveBat ? batV.toFixed(1) + ' V' : null,
+      // Only worth the space when it contradicts the dial; while the two agree it is noise.
+      (haveFused && batSocRaw != null && Math.abs(batSocRaw - batSoc) > RC_SOC_DISAGREE_POINTS)
+        ? 'BMS ' + Math.round(batSocRaw) + '%' : null,
+    ].filter(Boolean).join(' · ');
     rcDrawGauge($('rcBatDial'), RC_DIAL_SOC, (batSoc != null && !isNaN(batSoc)) ? batSoc : NaN);
     $('rcBatDial').closest('.rc-panel')?.classList.toggle('rc-danger', socLow);
     // BATTERY page (per-cell strip + pack readouts); flag the Battery tab if unhealthy
@@ -3209,33 +3223,38 @@ body{
 // caller can pulse the Battery tab red. The strip DOM is rebuilt only when the cell
 // count changes, then just fills/labels update each frame.
 const RC_CELL_MIN_MV = 2800, RC_CELL_MAX_MV = 4200;  // Li-ion display window for the bars
-// Sub-line under the SOC ring. Normally the remaining amp-hours, but it also has to
-// answer "is that percentage lying to you?".
+// How far the two charge figures must diverge before the raw one is worth screen space.
+// Below this they agree well enough that printing both is just clutter.
 //
-// The big number is the BMS's own state-of-charge byte, which is an open-loop coulomb
-// count: it only re-zeros on a full-charge termination or a low-voltage cutoff, and
-// between those it drifts. It has been seen reading 93% on a pack sitting at 46.4 V,
-// which on 13 series cells is 3.57 V/cell — about a quarter charged. The kb_bms node
-// publishes an independent estimate on /battery/soc_fused that corrects the count with
-// pack voltage. When the two disagree by more than this many points, say so here rather
-// than quietly averaging them: the disagreement IS the drift, and a driver deciding
-// whether to start another session needs to see it, not a single smoothed number.
+// Which figure is which: the ring and the Telemetry dial show the FUSED estimate, published
+// by kb_bms on /battery/soc_fused, which corrects the pack's coulomb count using voltage.
+// The BMS's own state-of-charge byte is the raw one, and it cannot be trusted on its own —
+// it is an open-loop integral that only re-zeros at a full-charge termination or a
+// low-voltage cutoff, so it drifts unchecked. It read 93% on a pack resting at 46.4 V,
+// which on 13 series cells is 3.57 V/cell, roughly a quarter charged.
+//
+// The raw figure stays visible underneath instead of being dropped, because a driver
+// deciding whether to start another session should be able to see the two sources
+// disagreeing rather than be handed one smoothed number with no provenance.
 const RC_SOC_DISAGREE_POINTS = 10;
 
-function rcBatRingSub(ah, soc, socFused) {
+function rcBatRingSub(ah, socShown, socRaw) {
   const parts = [];
   if (ah != null && !isNaN(ah)) parts.push(ah.toFixed(1) + ' Ah');
-  const est = (socFused != null && !isNaN(socFused)) ? Math.round(socFused * 100) : null;
-  if (est != null && soc != null && !isNaN(soc) &&
-      Math.abs(est - soc) > RC_SOC_DISAGREE_POINTS) {
-    parts.push('V says ' + est + '%');
+  if (socRaw != null && !isNaN(socRaw) && socShown != null && !isNaN(socShown) &&
+      Math.abs(socRaw - socShown) > RC_SOC_DISAGREE_POINTS) {
+    parts.push('BMS ' + Math.round(socRaw) + '%');
   }
   return parts.length ? parts.join(' · ') : null;
 }
 
 function rcUpdateBattery(d) {
   if (!$('rcCellStrip')) return false;
-  const v = d.battery_voltage, soc = d.battery_soc, cur = d.battery_current;
+  // Same rule as the Telemetry dial: the ring shows the fused estimate, the BMS's own byte
+  // goes in the sub-line. See the comment there for why the raw figure is not to be trusted.
+  const v = d.battery_voltage, socRaw = d.battery_soc, cur = d.battery_current;
+  const socFused = d.battery_soc_fused;
+  const soc = (socFused != null && !isNaN(socFused)) ? socFused * 100 : socRaw;
   const ah = d.battery_charge, temps = d.battery_temps, cells = d.battery_cells_mv;
   const have = v != null && !isNaN(v);
   const haveSoc = soc != null && !isNaN(soc);
@@ -3244,7 +3263,7 @@ function rcUpdateBattery(d) {
   rcDrawRing($('rcBatRing'), {
     frac: haveSoc ? soc / 100 : 0, color: socCol, dim: !haveSoc, label: 'SOC',
     big: haveSoc ? Math.round(soc) + '%' : '--',
-    sub: rcBatRingSub(ah, soc, d.battery_soc_fused),
+    sub: rcBatRingSub(ah, soc, socRaw),
   });
   // current: bidirectional analog gauge (− discharge / + charge) with amber/red over-limit zones,
   // exact signed value in the centre. Danger if it sits in a red zone (over-current either way).
