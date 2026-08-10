@@ -1293,7 +1293,7 @@ function rcDrawGauge(canvas, cfg, value) {
   }
 }
 // Pedals — two vertical bars, filling bottom→up (more pedal = taller bar).
-// LEFT/green = accelerator, RIGHT/red = brake.
+// LEFT/red = brake, RIGHT/green = accelerator — same order as the real pedals.
 //   • Accel: green fill = real accelerator pedal (ESP_PEDALS ADC on GPIO 4,
 //     esp32_throttle); an amber tick marks the commanded target
 //     (orin_cmd_throttle). Same target-vs-real split as the brake.
@@ -1314,7 +1314,7 @@ function rcDrawPedals(canvas, thr, thrTgt, brkReal, brkTgt) {
   const trackTop = H * 0.10, botPad = H * 0.18;
   const trackH = H - trackTop - botPad, trackBot = trackTop + trackH;
   const bw = W * 0.30, gap = W * 0.10, x0 = (W - (bw * 2 + gap)) / 2;
-  const thrX = x0, brkX = x0 + bw + gap;
+  const brkX = x0, thrX = x0 + bw + gap;   // real pedal placement: brake left, accelerator right
 
   const drawTrack = (x) => {
     rr(x, trackTop, bw, trackH, 6); ctx.fillStyle = '#141416'; ctx.fill();
@@ -1372,8 +1372,8 @@ function rcDrawPedals(canvas, thr, thrTgt, brkReal, brkTgt) {
   const wReal = ctx.measureText('REAL').width, wTgt = ctx.measureText('TARGET').width;
   let lx = W / 2 - (dotR * 4 + dgap * 2 + wReal + wTgt + mid) / 2;
   ctx.textAlign = 'left';
-  ctx.fillStyle = '#2ecc71'; ctx.beginPath(); ctx.arc(lx + dotR, ly, dotR, Math.PI / 2, Math.PI * 1.5); ctx.fill();
-  ctx.fillStyle = '#e2001a'; ctx.beginPath(); ctx.arc(lx + dotR, ly, dotR, Math.PI * 1.5, Math.PI / 2); ctx.fill();
+  ctx.fillStyle = '#e2001a'; ctx.beginPath(); ctx.arc(lx + dotR, ly, dotR, Math.PI / 2, Math.PI * 1.5); ctx.fill();
+  ctx.fillStyle = '#2ecc71'; ctx.beginPath(); ctx.arc(lx + dotR, ly, dotR, Math.PI * 1.5, Math.PI / 2); ctx.fill();
   ctx.fillStyle = '#b4b4be'; ctx.fillText('REAL', lx + dotR * 2 + dgap, ly);
   lx += dotR * 2 + dgap + wReal + mid;
   ctx.fillStyle = '#ffb020'; ctx.beginPath(); ctx.arc(lx + dotR, ly, dotR, 0, 6.2832); ctx.fill();
