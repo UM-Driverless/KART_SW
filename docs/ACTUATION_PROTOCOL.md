@@ -23,7 +23,21 @@ Scaling (current):
 - `BRAKE`: `-acceleration` if < 0, scaled `* 255`
 
 Safety expectation on ESP32:
-- If no new frame arrives within a timeout, apply full brake, zero steering, zero throttle.
+- If no new frame arrives within a timeout, the kart must **brake**, not coast.
+
+**How that is delivered, and what is true today.** The braking does not come from the `BRAKE`
+byte above. On a comms timeout the ESP32 opens the shutdown circuit — `SDC_NOT_EMERGENCY`
+(GPIO 18) drives the gate of Q3, and fresh comms is one of the conditions in the whitelist that
+keeps the chain closed — which fires the EBS and applies the mechanical brake. That path is the
+design of record and does not depend on the Orin still being able to talk.
+
+The firmware's own actuator handling on timeout is to zero throttle, steering **and** brake, which
+releases the proportional brake valve. On its own that is a coast. The stop comes from the EBS.
+
+**Q3's gate is not yet connected to anything downstream,** so as of today a comms timeout leaves
+the kart coasting in practice. Wiring it is the step that makes this clause true — tracked in
+`tasks.md` ("Verify the shutdown-circuit drive on the bench, then wire the Q3 gate"). Until that is
+done, do not rely on this clause for safety.
 
 ## Version 2 (planned)
 Add sequence + checksum for robustness and loss detection. Also switch steering to
