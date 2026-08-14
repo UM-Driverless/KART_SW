@@ -13,7 +13,7 @@ Differences from kart-medulla:
 """
 import re, sys
 
-TASKS = "/Users/rubenayla/repos/hardware/kart-brain/tasks.md"
+TASKS = "/Users/rubenayla/repos/kart-brain/tasks.md"
 lines = open(TASKS).read().split("\n")
 
 CLOSED_RE = re.compile(r"^- \[(x(\s+\d{4}-\d{2}-\d{2})?|\d{4}-\d{2}-\d{2})\]")
@@ -161,7 +161,7 @@ for h, b in archived_from_board:
 
 out += ["", "## Previously under the board's `## Done` heading", ""] + archived_from_done + [""]
 
-with open("/Users/rubenayla/repos/hardware/kart-brain/tasks/done-archive.md", "w") as f:
+with open("/Users/rubenayla/repos/kart-brain/tasks/done-archive.md", "w") as f:
     f.write("\n".join(out).rstrip() + "\n")
 
 # --- rewrite the board -------------------------------------------------------
